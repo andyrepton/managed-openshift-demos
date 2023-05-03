@@ -1,0 +1,22 @@
+apiVersion: "logging.openshift.io/v1"
+kind: ClusterLogForwarder
+metadata:
+  name: instance 
+  namespace: openshift-logging 
+spec:
+  outputs:
+   - name: cw 
+     type: cloudwatch 
+     cloudwatch:
+       groupBy: logType 
+       groupPrefix: poc-andyr
+       region: eu-west-1
+     secret:
+        name: cw-sts-secret
+  pipelines:
+    - name: to-cloudwatch 
+      inputRefs: 
+        - infrastructure
+        - audit
+      outputRefs:
+        - cw 
