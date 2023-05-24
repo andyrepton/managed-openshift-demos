@@ -241,9 +241,13 @@ install_demo3 () {
   echo "Cleaning up demo3 before installing demo3"
   clean_demo3
 
-  echo "WARNING: This demo requires the installation of the cluster logging operator. So, we need to add a new machinepool of 3 m5.2xlarge machines for this. This is going to take some time!"
-  rosa create machinepool --cluster=${CLUSTER} --name=logging-pool --replicas=3 --instance-type=m5.2xlarge
-  until oc get machines -A | grep logging-pool | grep -c Running | grep 3 
+  if rosa list machinepools -c ${CLUSTER} | grep logging-pool; then
+    echo "Machine Pool already here. Leaving it be"
+  else
+    echo "WARNING: This demo requires the installation of the cluster logging operator. So, we need to add a new machinepool of 3 m5.2xlarge machines for this. This is going to take some time!"
+    rosa create machinepool --cluster=${CLUSTER} --name=logging-pool --replicas=3 --instance-type=m5.2xlarge
+  fi
+  until rosa list machinepools -c ${CLUSTER} | grep logging-pool | awk '{print $4}' | grep 3
     do sleep 2 
   done
 
@@ -276,11 +280,16 @@ EOF
   fi
   echo ${POLICY_ARN}
 
+  echo "Checking OIDC Provider"
   export OIDC_PROVIDER=$(oc get authentication.config.openshift.io cluster -o json | jq -r .spec.serviceAccountIssuer| sed -e "s/^https:\/\///")
+  if  [[ -n "${OIDC_PROVIDER}" ]]; then
+    echo "Cluster appears to be HCP, getting OIDC provider from rosa command instead of oc command"
+    export OIDC_PROVIDER=$(rosa describe cluster -c ${CLUSTER} -o json | jq -r '.aws.sts.oidc_config.issuer_url' | sed  's|^https://||')
+  fi
 
   export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 
-  cat <<EOF > TrustPolicy.json
+  cat <<EOF > ./demo3/TrustPolicy.json
 {
   "Version": "2012-10-17",
   "Statement": [
@@ -303,7 +312,7 @@ EOF
 EOF
 
   echo "Creating IAM Role ${CLUSTER}-log-forward"
-  ROLE_ARN=$(aws iam create-role --role-name "${CLUSTER}-log-forward" --assume-role-policy-document file://TrustPolicy.json --query "Role.Arn" --output text)
+  ROLE_ARN=$(aws iam create-role --role-name "${CLUSTER}-log-forward" --assume-role-policy-document file://./demo3/TrustPolicy.json --query "Role.Arn" --output text)
 
   echo "Attaching role policy to ${CLUSTER}-log-forward"
   aws iam attach-role-policy --role-name "${CLUSTER}-log-forward" --policy-arn ${POLICY_ARN}
@@ -317,6 +326,12 @@ EOF
   oc apply -f demo3/openshift-logging-og.yaml
   oc apply -f demo3/cluster-logging-sub.yaml
 
+  # Enhancement: This can be a oc get loop`
+  until oc get ClusterLogging; do
+    echo "Waiting 3 seconds for the Operators to install and prepare the CRDs"
+    sleep 3
+  done
+
   echo "Installing Cluster Logging"
   oc apply -f demo3/logging.yaml
 
@@ -326,11 +341,17 @@ EOF
   echo "Demo 3 is ready. Proceed to demo-3.md for your demo!"
 }
 
+hard_clean_demo3 () {
+  # Since the introduction of HCP, there isn't a clean way to check if the machine pool is still in deleting mode. So made this separate check for now while I think of a more elegant way to achieve this
+  prep_demo3
+  rosa delete machinepool logging-pool -c ${CLUSTER} --yes
+}
+
 clean_demo3 () {
   prep_demo3
 
   echo "Removing secret"
-  oc delete secret cw-sts-secret -n openshift-logging
+  oc delete secret cw-sts-secret -n openshift-logging || echo "Secret not installed"
 
   echo "Removing clusterlogforwarder"
   oc delete clusterlogforwarder instance -n openshift-logging || echo "Cluster Log Forwarder already removed"
@@ -364,16 +385,16 @@ clean_demo3 () {
     aws iam delete-role --role-name "${CLUSTER}-log-forward"
   fi
 
-  echo "Removing additional machine pool. This will take some time!"
-  if rosa list machinepools -c poc-andyr | grep logging-pool; then
-    rosa delete machinepool logging-pool -c poc-andyr --yes
+  echo "Checking if machinepool is still here"
+  if rosa list machinepools -c ${CLUSTER} | grep logging-pool; then
+    echo "Machine Pool still here. Leaving it be"
   else
     echo "Machine Pool already cleaned up"
   fi
 
   echo "Cleaning up log groups"
-  aws logs delete-log-group --log-group-name "${CLUSTER}.audit"
-  aws logs delete-log-group --log-group-name "${CLUSTER}.infrastructure"
+  aws logs delete-log-group --log-group-name "${CLUSTER}.audit" || echo "AWS Log group ${CLUSTER}.audit does not exist"
+  aws logs delete-log-group --log-group-name "${CLUSTER}.infrastructure" || echo "AWS log group ${CLUSTER}.infrastructure does not exist"
 
   echo "Demo 3 is cleaned up"
 }
