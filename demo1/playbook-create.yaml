@@ -1,0 +1,87 @@
+---
+- hosts: localhost
+  connection: "local"
+
+  vars:
+    cluster: example-cluster
+    ocp_namespace: ack-system
+    aws_region: us-east-2
+
+  tasks:
+    - set_fact:
+         _aws_iam_user: "{{ cluster }}-ack-controller"
+    - name: Create an IAM user
+      amazon.aws.iam_user:
+        name: "{{ _aws_iam_user }}"
+        state: present
+        managed_policies: arn:aws:iam::aws:policy/AmazonS3FullAccess
+
+    - name: Create a new access key
+      community.aws.iam_access_key:
+        user_name: "{{ _aws_iam_user }}"
+        state: present
+      register: _aws_iam_access_key
+
+    - name: Create a k8s namespace
+      kubernetes.core.k8s:
+        name: "{{ ocp_namespace }}"
+        api_version: v1
+        kind: Namespace
+        state: present
+
+    - name: Create configmap for ACK
+      kubernetes.core.k8s:
+        namespace: "{{ ocp_namespace }}"
+        definition:
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: ack-s3-user-config
+          data:
+            config.txt: |
+              ACK_ENABLE_DEVELOPMENT_LOGGING=true
+              ACK_LOG_LEVEL=debug
+              ACK_WATCH_NAMESPACE=
+              AWS_ENDPOINT_URL=
+              AWS_REGION={{ aws_region }}
+              ACK_RESOURCE_TAGS={{ cluster }}
+
+    - name: Create secret for ACK
+      kubernetes.core.k8s:
+        namespace: "{{ ocp_namespace }}"
+        definition:
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: ack-s3-user-secrets
+          stringData:
+            secrets.txt: |
+              AWS_ACCESS_KEY_ID={{ _aws_iam_access_key.access_key.access_key_id }}
+              AWS_SECRET_ACCESS_KEY={{ _aws_iam_access_key.secret_access_key }}
+
+    - name: create ACK operator group
+      kubernetes.core.k8s:
+        namespace: "{{ ocp_namespace }}"
+        definition:
+          apiVersion: operators.coreos.com/v1
+          kind: OperatorGroup
+          metadata:
+            name: ack-system
+          spec:
+            upgradeStrategy: Default
+
+    - name: create ACK S3 Operator subscription
+      kubernetes.core.k8s:
+        namespace: "{{ ocp_namespace }}"
+        definition:
+          apiVersion: operators.coreos.com/v1alpha1
+          kind: Subscription
+          metadata:
+            name: ack-s3-controller
+          spec:
+            channel: alpha
+            installPlanApproval: Automatic
+            name: ack-s3-controller
+            source: community-operators
+            sourceNamespace: openshift-marketplace
+            startingCSV: ack-s3-controller.v1.0.4
