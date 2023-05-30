@@ -419,6 +419,8 @@ install_demo4 () {
   export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 
   oc new-project ${NAMESPACE}
+  echo "Creating project for our application"
+  oc new-project csi-secrets-demo
   echo "Adding privileged permissions to the csi driver service account in ${NAMESPACE}"
   oc adm policy add-scc-to-user privileged system:serviceaccount:${NAMESPACE}:secrets-store-csi-driver
   oc adm policy add-scc-to-user privileged system:serviceaccount:${NAMESPACE}:csi-secrets-store-provider-aws
@@ -431,8 +433,6 @@ install_demo4 () {
   helm upgrade --install -n csi-secrets-store csi-secrets-store-driver secrets-store-csi-driver/secrets-store-csi-driver
   oc -n csi-secrets-store apply -f https://raw.githubusercontent.com/rh-mobb/documentation/main/content/docs/misc/secrets-store-csi/aws-provider-installer.yaml
 
-  echo "Creating project for our application"
-  oc new-project csi-driver-demo
 
   export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 
@@ -446,11 +446,11 @@ install_demo4 () {
   "Effect": "Allow",
   "Condition": {
     "StringEquals" : {
-      "${OIDC_ENDPOINT}:sub": ["system:serviceaccount:csi-driver-demo:default"]
+      "${OIDC_PROVIDER}:sub": ["system:serviceaccount:csi-secrets-demo:default"]
     }
   },
   "Principal": {
-    "Federated": "arn:aws:iam::${AWS_ACCOUNT_ID}:oidc-provider/${OIDC_ENDPOINT}"
+    "Federated": "arn:aws:iam::${AWS_ACCOUNT_ID}:oidc-provider/${OIDC_PROVIDER}"
   },
   "Action": "sts:AssumeRoleWithWebIdentity"
   }
@@ -464,10 +464,10 @@ EOF
   --query Role.Arn --output text)
 
   echo "Annotating the service account to use the Role ARN"
-  oc annotate -n csi-driver-demo  serviceaccount default eks.amazonaws.com/role-arn=$ROLE_ARN
+  oc annotate -n csi-secrets-demo  serviceaccount default eks.amazonaws.com/role-arn=$ROLE_ARN
 
   echo "Creating secrets provider class"
-  cat << EOF | oc apply -f -
+  cat << EOF | oc apply -n csi-secrets-demo -f -
 apiVersion: secrets-store.csi.x-k8s.io/v1
 kind: SecretProviderClass
 metadata:
@@ -476,7 +476,7 @@ spec:
   provider: aws
   parameters:
     objects: |
-        - objectName: "MySecret"
+        - objectName: "MySecret-${CLUSTER}"
           objectType: "secretsmanager"
 EOF
 
@@ -487,7 +487,7 @@ clean_demo4 () {
   prep_demo4
 
   echo "Cleaning up project"
-  oc delete project csi-driver-demo || echo "Project already deleted"
+  oc delete project csi-secrets-demo || echo "Project already deleted"
   oc delete project csi-secrets-store || echo "Project already deleted"
 
   echo "Checking if secrets-store and driver are installed via helm"
@@ -510,7 +510,7 @@ clean_demo4 () {
   echo $ROLE_CHECK
   set -e
   if [ -n "${ROLE_CHECK}" ]; then
-    POLICY_ARN=$(aws iam list-policies --query "Policies[?PolicyName=='${CLUSTER}-access-to-my-secret'].{ARN:Arn}" --output text)
+    POLICY_ARN=$(aws iam list-policies --query "Policies[?PolicyName=='${CLUSTER}-access-to-aws-secret'].{ARN:Arn}" --output text)
     echo "Removing role policy ${CLUSTER}-access-to-aws-secret from ${POLICY_ARN}"
     aws iam detach-role-policy --role-name "${CLUSTER}-access-to-aws-secret" --policy-arn ${POLICY_ARN} || echo "Policy already detached"
 
@@ -520,7 +520,7 @@ clean_demo4 () {
 
   echo "Cleaning up secret from secretsmanager"
   set +e
-  SECRET_ARN=$(aws secretsmanager list-secrets --query 'SecretList[].[ARN]' --output text | grep MySecret)
+  SECRET_ARN=$(aws secretsmanager list-secrets --query 'SecretList[].[ARN]' --output text | grep MySecret-$CLUSTER)
   set -e
   aws secretsmanager --region $REGION delete-secret --secret-id $SECRET_ARN --force-delete-without-recovery || echo "Secret already deleted"
 }

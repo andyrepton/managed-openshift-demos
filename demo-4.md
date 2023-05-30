@@ -11,7 +11,7 @@
 
 ```
 aws --region "$REGION" secretsmanager create-secret \
-  --name MySecret --secret-string \
+  --name MySecret-$CLUSTER --secret-string \
   '{"username":"shadowman", "password":"hello-world"}' \
   --query ARN --output text
 ```
@@ -45,14 +45,14 @@ EOF
 ```
 POLICY_ARN=$(aws --region "$REGION" --query Policy.Arn \
   --output text iam create-policy \
-  --policy-name ${CLUSTER}-access-to-my-secret \
+  --policy-name ${CLUSTER}-access-to-aws-secret \
   --policy-document file://policy.json)
 ```
 
 6. Deploy an application to read your secret:
 
 ```
-cat << EOF | oc apply -n csi-driver-demo -f -
+cat << EOF | oc apply -n csi-secrets-demo -f -
 apiVersion: v1
 kind: Pod
 metadata:
