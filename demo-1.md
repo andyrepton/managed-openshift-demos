@@ -9,15 +9,15 @@
 2. Run the following commands:
 
 ```
-$ aws s3 ls | grep hello-kubecon
+$ aws s3 ls | grep hello-hcp
 
 $ cat demo1/bucket.yaml
 
 $ oc apply -f demo1/bucket.yaml
 
-$ aws s3 ls | grep hello-kubecon
+$ aws s3 ls | grep hello-hcp
 
-$ oc delete bucket hello-kubecon-bucket
+$ oc delete bucket hello-hcp-bucket
 
-$ aws s3 ls | grep hello-kubecon
+$ aws s3 ls | grep hello-hcp
 ```

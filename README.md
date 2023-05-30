@@ -1,7 +1,7 @@
 # Demos for a ROSA/AWS Integrations
 
-Link to slides (Internal Red Hat only for now, apologies. I will try and open source them): https://docs.google.com/presentation/d/1GMnpxdAwqL7Xlv1lSu8hf1Mvo1zJRmOq1Bg1CvjHFQ0/edit#slide=id.p
+Link to slides (Internal Red Hat only for now, apologies. I will try and open source them): https://docs.google.com/presentation/d/1mJJ570GNfw3daiN_6w6JzoSkQ7R-UP7VvXyUMjSOljc/edit?usp=sharing
 
-Instructions to setup the cluster for the demo can be found in the setup directory
+Link to diagrams can be found in the notes of the first slide. 
 
 Commands for each demo can be found in the corresponding markdown file

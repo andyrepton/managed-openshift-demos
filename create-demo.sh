@@ -21,7 +21,7 @@ set -e
 # - Submariner
 
 # This script is designed to take a built, existing ROSA cluster and prepare it for demos to give to customers. This script expects that you have the following commands installed
-# aws cli, rosa, oc
+# aws cli, rosa, oc, helm
 
 help () {
   echo ""
@@ -31,6 +31,16 @@ help () {
   echo "When finished, run with clean_demoX where X is the demo you wish to clean from the cluster. E.G: "
   echo " ./create_demo.sh clean_demo1"
   exit 1
+}
+
+get_oidc_provider () {
+  # HCP clusters do not have the `authentication.config.openshift.io cluster` CR, so this simply checks if it can get that, and if not falls back onto the rosa command to get it.
+  echo "Checking OIDC Provider"
+  export OIDC_PROVIDER=$(oc get authentication.config.openshift.io cluster -o json | jq -r .spec.serviceAccountIssuer| sed -e "s/^https:\/\///")
+  if  [[ -n "${OIDC_PROVIDER}" ]]; then
+    echo "Cluster appears to be HCP, getting OIDC provider from rosa command instead of oc command"
+    export OIDC_PROVIDER=$(rosa describe cluster -c ${CLUSTER} -o json | jq -r '.aws.sts.oidc_config.issuer_url' | sed  's|^https://||')
+  fi
 }
 
 prep_demo1 () {
@@ -232,7 +242,6 @@ prep_demo3 () {
   export SCRATCH_DIR=/tmp/cloudwatch-logging
   export AWS_PAGER=""
   mkdir -p $SCRATCH_DIR
-
 }
 
 install_demo3 () {
@@ -280,12 +289,7 @@ EOF
   fi
   echo ${POLICY_ARN}
 
-  echo "Checking OIDC Provider"
-  export OIDC_PROVIDER=$(oc get authentication.config.openshift.io cluster -o json | jq -r .spec.serviceAccountIssuer| sed -e "s/^https:\/\///")
-  if  [[ -n "${OIDC_PROVIDER}" ]]; then
-    echo "Cluster appears to be HCP, getting OIDC provider from rosa command instead of oc command"
-    export OIDC_PROVIDER=$(rosa describe cluster -c ${CLUSTER} -o json | jq -r '.aws.sts.oidc_config.issuer_url' | sed  's|^https://||')
-  fi
+  get_oidc_provider
 
   export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 
@@ -326,7 +330,6 @@ EOF
   oc apply -f demo3/openshift-logging-og.yaml
   oc apply -f demo3/cluster-logging-sub.yaml
 
-  # Enhancement: This can be a oc get loop`
   until oc get ClusterLogging; do
     echo "Waiting 3 seconds for the Operators to install and prepare the CRDs"
     sleep 3
@@ -344,6 +347,7 @@ EOF
 hard_clean_demo3 () {
   # Since the introduction of HCP, there isn't a clean way to check if the machine pool is still in deleting mode. So made this separate check for now while I think of a more elegant way to achieve this
   prep_demo3
+  clean_demo3
   rosa delete machinepool logging-pool -c ${CLUSTER} --yes
 }
 
@@ -397,12 +401,137 @@ clean_demo3 () {
   aws logs delete-log-group --log-group-name "${CLUSTER}.infrastructure" || echo "AWS log group ${CLUSTER}.infrastructure does not exist"
 
   echo "Demo 3 is cleaned up"
+  echo "IMPORTANT: Logging Pool has been left behind, as the 'oc get machines' command does not work with HCP. Re-run with ./create_demo hard_clean_demo3 to clean this up fully"
+}
+
+prep_demo4 () {
+  export NAMESPACE=csi-secrets-store
+  export SCRATCH_DIR=/tmp/aws-secrets-manager-csi
+  export AWS_PAGER=""
+  mkdir -p $SCRATCH_DIR
+}
+
+install_demo4 () {
+  prep_demo4
+  echo "Cleaning up demo4 before install"
+  clean_demo4
+
+  export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+
+  oc new-project ${NAMESPACE}
+  echo "Adding privileged permissions to the csi driver service account in ${NAMESPACE}"
+  oc adm policy add-scc-to-user privileged system:serviceaccount:${NAMESPACE}:secrets-store-csi-driver
+  oc adm policy add-scc-to-user privileged system:serviceaccount:${NAMESPACE}:csi-secrets-store-provider-aws
+
+  echo "Adding Kubernetes Sigs Helm Repo"
+  helm repo add secrets-store-csi-driver https://kubernetes-sigs.github.io/secrets-store-csi-driver/charts
+  helm repo update
+
+  echo "Installing the cs-secrets-store helm chart"
+  helm upgrade --install -n csi-secrets-store csi-secrets-store-driver secrets-store-csi-driver/secrets-store-csi-driver
+  oc -n csi-secrets-store apply -f https://raw.githubusercontent.com/rh-mobb/documentation/main/content/docs/misc/secrets-store-csi/aws-provider-installer.yaml
+
+  echo "Creating project for our application"
+  oc new-project csi-driver-demo
+
+  export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+
+  get_oidc_provider
+  echo "Creating Trust policy document for the service account"
+  cat <<EOF > ./demo4/trust-policy.json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+  {
+  "Effect": "Allow",
+  "Condition": {
+    "StringEquals" : {
+      "${OIDC_ENDPOINT}:sub": ["system:serviceaccount:csi-driver-demo:default"]
+    }
+  },
+  "Principal": {
+    "Federated": "arn:aws:iam::${AWS_ACCOUNT_ID}:oidc-provider/${OIDC_ENDPOINT}"
+  },
+  "Action": "sts:AssumeRoleWithWebIdentity"
+  }
+  ]
+}
+EOF
+
+  echo "Creating Role ${CLUSTER}-access-to-aws-secret for the service account"
+  ROLE_ARN=$(aws iam create-role --role-name ${CLUSTER}-access-to-aws-secret \
+  --assume-role-policy-document file://./demo4/trust-policy.json \
+  --query Role.Arn --output text)
+
+  echo "Annotating the service account to use the Role ARN"
+  oc annotate -n csi-driver-demo  serviceaccount default eks.amazonaws.com/role-arn=$ROLE_ARN
+
+  echo "Creating secrets provider class"
+  cat << EOF | oc apply -f -
+apiVersion: secrets-store.csi.x-k8s.io/v1
+kind: SecretProviderClass
+metadata:
+  name: my-application-aws-secrets
+spec:
+  provider: aws
+  parameters:
+    objects: |
+        - objectName: "MySecret"
+          objectType: "secretsmanager"
+EOF
+
+  echo "Demo4 is ready! Proceed to ./demo-4.md for your demo"
+}
+
+clean_demo4 () {
+  prep_demo4
+
+  echo "Cleaning up project"
+  oc delete project csi-driver-demo || echo "Project already deleted"
+  oc delete project csi-secrets-store || echo "Project already deleted"
+
+  echo "Checking if secrets-store and driver are installed via helm"
+  if helm list -n csi-secrets-store | grep csi-secrets-store-driver; then
+    echo "Removing csi secrets store and driver via helm"
+    helm delete -n csi-secrets-store csi-secrets-store-driver
+  fi
+
+  echo "Cleaning up additional scc permissions from service accounts"
+  oc adm policy remove-scc-from-user privileged system:serviceaccount:${NAMESPACE}:secrets-store-csi-driver || echo "SCC already removed for CSI driver"
+  oc adm policy remove-scc-from-user privileged system:serviceaccount:${NAMESPACE}:csi-secrets-store-provider-aws || echo "SCC already removed for AWS provider"
+
+  echo "Deleting the aws provider"
+  # To-DO: make this cleaner, it's not future proof
+  set +e
+  oc -n csi-secrets-store delete -f https://raw.githubusercontent.com/rh-mobb/documentation/main/content/docs/misc/secrets-store-csi/aws-provider-installer.yaml
+
+  echo "Checking if role ${CLUSTER}-access-to-aws-secret exists"
+  ROLE_CHECK=$(aws iam list-roles | grep ${CLUSTER}-access-to-aws-secret)
+  echo $ROLE_CHECK
+  set -e
+  if [ -n "${ROLE_CHECK}" ]; then
+    POLICY_ARN=$(aws iam list-policies --query "Policies[?PolicyName=='${CLUSTER}-access-to-my-secret'].{ARN:Arn}" --output text)
+    echo "Removing role policy ${CLUSTER}-access-to-aws-secret from ${POLICY_ARN}"
+    aws iam detach-role-policy --role-name "${CLUSTER}-access-to-aws-secret" --policy-arn ${POLICY_ARN} || echo "Policy already detached"
+
+    echo "Removing role ${CLUSTER}-access-to-aws-secret"
+    aws iam delete-role --role-name "${CLUSTER}-access-to-aws-secret"
+  fi
+
+  echo "Cleaning up secret from secretsmanager"
+  set +e
+  SECRET_ARN=$(aws secretsmanager list-secrets --query 'SecretList[].[ARN]' --output text | grep MySecret)
+  set -e
+  aws secretsmanager --region $REGION delete-secret --secret-id $SECRET_ARN --force-delete-without-recovery || echo "Secret already deleted"
 }
 
 # main
 read -p "Enter the cluster name: " CLUSTER
 
 read -p "Enter the AWS Region name: " AWS_REGION
+
+export CLUSTER
+export AWS_REGION
 
 if [ -z ${1+x} ]; then echo "Please provide a command"; help; fi
 
