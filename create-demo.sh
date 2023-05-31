@@ -33,6 +33,20 @@ help () {
   exit 1
 }
 
+check_cli () {
+  required_cmds=("oc" "sed" "aws" "rosa")
+
+  echo "Check all command tolls are installed"
+  for cmd in "${required_cmds[@]}"
+  do
+    if ! command -v $cmd &> /dev/null
+    then
+      echo "Please install $cmd to continue"
+      exit
+    fi
+  done
+}
+
 prep_demo1 () {
   export NAMESPACE=ack-system
   export IAM_USER=${CLUSTER}-ack-controller
