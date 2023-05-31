@@ -399,6 +399,57 @@ clean_demo3 () {
   echo "Demo 3 is cleaned up"
 }
 
+install_demo4 () {
+  echo "Deploy frontend patient portal"
+  oc project public
+  oc new-app quay.io/redhatintegration/patient-portal-frontend
+  oc expose deployment patient-portal-frontend --port=8080
+  oc create route edge --service=patient-portal-frontend --insecure-policy=Redirect
+  oc set env deployment/patient-portal-frontend DATABASE_SERVICE_HOST=database
+
+  # Log into other cluster
+  oc project private
+  oc new-app quay.io/redhatintegration/patient-portal-database
+  # We need to wait until this is runnung 
+  oc new-app quay.io/redhatintegration/patient-portal-payment-processor
+  oc expose deployment patient-portal-payment-processor --name=payment-processor --port=8080
+
+  # All apps are now installed
+
+  #Public
+  skupper init --enable-console --enable-flow-collector --console-auth unsecured
+  # Check skupper console
+
+  #Private
+  skupper init --ingress none --router-mode edge --enable-console=false
+
+  #Public
+  skupper token create ~/secret.token
+  cat root/secret.token
+
+  #You now copy the secret to a location that can be called by the next command for the private terminal
+  skupper link create home/secret.token
+  skupper link status
+  # Check skupper console
+  # Check front end, it should still be empty
+  # Skupper console components tab no lines between the components
+  # Terminal private
+  skupper expose deployment/patient-portal-database --address database --protocol tcp --port 5432
+  skupper expose deployment/patient-portal-payment-processor --address payment-processor --protocol http --port 8080
+
+  # None of this exposes the "internal" apps publically
+  # To confirm terminal public
+  oc get service
+  # Now check the front end and see its populated with data
+  # Select top one
+  # Select Bills
+  # Pay bill
+  # Refresh screen
+  # Goto skupper screen and checkout them arrows
+
+
+}
+
 # main
 read -p "Enter the cluster name: " CLUSTER
 
