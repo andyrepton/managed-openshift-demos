@@ -41,6 +41,19 @@ get_oidc_provider () {
     echo "Cluster appears to be HCP, getting OIDC provider from rosa command instead of oc command"
     export OIDC_PROVIDER=$(rosa describe cluster -c ${CLUSTER} -o json | jq -r '.aws.sts.oidc_config.issuer_url' | sed  's|^https://||')
   fi
+
+check_cli () {
+  required_cmds=("oc" "sed" "aws" "rosa")
+
+  echo "Check all command tolls are installed"
+  for cmd in "${required_cmds[@]}"
+  do
+    if ! command -v $cmd &> /dev/null
+    then
+      echo "Please install $cmd to continue"
+      exit
+    fi
+  done
 }
 
 prep_demo1 () {
