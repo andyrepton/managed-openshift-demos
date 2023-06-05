@@ -399,7 +399,7 @@ clean_demo3 () {
   echo "Demo 3 is cleaned up"
 }
 
-install_demo4 () {
+install_demo5 () {
   echo "Deploy frontend patient portal"
   oc project public
   oc new-app quay.io/redhatintegration/patient-portal-frontend

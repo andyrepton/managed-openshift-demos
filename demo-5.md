@@ -1,4 +1,4 @@
-# Demo 4: Red Hat Interconnects (skupper)
+# Demo 5: Red Hat Interconnects (skupper)
 
 ## Before you run your demo
 A second cluster is required
