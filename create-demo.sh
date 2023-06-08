@@ -540,7 +540,7 @@ clean_demo4 () {
 
 install_demo5 () {
   echo "Deploy frontend patient portal"
-  oc project public
+  oc new-project patient-portal-frontend
   oc new-app quay.io/redhatintegration/patient-portal-frontend
   oc expose deployment patient-portal-frontend --port=8080
   oc create route edge --service=patient-portal-frontend --insecure-policy=Redirect
