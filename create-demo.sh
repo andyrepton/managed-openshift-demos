@@ -57,7 +57,17 @@ check_cli () {
   done
 }
 
+cluster_details () {
+  read -p "Enter the cluster name: " CLUSTER
+
+  read -p "Enter the AWS Region name: " AWS_REGION
+
+  export CLUSTER
+  export AWS_REGION
+}
+
 prep_demo1 () {
+  cluster_details
   export NAMESPACE=ack-system
   export IAM_USER=${CLUSTER}-ack-controller
   # you can find the recommended policy in each projects github repo, example https://github.com/aws-controllers-k8s/s3-controller/blob/main/config/iam/recommended-policy-arn
@@ -145,6 +155,7 @@ clean_demo1 () {
 }
 
 prep_demo2 () {
+  cluster_details
   export NAMESPACE=amazon-cloudwatch
   export IAM_USER=${CLUSTER}-cloud-watch
   export CW_POLICY_ARN=arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
@@ -251,6 +262,7 @@ clean_demo2 () {
 }
 
 prep_demo3 () {
+  cluster_details
   export NAMESPACE=openshift-logging
   export POLICY_ARN_NAME=RosaCloudWatch
   export SCRATCH_DIR=/tmp/cloudwatch-logging
@@ -419,6 +431,7 @@ clean_demo3 () {
 }
 
 prep_demo4 () {
+  cluster_details
   export NAMESPACE=csi-secrets-store
   export SCRATCH_DIR=/tmp/aws-secrets-manager-csi
   export AWS_PAGER=""
@@ -540,11 +553,76 @@ clean_demo4 () {
 }
 
 install_demo5 () {
+
+  if ! command -v skupper &> /dev/null
+    then
+      echo "Please install skupper to continue"
+      exit
+  fi
   echo "Deploy frontend patient portal"
+  echo "Create new project for the front end portal"
   oc new-project patient-portal-frontend
+  echo "Deploy the application"
   oc new-app quay.io/redhatintegration/patient-portal-frontend
+  echo "Set up infrastructure to expose the app"
   oc expose deployment patient-portal-frontend --port=8080
   oc create route edge --service=patient-portal-frontend --insecure-policy=Redirect
+  echo "Here is the front end url"
+  echo "https://`oc get routes/patient-portal-frontend -o jsonpath={.spec.host}`"
+  read -p "Press key to continue"
+
+  oc set env deployment/patient-portal-frontend DATABASE_SERVICE_HOST=database
+
+  # Log into other cluster
+  oc project private
+  oc new-app quay.io/redhatintegration/patient-portal-database
+  # We need to wait until this is runnung 
+  oc new-app quay.io/redhatintegration/patient-portal-payment-processor
+  oc expose deployment patient-portal-payment-processor --name=payment-processor --port=8080
+
+  # All apps are now installed
+
+  #Public
+  skupper init --enable-console --enable-flow-collector --console-auth unsecured
+  # Check skupper console
+
+  #Private
+  skupper init --ingress none --router-mode edge --enable-console=false
+
+  #Public
+  skupper token create ~/secret.token
+  cat root/secret.token
+
+  #You now copy the secret to a location that can be called by the next command for the private terminal
+  skupper link create home/secret.token
+  skupper link status
+  # Check skupper console
+  # Check front end, it should still be empty
+  # Skupper console components tab no lines between the components
+  # Terminal private
+  skupper expose deployment/patient-portal-database --address database --protocol tcp --port 5432
+  skupper expose deployment/patient-portal-payment-processor --address payment-processor --protocol http --port 8080
+
+  # None of this exposes the "internal" apps publically
+  # To confirm terminal public
+  oc get service
+  # Now check the front end and see its populated with data
+  # Select top one
+  # Select Bills
+  # Pay bill
+  # Refresh screen
+  # Goto skupper screen and checkout them arrows
+
+
+}
+
+
+clean_demo5 () {
+
+  echo "Delete frontend patient portal"
+  echo "Create new project for the front end portal"
+  oc delete project patient-portal-frontend
+
   oc set env deployment/patient-portal-frontend DATABASE_SERVICE_HOST=database
 
   # Log into other cluster
@@ -591,12 +669,6 @@ install_demo5 () {
 }
 
 # main
-read -p "Enter the cluster name: " CLUSTER
-
-read -p "Enter the AWS Region name: " AWS_REGION
-
-export CLUSTER
-export AWS_REGION
 
 if [ -z ${1+x} ]; then echo "Please provide a command"; help; fi
 
