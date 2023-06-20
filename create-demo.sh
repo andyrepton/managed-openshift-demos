@@ -559,7 +559,30 @@ install_demo5 () {
       echo "Please install skupper to continue"
       exit
   fi
-  echo "Deploy frontend patient portal"
+
+  echo "Cluster 1 details"
+  read -p "Cluster 1 api url? " CLUSTER1_API
+  read -p "Cluster 1 username? " CLUSTER1_USERNAME
+  echo "Cluster 1 password? "
+  IFS= read -rs  CLUSTER1_PASSWORD
+
+  export CLUSTER1_API
+  export CLUSTER1_USERNAME
+  export CLUSTER1_PASSWORD
+
+  echo "Cluster 2 details"
+  read -p "Cluster 2 api url? " CLUSTER2_API
+  read -p "Cluster 2 username? " CLUSTER2_USERNAME
+  echo "Cluster 2 password? "
+  IFS= read -rs  CLUSTER2_PASSWORD
+
+  export CLUSTER2_API
+  export CLUSTER2_USERNAME
+  export CLUSTER2_PASSWORD
+
+  echo "Deploy frontend patient portal to cluster 1"
+  oc login $CLUSTER1_API --username $CLUSTER1_USERNAME --password $CLUSTER1_PASSWORD
+
   echo "Create new project for the front end portal"
   oc new-project patient-portal-frontend
   echo "Deploy the application"
@@ -574,9 +597,23 @@ install_demo5 () {
   oc set env deployment/patient-portal-frontend DATABASE_SERVICE_HOST=database
 
   # Log into other cluster
-  oc project private
+  oc login $CLUSTER2_API --username $CLUSTER2_USERNAME --password $CLUSTER2_PASSWORD
+  echo "Create project and deploy the patient portal database"
+  oc new-project private
   oc new-app quay.io/redhatintegration/patient-portal-database
-  # We need to wait until this is runnung 
+  echo "Wait DB deployment"
+  DB_STATUS=""
+  while [ DB_STATUS == "" ]
+  do
+    current_status=`oc rollout status deployment patient-portal-database`
+    if [ echo $current_status | grep -v "Waiting" ]
+    then
+      break
+    fi
+    echo $current_status
+  done
+
+  echo "Deploy payment processor service and expose that 'internally'"
   oc new-app quay.io/redhatintegration/patient-portal-payment-processor
   oc expose deployment patient-portal-payment-processor --name=payment-processor --port=8080
 
