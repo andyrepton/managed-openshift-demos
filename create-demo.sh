@@ -41,6 +41,7 @@ get_oidc_provider () {
     echo "Cluster appears to be HCP, getting OIDC provider from rosa command instead of oc command"
     export OIDC_PROVIDER=$(rosa describe cluster -c ${CLUSTER} -o json | jq -r '.aws.sts.oidc_config.issuer_url' | sed  's|^https://||')
   fi
+}
 
 check_cli () {
   required_cmds=("oc" "sed" "aws" "rosa")
