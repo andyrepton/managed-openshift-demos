@@ -1,0 +1,15 @@
+ansible
+boto3 #==2.49.0
+
+# required for k8s ansible module
+openshift==0.13.1
+
+# required for dns lookups
+dnspython==1.16.0
+
+# required for linting
+yamllint==1.24.2
+ansible-lint==4.3.4
+
+# semver processing
+semver==2.13.0

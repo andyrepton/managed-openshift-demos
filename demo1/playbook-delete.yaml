@@ -1,0 +1,23 @@
+---
+- hosts: localhost
+  connection: "local"
+
+  vars:
+    cluster: example-cluster
+    ocp_namespace: ack-system
+    aws_region: us-east-2
+
+  tasks:
+    - set_fact:
+         _aws_iam_user: "{{ cluster }}-ack-controller"
+    - name: Delete IAM user
+      amazon.aws.iam_user:
+        name: "{{ _aws_iam_user }}"
+        state: absent
+
+    - name: Delete k8s namespace
+      kubernetes.core.k8s:
+        name: "{{ ocp_namespace }}"
+        api_version: v1
+        kind: Namespace
+        state: absent
