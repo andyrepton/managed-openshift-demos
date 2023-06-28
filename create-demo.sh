@@ -552,7 +552,41 @@ clean_demo4 () {
   aws secretsmanager --region $REGION delete-secret --secret-id $SECRET_ARN --force-delete-without-recovery || echo "Secret already deleted"
 }
 
+prep_demo5 () {
+  R='\033[0;31m'
+  B='\033[0;36m'
+  NC='\033[0m'
+
+  printf "${R}To run this demo you will need two clusters\n"
+  printf "The api url, username and password are required for both\n"
+  printf "You will be asked for the details of each cluster, the password is shadowed\n ${NC}"
+
+  printf "${B}Cluster 1 details${NC}\n"
+  read -p "     Cluster 1 api url? " CLUSTER1_API
+  read -p "     Cluster 1 username? " CLUSTER1_USERNAME
+  echo "     Cluster 1 password? "
+  IFS= read -rs  CLUSTER1_PASSWORD
+
+  export CLUSTER1_API
+  export CLUSTER1_USERNAME
+  export CLUSTER1_PASSWORD
+
+  printf "${B}Cluster 2 details${NC}\n"
+  read -p "     Cluster 2 api url? " CLUSTER2_API
+  read -p "     Cluster 2 username? " CLUSTER2_USERNAME
+  echo "     Cluster 2 password? "
+  IFS= read -rs  CLUSTER2_PASSWORD
+
+  export CLUSTER2_API
+  export CLUSTER2_USERNAME
+  export CLUSTER2_PASSWORD
+}
+
 install_demo5 () {
+
+  R='\033[0;31m'
+  B='\033[0;36m'
+  NC='\033[0m'
 
   if ! command -v skupper &> /dev/null
     then
@@ -560,38 +594,24 @@ install_demo5 () {
       exit
   fi
 
-  echo "Cluster 1 details"
-  read -p "Cluster 1 api url? " CLUSTER1_API
-  read -p "Cluster 1 username? " CLUSTER1_USERNAME
-  echo "Cluster 1 password? "
-  IFS= read -rs  CLUSTER1_PASSWORD
-
-  export CLUSTER1_API
-  export CLUSTER1_USERNAME
-  export CLUSTER1_PASSWORD
-
-  echo "Cluster 2 details"
-  read -p "Cluster 2 api url? " CLUSTER2_API
-  read -p "Cluster 2 username? " CLUSTER2_USERNAME
-  echo "Cluster 2 password? "
-  IFS= read -rs  CLUSTER2_PASSWORD
-
-  export CLUSTER2_API
-  export CLUSTER2_USERNAME
-  export CLUSTER2_PASSWORD
+  prep_demo5
 
   echo "Deploy frontend patient portal to cluster 1"
   oc login $CLUSTER1_API --username $CLUSTER1_USERNAME --password $CLUSTER1_PASSWORD
 
+  echo ""
   echo "Create new project for the front end portal"
   oc new-project patient-portal-frontend
+  echo ""
   echo "Deploy the application"
   oc new-app quay.io/redhatintegration/patient-portal-frontend
+
+  echo ""
   echo "Set up infrastructure to expose the app"
   oc expose deployment patient-portal-frontend --port=8080
   oc create route edge --service=patient-portal-frontend --insecure-policy=Redirect
   echo "Here is the front end url"
-  echo "https://`oc get routes/patient-portal-frontend -o jsonpath={.spec.host}`"
+  printf "${B}https://`oc get routes/patient-portal-frontend -o jsonpath={.spec.host}`\n${nc}"
   read -p "Press key to continue"
 
   oc set env deployment/patient-portal-frontend DATABASE_SERVICE_HOST=database
@@ -656,13 +676,14 @@ install_demo5 () {
 
 clean_demo5 () {
 
+  prep_demo5
+  
   echo "Delete frontend patient portal"
-  echo "Create new project for the front end portal"
+  oc login $CLUSTER1_API --username $CLUSTER1_USERNAME --password $CLUSTER1_PASSWORD
   oc delete project patient-portal-frontend
 
-  oc set env deployment/patient-portal-frontend DATABASE_SERVICE_HOST=database
-
   # Log into other cluster
+  oc login $CLUSTER2_API --username $CLUSTER2_USERNAME --password $CLUSTER2_PASSWORD
   oc project private
   oc new-app quay.io/redhatintegration/patient-portal-database
   # We need to wait until this is runnung 
