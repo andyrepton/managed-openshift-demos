@@ -553,6 +553,15 @@ clean_demo4 () {
 }
 
 prep_demo5 () {
+
+  echo "Checking for a config file"
+  if [ -f demo5/demo5_config.txt ]; then
+  echo "File found"
+    source demo5/demo5_config.txt
+    return
+  fi
+
+  echo "No config file found please enter the required details"
   R='\033[0;31m'
   B='\033[0;36m'
   NC='\033[0m'
@@ -580,6 +589,8 @@ prep_demo5 () {
   export CLUSTER2_API
   export CLUSTER2_USERNAME
   export CLUSTER2_PASSWORD
+
+  exit
 }
 
 install_demo5 () {
@@ -611,58 +622,97 @@ install_demo5 () {
   oc expose deployment patient-portal-frontend --port=8080
   oc create route edge --service=patient-portal-frontend --insecure-policy=Redirect
   echo "Here is the front end url"
-  printf "${B}https://`oc get routes/patient-portal-frontend -o jsonpath={.spec.host}`\n${nc}"
+  printf "${B}https://`oc get routes/patient-portal-frontend -o jsonpath={.spec.host}`\n${NC}"
   read -p "Press key to continue"
 
   oc set env deployment/patient-portal-frontend DATABASE_SERVICE_HOST=database
 
   # Log into other cluster
   oc login $CLUSTER2_API --username $CLUSTER2_USERNAME --password $CLUSTER2_PASSWORD
-  echo "Create project and deploy the patient portal database"
+  printf "${B}Create project and deploy the patient portal database to cluster 2\n${NC}"
   oc new-project private
   oc new-app quay.io/redhatintegration/patient-portal-database
   echo "Wait DB deployment"
   DB_STATUS=""
-  while [ DB_STATUS == "" ]
+  while [ DB_STATUS="" ]
   do
+    oc rollout status deployment patient-portal-database
     current_status=`oc rollout status deployment patient-portal-database`
-    if [ echo $current_status | grep -v "Waiting" ]
+    if [[ $current_status == *"successfully"* ]]
     then
       break
     fi
-    echo $current_status
   done
 
-  echo "Deploy payment processor service and expose that 'internally'"
+  printf "${B}Services available in the cluster\n${NC}"
+  oc get svc
+
+  printf "${B}Confirm no external routes have been created\n${NC}"
+  oc get routes
+  read -p "Press key to continue"
+
+  printf "${B}Deploy payment processor service and expose that 'internally'\n${NC}"
   oc new-app quay.io/redhatintegration/patient-portal-payment-processor
   oc expose deployment patient-portal-payment-processor --name=payment-processor --port=8080
+
+  printf "${B}Services available in the cluster\n${NC}"
+  oc get svc
+
+  printf "${B}Confirm no external routes have been created\n${NC}"
+  oc get routes
+
+  read -p "Press key to continue"
 
   # All apps are now installed
 
   #Public
+  echo "Install Skupper console on the public cluster"
+  oc login $CLUSTER1_API --username $CLUSTER1_USERNAME --password $CLUSTER1_PASSWORD
+  oc project patient-portal-frontend
   skupper init --enable-console --enable-flow-collector --console-auth unsecured
   # Check skupper console
+  skupper status
+  read -p "Press key to continue"
 
   #Private
+  echo "Create the skupper ingress router on the private cluster"
+  oc login $CLUSTER2_API --username $CLUSTER2_USERNAME --password $CLUSTER2_PASSWORD
+  oc project private
   skupper init --ingress none --router-mode edge --enable-console=false
+  skupper status
+  read -p "Press key to continue"
 
   #Public
-  skupper token create ~/secret.token
-  cat root/secret.token
+  echo "Create the token that ties the services together"
+  oc login $CLUSTER1_API --username $CLUSTER1_USERNAME --password $CLUSTER1_PASSWORD
+  oc project patient-portal-frontend
+  skupper token create demo5/secret.token
+  demo_secret=`cat demo5/secret.token`
+  echo "Demo Secret"
+  echo $demo_secret
 
   #You now copy the secret to a location that can be called by the next command for the private terminal
-  skupper link create home/secret.token
+  echo "Tie secret and link together"
+  oc login $CLUSTER2_API --username $CLUSTER2_USERNAME --password $CLUSTER2_PASSWORD
+  oc project private
+  skupper link create demo5/secret.token
   skupper link status
+  read -p "Press key to continue"
   # Check skupper console
   # Check front end, it should still be empty
   # Skupper console components tab no lines between the components
-  # Terminal private
+
+  echo "expose database to skupper"
   skupper expose deployment/patient-portal-database --address database --protocol tcp --port 5432
+  echo "expose payment processor to skupper"
   skupper expose deployment/patient-portal-payment-processor --address payment-processor --protocol http --port 8080
+
+  oc get service -n private
+  read -p "Press key to continue"
 
   # None of this exposes the "internal" apps publically
   # To confirm terminal public
-  oc get service
+  # oc get service
   # Now check the front end and see its populated with data
   # Select top one
   # Select Bills
@@ -678,52 +728,21 @@ clean_demo5 () {
 
   prep_demo5
   
+  error_handler()
+  {
+    echo "Error: $1"
+  }
+
   echo "Delete frontend patient portal"
   oc login $CLUSTER1_API --username $CLUSTER1_USERNAME --password $CLUSTER1_PASSWORD
-  oc delete project patient-portal-frontend
+  oc delete project patient-portal-frontend || error_handler "Projected already deleted"
+  oc delete project skupper || error_handler "Projected already deleted"
 
   # Log into other cluster
+  echo "Delete backend services"
   oc login $CLUSTER2_API --username $CLUSTER2_USERNAME --password $CLUSTER2_PASSWORD
-  oc project private
-  oc new-app quay.io/redhatintegration/patient-portal-database
-  # We need to wait until this is runnung 
-  oc new-app quay.io/redhatintegration/patient-portal-payment-processor
-  oc expose deployment patient-portal-payment-processor --name=payment-processor --port=8080
-
-  # All apps are now installed
-
-  #Public
-  skupper init --enable-console --enable-flow-collector --console-auth unsecured
-  # Check skupper console
-
-  #Private
-  skupper init --ingress none --router-mode edge --enable-console=false
-
-  #Public
-  skupper token create ~/secret.token
-  cat root/secret.token
-
-  #You now copy the secret to a location that can be called by the next command for the private terminal
-  skupper link create home/secret.token
-  skupper link status
-  # Check skupper console
-  # Check front end, it should still be empty
-  # Skupper console components tab no lines between the components
-  # Terminal private
-  skupper expose deployment/patient-portal-database --address database --protocol tcp --port 5432
-  skupper expose deployment/patient-portal-payment-processor --address payment-processor --protocol http --port 8080
-
-  # None of this exposes the "internal" apps publically
-  # To confirm terminal public
-  oc get service
-  # Now check the front end and see its populated with data
-  # Select top one
-  # Select Bills
-  # Pay bill
-  # Refresh screen
-  # Goto skupper screen and checkout them arrows
-
-
+  oc delete project private || error_handler "Projected already deleted"
+  
 }
 
 # main
