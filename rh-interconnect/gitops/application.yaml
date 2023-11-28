@@ -1,0 +1,22 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: skupper-install
+  namespace: openshift-gitops
+spec:
+  destination:
+    namespace: openshift-operators
+    server: https://kubernetes.default.svc
+  project: default
+  source:
+    directory:
+      recurse: false
+    path: rh-interconnect
+    repoURL: https://github.com/andyrepton/rosa-demos
+    targetRevision: main
+  syncPolicy:
+    syncOptions:
+    - CreateNamespace=false
+    automated:
+      prune: true
+      selfHeal: true
