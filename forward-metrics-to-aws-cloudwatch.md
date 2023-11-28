@@ -10,13 +10,13 @@
 
 2. Show the empty dashboard in AWS (the setup script will spit out the dashboard link)
 
-$ oc apply -f demo2/cloud-watch.yaml
+$ oc apply -f forward-metrics-to-aws-cloudwatch/cloud-watch.yaml
 
 $ oc get pods -n amazon-cloudwatch
 
-$ cat demo2/dashboard.json
+$ cat forward-metrics-to-aws-cloudwatch/dashboard.json
 
-$ cat demo2/dashboard.json | pbcopy
+$ cat forward-metrics-to-aws-cloudwatch/dashboard.json | pbcopy
 
 Paste into your dashboard: Actions -> View/Edit Source and then paste
 

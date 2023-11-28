@@ -1,0 +1,8 @@
+dn: uid=user1,ou=people,dc=example,dc=com
+objectClass: top
+objectClass: person
+objectClass: organizationalPerson
+objectClass: inetOrgPerson
+uid: user1
+cn: User One
+userPassword: {SSHA}GGoJEPvF6q/ZgjFipScR6Kvi4P88hL8a

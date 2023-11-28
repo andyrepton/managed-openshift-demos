@@ -11,9 +11,9 @@
 ```
 $ aws s3 ls | grep hello-hcp
 
-$ cat demo1/bucket.yaml
+$ cat deploy-s3-buckets-with-ack/bucket.yaml
 
-$ oc apply -f demo1/bucket.yaml
+$ oc apply -f deploy-s3-buckets-with-ack/bucket.yaml
 
 $ aws s3 ls | grep hello-hcp
 

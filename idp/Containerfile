@@ -1,0 +1,26 @@
+# Use the official Fedora image as the base image
+FROM fedora:latest
+
+# Install OpenLDAP server package
+RUN dnf install -y openldap-servers && dnf clean all
+
+# Copy the LDAP server configuration files to the container
+RUN rm -Rf /etc/openldap/slapd.d/*
+COPY slapd.conf /etc/openldap/slapd.conf
+COPY ldap.conf /etc/openldap/ldap.conf
+COPY user1.ldif /etc/openldap/user1.ldif
+
+# Define environment variables for LDAP admin user and password
+ENV LDAP_ADMIN_USER=admin
+ENV LDAP_ADMIN_PASSWORD=testing
+
+# Expose the default LDAP port
+EXPOSE 389
+
+# Create DB directory
+RUN mkdir -p /var/openldap-data && chown ldap:ldap /var/openldap-data
+
+# Start the LDAP server
+#CMD ["slapd", "-d", "-1", "-f", "/etc/openldap/slapd.conf", "-u", "ldap", "-g", "ldap"]
+CMD ["sh", "-c", "slapadd -F /etc/openldap/slapd.d -b 'dc=example,dc=com' -l /etc/openldap/user1.ldif && slapd -d 0 -F /etc/openldap/slapd.d -u ldap -g ldap"]
+#CMD ["sh", "-c", "mkdir -p /etc/openldap/slapd.d && slaptest -f /etc/openldap/slapd.conf -F /etc/openldap/slapd.d && slapadd -F /etc/openldap/slapd.d -n 0 -b 'dc=example,dc=com' -l /root/add_user.ldif && slapd -d 0 -F /etc/openldap/slapd.d -u ldap -g ldap"]

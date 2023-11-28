@@ -15,10 +15,10 @@
 $ oc project openshift-logging
 
 # Explain what the logforwader is and how it works:
-$ cat demo3/logforwarder.yaml
+$ cat forward-logs-to-aws-cloudwatch/logforwarder.yaml
 
 # Apply the forwarded:
-$ oc apply -f demo3/logforwarder.yaml
+$ oc apply -f forward-logs-to-aws-cloudwatch/logforwarder.yaml
 
 # Show that logs have arrived:
 $ aws logs describe-log-groups --log-group-name-prefix poc-andyr
