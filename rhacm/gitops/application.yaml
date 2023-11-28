@@ -10,8 +10,8 @@ spec:
   project: default
   source:
     directory:
-      recurse: true
-    path: rhacm/gitops
+      recurse: false
+    path: rhacm
     repoURL: https://github.com/andyrepton/rosa-demos
     targetRevision: main
   syncPolicy:
