@@ -12,7 +12,7 @@ spec:
     directory:
       recurse: true
     path: rhacm/gitops
-    repoURL: 
+    repoURL: https://github.com/andyrepton/rosa-demos
     targetRevision: main
   syncPolicy:
     syncOptions:
