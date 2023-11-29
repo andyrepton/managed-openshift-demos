@@ -1,0 +1,30 @@
+apiVersion: maistra.io/v2
+kind: ServiceMeshControlPlane
+metadata:
+  name: basic
+  namespace: istio-system
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  security:
+    identity:
+      type: ThirdParty
+  tracing:
+    type: Jaeger
+    sampling: 10000
+  policy:
+    type: Istiod
+  addons:
+    grafana:
+      enabled: true
+    jaeger:
+      install:
+        storage:
+          type: Memory
+    kiali:
+      enabled: true
+    prometheus:
+      enabled: true
+  telemetry:
+    type: Istiod
+  version: v2.1

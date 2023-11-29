@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: skupper-install
+  name: service-mesh-install
   namespace: openshift-gitops
 spec:
   destination:
@@ -11,12 +11,12 @@ spec:
   source:
     directory:
       recurse: false
-    path: rh-interconnect
+    path: openshift-service-mesh
     repoURL: https://github.com/andyrepton/managed-openshift-demos
     targetRevision: main
   syncPolicy:
     syncOptions:
-    - CreateNamespace=false
+    - CreateNamespace=true
     automated:
       prune: true
       selfHeal: true

@@ -12,7 +12,7 @@ spec:
     directory:
       recurse: false
     path: rhacm
-    repoURL: https://github.com/andyrepton/rosa-demos
+    repoURL: https://github.com/andyrepton/managed-openshift-demos
     targetRevision: main
   syncPolicy:
     syncOptions:
