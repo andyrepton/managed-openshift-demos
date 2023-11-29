@@ -50,6 +50,6 @@ Please see the [./rh-interconnect](./rh-interconnect) folder
 
 ### Demonstrating developer productivity via Source2Image
 
-Please see [./demonstrate-s2i.md])(demonstrate-s2i.md)
+Please see [./demonstrate-s2i.md](demonstrate-s2i.md)
 
 The key here is that the repository does not have a Dockerfile, nor does it need one. Your developers can write their code and deploy onto OpenShift quickly and easily
