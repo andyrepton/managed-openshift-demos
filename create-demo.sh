@@ -57,7 +57,17 @@ check_cli () {
   done
 }
 
+cluster_details () {
+  read -p "Enter the cluster name: " CLUSTER
+
+  read -p "Enter the AWS Region name: " AWS_REGION
+
+  export CLUSTER
+  export AWS_REGION
+}
+
 prep_demo1 () {
+  cluster_details
   export NAMESPACE=ack-system
   export IAM_USER=${CLUSTER}-ack-controller
   # you can find the recommended policy in each projects github repo, example https://github.com/aws-controllers-k8s/s3-controller/blob/main/config/iam/recommended-policy-arn
@@ -145,6 +155,7 @@ clean_demo1 () {
 }
 
 prep_demo2 () {
+  cluster_details
   export NAMESPACE=amazon-cloudwatch
   export IAM_USER=${CLUSTER}-cloud-watch
   export CW_POLICY_ARN=arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
@@ -251,6 +262,7 @@ clean_demo2 () {
 }
 
 prep_demo3 () {
+  cluster_details
   export NAMESPACE=openshift-logging
   export POLICY_ARN_NAME=RosaCloudWatch
   export SCRATCH_DIR=/tmp/cloudwatch-logging
@@ -419,6 +431,7 @@ clean_demo3 () {
 }
 
 prep_demo4 () {
+  cluster_details
   export NAMESPACE=csi-secrets-store
   export SCRATCH_DIR=/tmp/aws-secrets-manager-csi
   export AWS_PAGER=""
@@ -539,13 +552,200 @@ clean_demo4 () {
   aws secretsmanager --region $REGION delete-secret --secret-id $SECRET_ARN --force-delete-without-recovery || echo "Secret already deleted"
 }
 
+prep_demo5 () {
+
+  echo "Checking for a config file"
+  if [ -f demo5/demo5_config.txt ]; then
+  echo "File found"
+    source demo5/demo5_config.txt
+    return
+  fi
+
+  echo "No config file found please enter the required details"
+  R='\033[0;31m'
+  B='\033[0;36m'
+  NC='\033[0m'
+
+  printf "${R}To run this demo you will need two clusters\n"
+  printf "The api url, username and password are required for both\n"
+  printf "You will be asked for the details of each cluster, the password is shadowed\n ${NC}"
+
+  printf "${B}Cluster 1 details${NC}\n"
+  read -p "     Cluster 1 api url? " CLUSTER1_API
+  read -p "     Cluster 1 username? " CLUSTER1_USERNAME
+  echo "     Cluster 1 password? "
+  IFS= read -rs  CLUSTER1_PASSWORD
+
+  export CLUSTER1_API
+  export CLUSTER1_USERNAME
+  export CLUSTER1_PASSWORD
+
+  printf "${B}Cluster 2 details${NC}\n"
+  read -p "     Cluster 2 api url? " CLUSTER2_API
+  read -p "     Cluster 2 username? " CLUSTER2_USERNAME
+  echo "     Cluster 2 password? "
+  IFS= read -rs  CLUSTER2_PASSWORD
+
+  export CLUSTER2_API
+  export CLUSTER2_USERNAME
+  export CLUSTER2_PASSWORD
+
+  exit
+}
+
+install_demo5 () {
+
+  R='\033[0;31m'
+  B='\033[0;36m'
+  NC='\033[0m'
+
+  if ! command -v skupper &> /dev/null
+    then
+      echo "Please install skupper to continue"
+      exit
+  fi
+
+  prep_demo5
+
+  echo "Deploy frontend patient portal to cluster 1"
+  oc login $CLUSTER1_API --username $CLUSTER1_USERNAME --password $CLUSTER1_PASSWORD
+
+  echo ""
+  echo "Create new project for the front end portal"
+  oc new-project patient-portal-frontend
+  echo ""
+  echo "Deploy the application"
+  oc new-app quay.io/redhatintegration/patient-portal-frontend
+
+  echo ""
+  echo "Set up infrastructure to expose the app"
+  oc expose deployment patient-portal-frontend --port=8080
+  oc create route edge --service=patient-portal-frontend --insecure-policy=Redirect
+  echo "Here is the front end url"
+  printf "${B}https://`oc get routes/patient-portal-frontend -o jsonpath={.spec.host}`\n${NC}"
+  read -p "Press key to continue"
+
+  oc set env deployment/patient-portal-frontend DATABASE_SERVICE_HOST=database
+
+  # Log into other cluster
+  oc login $CLUSTER2_API --username $CLUSTER2_USERNAME --password $CLUSTER2_PASSWORD
+  printf "${B}Create project and deploy the patient portal database to cluster 2\n${NC}"
+  oc new-project private
+  oc new-app quay.io/redhatintegration/patient-portal-database
+  echo "Wait DB deployment"
+  DB_STATUS=""
+  while [ DB_STATUS="" ]
+  do
+    oc rollout status deployment patient-portal-database
+    current_status=`oc rollout status deployment patient-portal-database`
+    if [[ $current_status == *"successfully"* ]]
+    then
+      break
+    fi
+  done
+
+  printf "${B}Services available in the cluster\n${NC}"
+  oc get svc
+
+  printf "${B}Confirm no external routes have been created\n${NC}"
+  oc get routes
+  read -p "Press key to continue"
+
+  printf "${B}Deploy payment processor service and expose that 'internally'\n${NC}"
+  oc new-app quay.io/redhatintegration/patient-portal-payment-processor
+  oc expose deployment patient-portal-payment-processor --name=payment-processor --port=8080
+
+  printf "${B}Services available in the cluster\n${NC}"
+  oc get svc
+
+  printf "${B}Confirm no external routes have been created\n${NC}"
+  oc get routes
+
+  read -p "Press key to continue"
+
+  # All apps are now installed
+
+  #Public
+  echo "Install Skupper console on the public cluster"
+  oc login $CLUSTER1_API --username $CLUSTER1_USERNAME --password $CLUSTER1_PASSWORD
+  oc project patient-portal-frontend
+  skupper init --enable-console --enable-flow-collector --console-auth unsecured
+  # Check skupper console
+  skupper status
+  read -p "Press key to continue"
+
+  #Private
+  echo "Create the skupper ingress router on the private cluster"
+  oc login $CLUSTER2_API --username $CLUSTER2_USERNAME --password $CLUSTER2_PASSWORD
+  oc project private
+  skupper init --ingress none --router-mode edge --enable-console=false
+  skupper status
+  read -p "Press key to continue"
+
+  #Public
+  echo "Create the token that ties the services together"
+  oc login $CLUSTER1_API --username $CLUSTER1_USERNAME --password $CLUSTER1_PASSWORD
+  oc project patient-portal-frontend
+  skupper token create demo5/secret.token
+  demo_secret=`cat demo5/secret.token`
+  echo "Demo Secret"
+  echo $demo_secret
+
+  #You now copy the secret to a location that can be called by the next command for the private terminal
+  echo "Tie secret and link together"
+  oc login $CLUSTER2_API --username $CLUSTER2_USERNAME --password $CLUSTER2_PASSWORD
+  oc project private
+  skupper link create demo5/secret.token
+  skupper link status
+  read -p "Press key to continue"
+  # Check skupper console
+  # Check front end, it should still be empty
+  # Skupper console components tab no lines between the components
+
+  echo "expose database to skupper"
+  skupper expose deployment/patient-portal-database --address database --protocol tcp --port 5432
+  echo "expose payment processor to skupper"
+  skupper expose deployment/patient-portal-payment-processor --address payment-processor --protocol http --port 8080
+
+  oc get service -n private
+  read -p "Press key to continue"
+
+  # None of this exposes the "internal" apps publically
+  # To confirm terminal public
+  # oc get service
+  # Now check the front end and see its populated with data
+  # Select top one
+  # Select Bills
+  # Pay bill
+  # Refresh screen
+  # Goto skupper screen and checkout them arrows
+
+
+}
+
+
+clean_demo5 () {
+
+  prep_demo5
+  
+  error_handler()
+  {
+    echo "Error: $1"
+  }
+
+  echo "Delete frontend patient portal"
+  oc login $CLUSTER1_API --username $CLUSTER1_USERNAME --password $CLUSTER1_PASSWORD
+  oc delete project patient-portal-frontend || error_handler "Projected already deleted"
+  oc delete project skupper || error_handler "Projected already deleted"
+
+  # Log into other cluster
+  echo "Delete backend services"
+  oc login $CLUSTER2_API --username $CLUSTER2_USERNAME --password $CLUSTER2_PASSWORD
+  oc delete project private || error_handler "Projected already deleted"
+  
+}
+
 # main
-read -p "Enter the cluster name: " CLUSTER
-
-read -p "Enter the AWS Region name: " AWS_REGION
-
-export CLUSTER
-export AWS_REGION
 
 if [ -z ${1+x} ]; then echo "Please provide a command"; help; fi
 

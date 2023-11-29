@@ -1,0 +1,7 @@
+export CLUSTER1_API=https://api.rhys1.fgkx.p1.openshiftapps.com:6443
+export CLUSTER1_USERNAME=cluster-admin
+export CLUSTER1_PASSWORD=fipur-BpJit-cSjob-Rqtmu
+
+export CLUSTER2_API=https://api.rhys2.lhnt.p1.openshiftapps.com:6443
+export CLUSTER2_USERNAME=cluster-admin
+export CLUSTER2_PASSWORD=qtnDR-UttYQ-UbwRn-VRsA4
