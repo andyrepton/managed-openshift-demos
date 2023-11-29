@@ -12,40 +12,40 @@ Thanks!
 
 This demo only works on ROSA
 
-Please see deploy-s3-buckets-with-ack.md
+Please see [./deploy-s3-buckets-with-ack.md](./deploy-s3-buckets-with-ack.md)
 
 ### Deploying an App with Service Mesh
 
 Please note this is still a work in progress
 
-Please see deploying-an-app-with-service-mesh.md
+Please see [./deploying-an-app-with-service-mesh.md](./deploying-an-app-with-service-mesh.md)
 
 ### Forwarding logs to AWS CloudWatch from a ROSA cluster
 
 This demo only works on ROSA
 
-Please see forward-logs-to-aws-cloudwatch.md
+Please see [./forward-logs-to-aws-cloudwatch.md](./forward-logs-to-aws-cloudwatch.md)
 
 ### Forwarding metrics to AWS CloudWatch from a ROSA cluster
 
 This demo only works on ROSA
 
-Please see forward-metrics-to-aws-cloudwatch.md
+Please see [./forward-metrics-to-aws-cloudwatch.md](./forward-metrics-to-aws-cloudwatch.md)
 
 ### Deploying OpenShift gitops onto a new ARO or ROSA cluster
 
-Please see the openshift-gitops folder
+Please see the [./openshift-gitops](./openshift-gitops) folder
 
 ### Deploying RHACM onto a Managed OpenShift Cluster using the command line or via GitOps
 
-Please see the rhacm folder
+Please see the [./rhacm](./rhacm) folder
 
 ### Deploying OpenShift Service Mesh onto a Managed OpenShift Cluster using the command line or via GitOps
 
-Please see the openshift-service-mesh folder
+Please see the [./openshift-service-mesh](./openshift-service-mesh) folder
 
 ### Deploying OpenShift Interconnect (Skupper) onto a Managed OpenShift Cluster using the command line or via GitOps
 
-Please see the rh-interconnect folder
+Please see the [./rh-interconnect](./rh-interconnect) folder
 
 
