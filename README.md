@@ -1,4 +1,4 @@
-# Demos for a ROSA/AWS Integrations
+# Managed OpenShift Demos
 
 Link to slides (Internal Red Hat only for now, apologies. I will try and open source them): https://docs.google.com/presentation/d/1mJJ570GNfw3daiN_6w6JzoSkQ7R-UP7VvXyUMjSOljc/edit?usp=sharing
 
