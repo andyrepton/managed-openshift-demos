@@ -103,5 +103,10 @@ az aro create \
   --pull-secret @$AZR_PULL_SECRET \
   --version "$AZR_VERSION"
 
-ARO_URL=$(az aro show --name $AZR_CLUSTER --resource-group $AZR_RESOURCE_GROUP -o tsv --query consoleProfile)
+ARO_API_URL=$(az aro show --name poc-andyr2 --resource-group poc-andyr -o tsv --query apiserverProfile | awk '{print $2}')
 read -r ARO_ADMIN_PASSWORD ARO_ADMIN_USERNAME <<< $(az aro list-credentials --name $AZR_CLUSTER --resource-group $AZR_RESOURCE_GROUP -o tsv)
+
+echo oc login $ARO_API_URL --username kubeadmin --password $ARO_ADMIN_PASSWORD
+oc login $ARO_API_URL --username kubeadmin --password $ARO_ADMIN_PASSWORD
+
+oc config rename-context $(oc config current-context) aro-cluster

@@ -1,7 +1,51 @@
 # Managed OpenShift Demos
 
-Link to slides (Internal Red Hat only for now, apologies. I will try and open source them): https://docs.google.com/presentation/d/1mJJ570GNfw3daiN_6w6JzoSkQ7R-UP7VvXyUMjSOljc/edit?usp=sharing
+This repository is aimed to provide examples of how to do several "solution based" demos with Managed OpenShift. Managed OpenShift is a version of OpenShift where the creation and management of the cluster itself is taken care of by the cloud provider and Red Hat, so the demos here are more designed around what is possible to be built on top of the cluster when management of it is removed.
 
-Link to diagrams can be found in the notes of the first slide. 
+This is an ever growing repo which will be added to when I have time! If you find bugs, please open an issue and I will do my best to resolve it swiftly. If you have suggestions or would like to contribute, please feel free to make a PR.
 
-Commands for each demo can be found in the corresponding markdown file
+Thanks!
+
+## Demos
+
+### Deploying S3 Buckets from OpenShift using the ACK (AWS Controllers for Kubernetes) Operators
+
+This demo only works on ROSA
+
+Please see deploy-s3-buckets-with-ack.md
+
+### Deploying an App with Service Mesh
+
+Please note this is still a work in progress
+
+Please see deploying-an-app-with-service-mesh.md
+
+### Forwarding logs to AWS CloudWatch from a ROSA cluster
+
+This demo only works on ROSA
+
+Please see forward-logs-to-aws-cloudwatch.md
+
+### Forwarding metrics to AWS CloudWatch from a ROSA cluster
+
+This demo only works on ROSA
+
+Please see forward-metrics-to-aws-cloudwatch.md
+
+### Deploying OpenShift gitops onto a new ARO or ROSA cluster
+
+Please see the openshift-gitops folder
+
+### Deploying RHACM onto a Managed OpenShift Cluster using the command line or via GitOps
+
+Please see the rhacm folder
+
+### Deploying OpenShift Service Mesh onto a Managed OpenShift Cluster using the command line or via GitOps
+
+Please see the openshift-service-mesh folder
+
+### Deploying OpenShift Interconnect (Skupper) onto a Managed OpenShift Cluster using the command line or via GitOps
+
+Please see the rh-interconnect folder
+
+
