@@ -2,6 +2,8 @@
 
 This repository is aimed to provide examples of how to do several "solution based" demos with Managed OpenShift. Managed OpenShift is a version of OpenShift where the creation and management of the cluster itself is taken care of by the cloud provider and Red Hat, so the demos here are more designed around what is possible to be built on top of the cluster when management of it is removed.
 
+The details of the demos and what to run can be found in the [docs](docs/README.md) folder
+
 This is an ever growing repo which will be added to when I have time! If you find bugs, please open an issue and I will do my best to resolve it swiftly. If you have suggestions or would like to contribute, please feel free to make a PR.
 
 Thanks!
