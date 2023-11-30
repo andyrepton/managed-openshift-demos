@@ -671,7 +671,9 @@ install_demo5 () {
   oc project patient-portal-frontend
   skupper init --enable-console --enable-flow-collector --console-auth unsecured
   # Check skupper console
+  printf "${B}"
   skupper status
+  printf "\n${NC}"
   read -p "Press key to continue"
 
   #Private
@@ -679,7 +681,9 @@ install_demo5 () {
   oc login $CLUSTER2_API --username $CLUSTER2_USERNAME --password $CLUSTER2_PASSWORD
   oc project private
   skupper init --ingress none --router-mode edge --enable-console=false
+  printf "${B}"
   skupper status
+  printf "\n${NC}"
   read -p "Press key to continue"
 
   #Public
