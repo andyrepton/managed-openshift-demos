@@ -16,7 +16,7 @@ Thanks!
 
 2. [Deploying an App with Service Mesh](#2-deploying-an-app-with-service-mesh)
 
-    2.1. [Before your demo](#21-before-your-demo)
+    2.1 [Before your demo](#21-before-your-demo)
 
     2.2 [During your demo](#22-during-your-demo)
 
@@ -33,6 +33,24 @@ Thanks!
     4.2 [During your demo](#42-during-your-demo)
 
 5. [Deploying OpenShift gitops onto a new ARO or ROSA cluster](#5-deploying-openshift-gitops-onto-a-new-aro-or-rosa-cluster)
+
+6. WIP [6 Deploying RHACM onto a Managed OpenShift Cluster using the command line or via GitOps](#wip-6-deploying-rhacm-onto-a-managed-openshift-cluster-using-the-command-line-or-via-gitops)
+
+7. WIP [7 Deploying OpenShift Service Mesh onto a Managed OpenShift Cluster using the command line or via GitOps](#wip-7-deploying-openshift-service-mesh-onto-a-managed-openshift-cluster-using-the-command-line-or-via-gitops)
+
+8. WIP [8 Deploying OpenShift Interconnect (Skupper) onto a Managed OpenShift Cluster using the command line or via GitOps](#8-deploying-openshift-interconnect-skupper-onto-a-managed-openshift-cluster-using-the-command-line-or-via-gitops)
+
+9. [Demonstrating developer productivity via Source2Image](#9-demonstrating-developer-productivity-via-source2image)
+
+    9.1 [Before your demo](#91-before-your-demo)
+
+    9.2 [During your demo](#92-during-your-demo)
+
+10. WIP [10 Demonstrating the power of S2I to enable developers using dev spaces](#wip-10-demonstrating-the-power-of-s2i-to-enable-developers-using-dev-spaces)
+
+    10.1 [Before your demo](#101-before-your-demo)
+
+    10.2 [During your demo](#102-during-your-demo)
 
 ## 1 Deploying S3 Buckets from OpenShift using the ACK (AWS Controllers for Kubernetes) Operators
 
