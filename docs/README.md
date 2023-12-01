@@ -3,7 +3,8 @@
 ## Content
 
 1 [Deploying S3 Buckets from OpenShift using the ACK (AWS Controllers for Kubernetes) Operators](#1-deploying-s3-buckets-from-openshift-using-the-ack-aws-controllers-for-kubernetes-operators)
-    1.1 
+    1.1 [Before your demo](#11-before-your-demo)
+    1.2 [During your demo](#12-during-your-demo)
 
 2 [Deploying an App with Service Mesh](#2-deploying-an-app-with-service-mesh)
 
@@ -118,9 +119,33 @@ $ aws logs get-log-events --log-group-name poc-andyr.audit --log-stream-name $LO
 
 This demo only works on ROSA
 
-Please see [./forward-metrics-to-aws-cloudwatch.md](./forward-metrics-to-aws-cloudwatch.md)
+### 4.1 Before your demo
 
-#### Deploying OpenShift gitops onto a new ARO or ROSA cluster
+- Ensure you are logged into AWS!
+- Run `./create_demo.sh install_demo2`
+
+### 4.2 During your demo
+
+- Explain the need for metrics in AWS.
+
+- Show the empty dashboard in AWS (the setup script will spit out the dashboard link)
+
+```bash
+oc apply -f forward-metrics-to-aws-cloudwatch/cloud-watch.yaml
+
+oc get pods -n amazon-cloudwatch
+
+cat forward-metrics-to-aws-cloudwatch/dashboard.json
+
+cat forward-metrics-to-aws-cloudwatch/dashboard.json | pbcopy
+```
+
+- Paste into your dashboard: Actions -> View/Edit Source and then paste
+
+> Important! Remember that it'll take about 3.5 minutes from your deployment of the cloud watch agent until metrics start arriving, so perhaps move onto demo 3 during this time
+
+
+## 5 Deploying OpenShift gitops onto a new ARO or ROSA cluster
 
 Please see the [./openshift-gitops](./openshift-gitops) folder
 
@@ -141,3 +166,4 @@ Please see the [./rh-interconnect](./rh-interconnect) folder
 Please see [./demonstrate-s2i.md](demonstrate-s2i.md)
 
 The key here is that the repository does not have a Dockerfile, nor does it need one. Your developers can write their code and deploy onto OpenShift quickly and easily
+
