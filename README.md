@@ -174,7 +174,7 @@ Install the operator by running
 oc apply -f ../openshift-gitops/gitops-install.yaml
 ```
 
-## 6 Deploying RHACM onto a Managed OpenShift Cluster using the command line or via GitOps
+## WIP 6 Deploying RHACM onto a Managed OpenShift Cluster using the command line or via GitOps
 
 ### Option 1: Manually
 
@@ -194,7 +194,7 @@ Wait for the CRD to be installed, then run again (first run will lack the multi-
 oc apply -f gitops/
 ```
 
-## 7 Deploying OpenShift Service Mesh onto a Managed OpenShift Cluster using the command line or via GitOps
+## WIP 7 Deploying OpenShift Service Mesh onto a Managed OpenShift Cluster using the command line or via GitOps
 
 Please see the [./openshift-service-mesh](./openshift-service-mesh) folder
 
@@ -233,7 +233,7 @@ oc apply -f gitops/
 
 > The key here is that the repository does not have a Dockerfile, nor does it need one. Your developers can write their code and deploy onto OpenShift quickly and easily
 
-## 10 Demonstrating the power of S2I to enable developers using dev spaces
+## WIP 10 Demonstrating the power of S2I to enable developers using dev spaces
 
 ### 10.1 Before your demo
 - Make sure you have a cluster available
