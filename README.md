@@ -6,50 +6,256 @@ This is an ever growing repo which will be added to when I have time! If you fin
 
 Thanks!
 
-## Demos
+## Content
 
-### Deploying S3 Buckets from OpenShift using the ACK (AWS Controllers for Kubernetes) Operators
+1. [Deploying S3 Buckets from OpenShift using the ACK (AWS Controllers for Kubernetes) Operators](#1-deploying-s3-buckets-from-openshift-using-the-ack-aws-controllers-for-kubernetes-operators)
+
+    1.1 [Before your demo](#11-before-your-demo)
+
+    1.2 [During your demo](#12-during-your-demo)
+
+2. [Deploying an App with Service Mesh](#2-deploying-an-app-with-service-mesh)
+
+    2.1 [Before your demo](#21-before-your-demo)
+
+    2.2 [During your demo](#22-during-your-demo)
+
+3. [Forwarding logs to AWS CloudWatch from a ROSA cluster](#3-forwarding-logs-to-aws-cloudwatch-from-a-rosa-cluster)
+
+    3.1 [Before your demo](#31-before-your-demo)
+
+    3.2 [During your demo](#32-during-your-demo)
+
+4. [Forwarding metrics to AWS CloudWatch from a ROSA cluster](#4-forwarding-metrics-to-aws-cloudwatch-from-a-rosa-cluster)
+
+    4.1 [Before your demo](#41-before-your-demo)
+
+    4.2 [During your demo](#42-during-your-demo)
+
+5. [Deploying OpenShift gitops onto a new ARO or ROSA cluster](#5-deploying-openshift-gitops-onto-a-new-aro-or-rosa-cluster)
+
+6. WIP [6 Deploying RHACM onto a Managed OpenShift Cluster using the command line or via GitOps](#wip-6-deploying-rhacm-onto-a-managed-openshift-cluster-using-the-command-line-or-via-gitops)
+
+7. WIP [7 Deploying OpenShift Service Mesh onto a Managed OpenShift Cluster using the command line or via GitOps](#wip-7-deploying-openshift-service-mesh-onto-a-managed-openshift-cluster-using-the-command-line-or-via-gitops)
+
+8. WIP [8 Deploying OpenShift Interconnect (Skupper) onto a Managed OpenShift Cluster using the command line or via GitOps](#8-deploying-openshift-interconnect-skupper-onto-a-managed-openshift-cluster-using-the-command-line-or-via-gitops)
+
+9. [Demonstrating developer productivity via Source2Image](#9-demonstrating-developer-productivity-via-source2image)
+
+    9.1 [Before your demo](#91-before-your-demo)
+
+    9.2 [During your demo](#92-during-your-demo)
+
+10. WIP [10 Demonstrating the power of S2I to enable developers using dev spaces](#wip-10-demonstrating-the-power-of-s2i-to-enable-developers-using-dev-spaces)
+
+    10.1 [Before your demo](#101-before-your-demo)
+
+    10.2 [During your demo](#102-during-your-demo)
+
+## 1 Deploying S3 Buckets from OpenShift using the ACK (AWS Controllers for Kubernetes) Operators
 
 This demo only works on ROSA
 
-Please see [./deploy-s3-buckets-with-ack.md](./deploy-s3-buckets-with-ack.md)
+### 1.1 Before your demo
 
-### Deploying an App with Service Mesh
+- Run `./create_demo.sh install_demo1` from the root of the repo
 
-Please note this is still a work in progress
+### 1.2 During your demo
 
-Please see [./deploying-an-app-with-service-mesh.md](./deploying-an-app-with-service-mesh.md)
+- Install ACK controller via console
 
-### Forwarding logs to AWS CloudWatch from a ROSA cluster
+- Run the following commands:
+
+```bash
+aws s3 ls | grep hello-hcp
+
+cat deploy-s3-buckets-with-ack/bucket.yaml
+
+oc apply -f deploy-s3-buckets-with-ack/bucket.yaml
+
+aws s3 ls | grep hello-hcp
+
+oc delete bucket hello-hcp-bucket
+
+aws s3 ls | grep hello-hcp
+```
+
+## 2 Deploying an App with Service Mesh
+
+### 2.1 Before your demo
+
+Install service mesh by following the instructions in the `openshift-service-mesh` folder
+
+##### 2.1.1 Manually Install
+
+- Go to the openshift service mesh folder [here](../openshift-service-mesh/)
+- Run
+
+```bash
+oc apply -f .
+```
+
+##### 2.1.2 GitOps
+
+- Go to the gitops folder [here](../openshift-service-mesh/gitops/) and install gitops
+
+```bash
+oc apply -f gitops/
+```
+
+### 2.2 During your demo
+
+Deploy the hello application
+
+```bash
+oc new-project hello
+oc new-app https://github.com/andyrepton/hello
+```
+
+Create a service mesh role using the example here:
+
+```bash
+oc apply -f ../deploying-an-app-with-service-mesh/servicemeshroll.yaml
+```
+
+## 3 Forwarding logs to AWS CloudWatch from a ROSA cluster
 
 This demo only works on ROSA
 
-Please see [./forward-logs-to-aws-cloudwatch.md](./forward-logs-to-aws-cloudwatch.md)
+### 3.1 Before your demo
 
-### Forwarding metrics to AWS CloudWatch from a ROSA cluster
+- Run `../create_demo.sh install_demo3`
+
+### 3.2 During your demo
+
+- Go to OpenShift Operators -> Cluster Logging Operator.
+
+- Change project to OpenShift Logging
+
+- Show that the OpenShift Logging Operator is installed already, explaining that this takes time to set up so you've already done that bit
+
+- Run the following commands:
+
+```
+$ oc project openshift-logging
+
+# Explain what the logforwarder is and how it works:
+$ cat ../forward-logs-to-aws-cloudwatch/logforwarder.yaml
+
+# Apply the forwarded:
+$ oc apply -f ../forward-logs-to-aws-cloudwatch/logforwarder.yaml
+
+# Show that logs have arrived:
+$ aws logs describe-log-groups --log-group-name-prefix poc-andyr
+
+# Get the name of a log stream:
+$ aws logs describe-log-streams --log-group-name poc-andyr.audit | jq -r '.logStreams[0].logStreamName'
+
+# Read the log using the output of the above command:
+$ aws logs get-log-events --log-group-name poc-andyr.audit --log-stream-name $LOG_STREAM_NAME_HERE_FROM_LAST_STEP
+```
+
+## 4 Forwarding metrics to AWS CloudWatch from a ROSA cluster
 
 This demo only works on ROSA
 
-Please see [./forward-metrics-to-aws-cloudwatch.md](./forward-metrics-to-aws-cloudwatch.md)
+### 4.1 Before your demo
 
-### Deploying OpenShift gitops onto a new ARO or ROSA cluster
+- Ensure you are logged into AWS!
+- Run `./create_demo.sh install_demo2`
 
-Please see the [./openshift-gitops](./openshift-gitops) folder
+### 4.2 During your demo
 
-### Deploying RHACM onto a Managed OpenShift Cluster using the command line or via GitOps
+- Explain the need for metrics in AWS.
 
-Please see the [./rhacm](./rhacm) folder
+- Show the empty dashboard in AWS (the setup script will spit out the dashboard link)
 
-### Deploying OpenShift Service Mesh onto a Managed OpenShift Cluster using the command line or via GitOps
+```bash
+oc apply -f forward-metrics-to-aws-cloudwatch/cloud-watch.yaml
+
+oc get pods -n amazon-cloudwatch
+
+cat forward-metrics-to-aws-cloudwatch/dashboard.json
+
+cat forward-metrics-to-aws-cloudwatch/dashboard.json | pbcopy
+```
+
+- Paste into your dashboard: Actions -> View/Edit Source and then paste
+
+> Important! Remember that it'll take about 3.5 minutes from your deployment of the cloud watch agent until metrics start arriving, so perhaps move onto demo 3 during this time
+
+## 5 Deploying OpenShift gitops onto a new ARO or ROSA cluster
+
+Install the operator by running
+
+```bash
+oc apply -f ../openshift-gitops/gitops-install.yaml
+```
+
+## WIP 6 Deploying RHACM onto a Managed OpenShift Cluster using the command line or via GitOps
+
+### Option 1: Manually
+
+```bash
+cd rhacm
+oc apply -f .
+```
+
+Wait for the CRD to be installed, then run again (first run will lack the multi-cluster-hub CRD)
+
+### Option 2: GitOps
+
+- Go to the gitops folder [here](../openshift-gitops) and install gitops
+- Create the application file in the gitops folder:
+
+```bash
+oc apply -f gitops/
+```
+
+## WIP 7 Deploying OpenShift Service Mesh onto a Managed OpenShift Cluster using the command line or via GitOps
 
 Please see the [./openshift-service-mesh](./openshift-service-mesh) folder
 
-### Deploying OpenShift Interconnect (Skupper) onto a Managed OpenShift Cluster using the command line or via GitOps
+## 8 Deploying OpenShift Interconnect (Skupper) onto a Managed OpenShift Cluster using the command line or via GitOps
 
-Please see the [./rh-interconnect](./rh-interconnect) folder
+### Option 1: Manually
 
-### Demonstrating developer productivity via Source2Image
+```bash
+oc apply -f .
+```
 
-Please see [./demonstrate-s2i.md](demonstrate-s2i.md)
+Skupper will be installed in the openshift-operators namespace
 
-The key here is that the repository does not have a Dockerfile, nor does it need one. Your developers can write their code and deploy onto OpenShift quickly and easily
+### Option 2: GitOps
+
+- Go to the gitops folder [here](../openshift-gitops) and install gitops
+- Create the application file in the gitops folder:
+
+```bash
+oc apply -f gitops/
+```
+
+## 9 Demonstrating developer productivity via Source2Image
+
+### 9.1 Before your demo
+- Make sure you have a cluster available
+
+### 9.2 During your demo
+- Log onto your console
+
+- Open up the developer view and click "Add"
+
+- Paste the following URL: https://github.com/andyrepton/hello
+
+- Show the OpenShift Builds and show that it creates a valid route
+
+> The key here is that the repository does not have a Dockerfile, nor does it need one. Your developers can write their code and deploy onto OpenShift quickly and easily
+
+## WIP 10 Demonstrating the power of S2I to enable developers using dev spaces
+
+### 10.1 Before your demo
+- Make sure you have a cluster available
+- Install dev spaces (coming to this repo soon)
+
+### 10.2 During your demo
+- ?
