@@ -36,4 +36,4 @@ spec:
     kibana:
       replicas: 1
   collection:
-    fluentd: {}
+    type: fluentd
