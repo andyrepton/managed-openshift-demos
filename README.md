@@ -52,6 +52,8 @@ Thanks!
 
     10.2 [During your demo](#102-during-your-demo)
 
+11. [11 Deploying OpenShift Dev Spaces onto a Managed OpenShift Cluster using the command line or via GitOps](#11-deploying-openshift-dev-spaces-onto-a-managed-openshift-cluster-using-the-command-line-or-via-gitops)
+
 ## 1 Deploying S3 Buckets from OpenShift using the ACK (AWS Controllers for Kubernetes) Operators
 
 This demo only works on ROSA
@@ -221,6 +223,7 @@ Please see the [./openshift-service-mesh](./openshift-service-mesh) folder
 ### Option 1: Manually
 
 ```bash
+cd rh-interconnect
 oc apply -f .
 ```
 
@@ -259,3 +262,25 @@ oc apply -f gitops/
 
 ### 10.2 During your demo
 - ?
+
+## 11 Deploying OpenShift Dev Spaces onto a Managed OpenShift Cluster using the command line or via GitOps
+
+### Option 1: Manually
+
+```bash
+cd openshift-devspaces
+oc apply -f .
+```
+
+Skupper will be installed in the openshift-operators namespace
+
+### Option 2: GitOps
+
+- Go to the gitops folder [here](../openshift-gitops) and install gitops
+- Create the application file in the gitops folder:
+
+```bash
+cd openshift-devspaces
+oc apply -f gitops/
+```
+
