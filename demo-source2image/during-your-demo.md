@@ -1,5 +1,13 @@
 # Hello world demo for OpenShift - source2image
 
+## Instructions:
+
+> Things marked like this are things to do
+
+* Things marked like this are things you can say during your demo
+
+## Demo
+
 > Show the App:
 
 https://github.com/andyrepton/hello
