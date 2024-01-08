@@ -6,6 +6,7 @@ module "rosa-cluster" {
   private_cluster = false
   admin_username = var.admin_username
   admin_password = var.admin_password
+  cluster_name = "poc-andyr"
 }
 
 resource "null_resource" "install-gitops" {
