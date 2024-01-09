@@ -272,7 +272,7 @@ cd openshift-devspaces
 oc apply -f .
 ```
 
-Skupper will be installed in the openshift-operators namespace
+Dev Spaces will be installed in the openshift-operators namespace
 
 ### Option 2: GitOps
 
