@@ -5,6 +5,8 @@
 Go to ../openshift-devspaces and follow the instructions there
 
 ## Cleanup
+
+```
 oc project s2i-demo
 oc delete buildconfig demo
 oc delete deployment demo
@@ -12,6 +14,7 @@ oc delete imagestream demo
 oc delete service demo
 oc delete route demo
 oc delete project s2i-demo
+```
 
 # Cleanup Dev Space
 

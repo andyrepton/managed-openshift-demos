@@ -17,7 +17,7 @@ https://github.com/andyrepton/hello
 Create a new project:
 
 ```
-oc new-project demo
+oc new-project s2i-demo
 ```
 
 * Here we'll ask our cluster to take our code and deploy it as an application
