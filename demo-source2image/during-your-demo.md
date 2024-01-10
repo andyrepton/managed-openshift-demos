@@ -76,7 +76,7 @@ oc start-build demo --from-dir=. --follow
 
 ```
 oc get imagestream demo
-oc new-app —name demo ${image_name}
+oc new-app --name demo ${image_name}
 
 oc expose deployment/demo --port 8080
 oc create route edge --service=demo
