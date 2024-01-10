@@ -82,6 +82,12 @@ oc expose deployment/demo --port 8080
 oc create route edge --service=demo
 ```
 
+> Get the new route
+
+```
+oc get route demo
+```
+
 > Open the page
 
 * But now, it's even simpler to make changes to our code and see them reflected in real time. Let's edit our code again and trigger our built in CI pipeline!
