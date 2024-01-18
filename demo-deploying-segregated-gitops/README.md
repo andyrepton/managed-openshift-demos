@@ -107,7 +107,7 @@ namespace-application   ClusterRole/admin   73s
 
 You should see the following in your ArgoCD if you are using the UI:
 
-[](./assets/namespace-application.png)
+![](./assets/namespace-application.png)
 
 ## Creating an Application to deploy our second ArgoCD
 
@@ -146,7 +146,7 @@ You can now see that a new Application has been created, which is the setup for 
 
 You should see the following in your ArgoCD if you are using the UI:
 
-[](./assets/application1-project.png)
+![](./assets/application1-project.png)
 
 You can test that you can access your new ArgoCD:
 
