@@ -1,0 +1,19 @@
+apiVersion: argoproj.io/v1beta1
+kind: ArgoCD
+metadata:
+  name: application1-argocd
+  namespace: application1-project
+  labels:
+    team: application1
+spec:
+  repo:
+    replicas: 1
+  server:
+    replicas: 1
+    route:
+      enabled: true
+      path: /
+      tls:
+        insecureEdgeTerminationPolicy: Redirect
+        termination: reencrypt
+      wildcardPolicy: None
