@@ -57,8 +57,8 @@ https://github.com/andyrepton/hello.git
 
 * Now, let's make an edit to our code, right here inside our OpenShift Dev Space
 
-- Edit code to show a new message
-- Go to: Top left - Terminal
+> Edit code to show a new message
+> Go to: Top left - Terminal
 
 * Now we'll again ask the cluster to set up a new build pipeline for us
 

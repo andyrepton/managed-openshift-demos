@@ -3,7 +3,6 @@
 ### Option 1: Manually
 
 ```bash
-cd openshift-devspaces
 oc apply -f .
 ```
 
@@ -15,7 +14,6 @@ Dev Spaces will be installed in the openshift-operators namespace
 - Create the application file in the gitops folder:
 
 ```bash
-cd openshift-devspaces
 oc apply -f gitops/
 ```
 
