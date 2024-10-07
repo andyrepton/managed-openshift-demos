@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    image.openshift.io/triggers: '[{"from":{"kind":"ImageStreamTag","name":"hello:latest","namespace":"multiarch-demo"},"fieldPath":"spec.template.spec.containers[?(@.name==\"hello\")].image","paused":"false"}]'
+  name: hello-amd64
+  namespace: multiarch-demo-proj
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hello-amd64
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: hello-amd64
+        deployment: hello
+    spec:
+      containers:
+      - image: image-registry.openshift-image-registry.svc:5000/multiarch-demo-proj/hello:amd64
+        imagePullPolicy: Always
+        name: hello
+        resources: {}
+      nodeSelector:
+        kubernetes.io/arch: amd64
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    image.openshift.io/triggers: '[{"from":{"kind":"ImageStreamTag","name":"hello:latest","namespace":"multiarch-demo"},"fieldPath":"spec.template.spec.containers[?(@.name==\"hello\")].image","paused":"false"}]'
+  name: hello-arm64
+  namespace: multiarch-demo-proj
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hello-arm64
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: hello-arm64
+        deployment: hello
+    spec:
+      containers:
+      - image: image-registry.openshift-image-registry.svc:5000/multiarch-demo-proj/hello:arm64
+        imagePullPolicy: Always
+        name: hello
+        resources: {}
+      nodeSelector:
+        kubernetes.io/arch: arm64
+

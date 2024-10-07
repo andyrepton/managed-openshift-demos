@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: hello-amd64
+  namespace: multiarch-demo-proj
+spec:
+  ports:
+  - port: 8080
+    protocol: TCP
+    targetPort: 8080
+    name: 8080-tcp
+  selector:
+    app: hello-amd64
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hello-arm64
+  namespace: multiarch-demo-proj
+spec:
+  ports:
+  - port: 8080
+    protocol: TCP
+    targetPort: 8080
+    name: 8080-tcp
+  selector:
+    app: hello-arm64
+  type: ClusterIP

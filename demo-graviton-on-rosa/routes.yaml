@@ -1,0 +1,39 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  annotations:
+  labels:
+  name: hello-amd64
+  namespace: multiarch-demo-proj
+spec:
+  host: hello-amd64-demo.apps.rosa.poc-andyr.qftf.p3.openshiftapps.com
+  port:
+    targetPort: 8080-tcp
+  tls:
+    insecureEdgeTerminationPolicy: Redirect
+    termination: edge
+  to:
+    kind: Service
+    name: hello-amd64
+    weight: 100
+  wildcardPolicy: None
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  annotations:
+  labels:
+  name: hello-arm64
+  namespace: multiarch-demo-proj
+spec:
+  host: hello-arm64-demo.apps.rosa.poc-andyr.qftf.p3.openshiftapps.com
+  port:
+    targetPort: 8080-tcp
+  tls:
+    insecureEdgeTerminationPolicy: Redirect
+    termination: edge
+  to:
+    kind: Service
+    name: hello-arm64
+    weight: 100
+  wildcardPolicy: None

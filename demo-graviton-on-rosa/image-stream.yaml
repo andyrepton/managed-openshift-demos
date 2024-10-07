@@ -1,0 +1,8 @@
+kind: ImageStream
+apiVersion: image.openshift.io/v1
+metadata:
+  name: hello
+  namespace: multiarch-demo-proj
+spec:
+  lookupPolicy:
+    local: false

@@ -1,0 +1,28 @@
+kind: BuildConfig
+apiVersion: build.openshift.io/v1
+metadata:
+  annotations:
+  name: hello-arm64
+  namespace: multiarch-demo-proj
+spec:
+  output:
+    to:
+      kind: ImageStreamTag
+      name: 'hello:arm64'
+  strategy:
+    type: Source
+    sourceStrategy:
+      from:
+        kind: ImageStreamTag
+        namespace: openshift
+        name: 'golang:1.18-ubi8'
+  postCommit: {}
+  source:
+    type: Git
+    git:
+      uri: 'https://github.com/andyrepton/hello'
+    contextDir: /
+  nodeSelector:
+    kubernetes.io/arch: arm64
+  triggers:
+    - type: ConfigChange
