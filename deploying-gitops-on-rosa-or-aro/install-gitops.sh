@@ -3,6 +3,8 @@
 # Access the passed variables as $1 and $2
 admin_username=$1
 admin_password=$2
+
+
 api_url=$3
 
 while True

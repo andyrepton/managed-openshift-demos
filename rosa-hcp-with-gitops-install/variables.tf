@@ -1,6 +1,6 @@
 variable "openshift_version" {
   type        = string
-  default     = "4.16.4"
+  default     = "4.14.20"
   description = "Desired version of OpenShift for the cluster, for example '4.1.0'. If version is greater than the currently running version, an upgrade will be scheduled."
 }
 
@@ -129,41 +129,19 @@ variable "aws_region" {
   default = "us-east-2"
 }
 
-#variable "admin_username" {
-#  type        = string
-#  description = "The username for the admin user"
-#}
+variable "admin_username" {
+  type        = string
+  description = "The username for the admin user"
+}
 
-#variable "admin_password" {
-#  type        = string
-#  description = "The password for the admin user"
-#  sensitive   = true
-#}
+variable "admin_password" {
+  type        = string
+  description = "The password for the admin user"
+  sensitive   = true
+}
 
 variable "default_aws_tags" {
   type        = map(string)
   description = "Default tags for AWS"
   default     = {}
-}
-
-# Demo pool stuff
-
-variable "deploy_virt_machine_pool" {
-  type        = bool
-  description = "Should this deploy a metal node to demo OpenShift virt?"
-}
-
-variable "deploy_graviton_machine_pool" {
-  type        = bool
-  description = "Should this deploy a graviton node to demo ARM containers on OpenShift?"
-}
-
-variable "deploy_lokistack_machine_pool" {
-  type        = bool
-  description = "Should this deploy additional nodes to demo OpenShift Logging? Note that this will also make the required policies, roles and bucket to deploy lokistack"
-}
-
-variable "deploy_ai_machine_pool" {
-  type        = bool
-  description = "Should this deploy additional nodes to demo OpenShift Logging? Note that this will also make the required policies, roles and bucket to deploy lokistack"
 }

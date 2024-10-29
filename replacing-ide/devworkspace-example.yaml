@@ -1,0 +1,26 @@
+kind: DevWorkspace
+apiVersion: workspace.devfile.io/v1alpha2
+metadata:
+  name: andyr-demo
+spec:
+  started: true
+  template:
+    attributes:
+      controller.devfile.io/storage-type: ephemeral
+    projects:
+      - name: hello
+        git:
+          remotes:
+            origin: https://github.com/andyrepton/hello
+    components:
+      - name: dev-tooling
+        container:
+          image: quay.io/devfile/universal-developer-image:latest
+          memoryRequest: 2G
+          memoryLimit: 10G
+          cpuRequest: '1'
+          cpuLimit: '4'
+  contributions:
+    - name: editor
+      kubernetes:
+        name: andyr-test
