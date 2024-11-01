@@ -4,24 +4,9 @@ variable "openshift_version" {
   description = "Desired version of OpenShift for the cluster, for example '4.1.0'. If version is greater than the currently running version, an upgrade will be scheduled."
 }
 
-variable "create_rosa" {
-  type        = bool
-  description = "Would you like to make a ROSA cluster?"
-}
-
-variable "create_aro" {
-  type        = bool
-  description = "Would you like to make an ARO cluster?"
-}
-
 variable "create_vpc" {
   type        = bool
   description = "Would you like to make a new VPC for your ROSA cluster? true or false"
-}
-
-variable "subscription_id" {
-  type        = string
-  description = "Azure Subscription ID for your cluster"
 }
 
 # ROSA Cluster info
@@ -31,7 +16,7 @@ variable "cluster_name" {
   description = "The name of the ROSA cluster to create"
 }
 
-variable "tags" {
+variable "additional_tags" {
   default = {
     Terraform   = "true"
     Environment = "dev"

@@ -8,6 +8,15 @@ terraform {
       version = ">= 1.5.0"
       source  = "terraform-redhat/rhcs"
     }
+    azuread = {
+      source  = "hashicorp/azuread"
+      version = "~>2.43"
+    }
+
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = "~>3.92.0"
+    }
   }
 }
 
@@ -22,6 +31,15 @@ provider "aws" {
   default_tags {
     tags = var.default_aws_tags
   }
+}
+
+provider "azurerm" {
+  features {
+    resource_group {
+      prevent_deletion_if_contains_resources = false
+    }
+  }
+
 }
 
 data "aws_caller_identity" "current" {}
