@@ -1,0 +1,22 @@
+apiVersion: "logging.openshift.io/v1"
+kind: ClusterLogForwarder
+metadata:
+  name: "instance"
+  namespace: "openshift-logging"
+spec:
+  inputs:
+  - name: openshift-dns-logs
+    application:
+      namespaces:
+      - openshift-dns
+  pipelines:
+  - name: infrastructure-logs
+    inputRefs:
+      - infrastructure
+    outputRefs:
+      - default
+  - name: application-logs
+    inputRefs:
+      - openshift-dns-logs
+    outputRefs:
+      - default
