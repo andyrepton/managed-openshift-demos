@@ -12,7 +12,7 @@ module "vpc" {
   enable_nat_gateway   = var.private_cluster ? false : true
   enable_dns_hostnames = true
   enable_dns_support   = true
-  manage_default_security_group = false
+  manage_default_security_group = true
 
   tags = var.additional_tags
 }
