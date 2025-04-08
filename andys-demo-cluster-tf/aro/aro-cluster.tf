@@ -2,11 +2,11 @@ resource "azurerm_redhat_openshift_cluster" "aro" {
   name                = var.cluster_name
   location            = azurerm_resource_group.aro.location
   resource_group_name = azurerm_resource_group.aro.name
-  tags = var.tags
+  tags                = var.tags
 
   cluster_profile {
-    domain  = var.domain
-    version = var.cluster_version
+    domain      = var.domain
+    version     = var.cluster_version
     pull_secret = var.pull_secret
   }
 
@@ -39,11 +39,6 @@ resource "azurerm_redhat_openshift_cluster" "aro" {
     client_id     = azuread_application.aro.client_id
     client_secret = azuread_service_principal_password.aro.value
   }
-
-  depends_on = [
-    azurerm_role_assignment.role_network1,
-    azurerm_role_assignment.role_network2,
-  ]
 }
 
 output "console_url" {

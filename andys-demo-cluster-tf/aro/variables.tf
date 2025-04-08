@@ -42,6 +42,6 @@ variable "cluster_version" {
 }
 
 variable "domain" {
-  type = string
+  type        = string
   description = "The domain for the ARO cluster to use"
 }

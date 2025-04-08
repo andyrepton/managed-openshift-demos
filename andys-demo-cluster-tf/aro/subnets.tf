@@ -3,6 +3,7 @@ resource "azurerm_virtual_network" "aro" {
   address_space       = ["10.0.0.0/22"]
   location            = azurerm_resource_group.aro.location
   resource_group_name = azurerm_resource_group.aro.name
+  tags                = var.tags
 }
 
 resource "azurerm_subnet" "main_subnet" {
