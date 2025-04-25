@@ -2,7 +2,7 @@
 
 ## Ahead of time
 
-- Ensure you have two clusters. Ideally these would be in two different namespaces
+- Ensure you have two clusters. Ideally these would be in two different clouds/on-prem
 
 - Create your users:
 
