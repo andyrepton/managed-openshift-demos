@@ -141,7 +141,7 @@ variable "single_nat_gateway" {
 #AWS Info
 variable "aws_region" {
   type    = string
-  default = "us-east-2"
+  default = "eu-west-1"
 }
 
 #variable "admin_username" {
