@@ -19,4 +19,5 @@ module "aro" {
   count           = var.create_aro ? 1 : 0
   source          = "./aro"
   subscription_id = var.subscription_id
+  domain          = var.domain
 }

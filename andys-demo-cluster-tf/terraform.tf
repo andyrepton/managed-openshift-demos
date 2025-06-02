@@ -5,7 +5,7 @@ terraform {
       version = ">= 4.20.0"
     }
     rhcs = {
-      version = ">= 1.5.0"
+      version = ">= 1.6.9"
       source  = "terraform-redhat/rhcs"
     }
     azuread = {
@@ -15,7 +15,7 @@ terraform {
 
     azurerm = {
       source  = "hashicorp/azurerm"
-      version = "~>3.92.0"
+      version = "~>4.9.0"
     }
   }
 }
@@ -39,7 +39,7 @@ provider "azurerm" {
       prevent_deletion_if_contains_resources = false
     }
   }
-
+  subscription_id = var.subscription_id
 }
 
 data "aws_caller_identity" "current" {}
