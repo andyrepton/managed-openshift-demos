@@ -20,4 +20,6 @@ module "aro" {
   source          = "./aro"
   subscription_id = var.subscription_id
   domain          = var.domain
+  cluster_name    = var.cluster_name
+  tags            = var.default_azure_tags
 }

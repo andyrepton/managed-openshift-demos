@@ -1,6 +1,6 @@
 variable "openshift_version" {
   type        = string
-  default     = "4.18.13"
+  default     = "4.19.4"
   description = "Desired version of OpenShift for the cluster, for example '4.1.0'. If version is greater than the currently running version, an upgrade will be scheduled."
 }
 
@@ -158,6 +158,12 @@ variable "aws_region" {
 variable "default_aws_tags" {
   type        = map(string)
   description = "Default tags for AWS"
+  default     = {}
+}
+
+variable "default_azure_tags" {
+  type        = map(string)
+  description = "Default tags for Azure"
   default     = {}
 }
 

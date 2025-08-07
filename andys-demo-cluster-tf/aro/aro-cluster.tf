@@ -5,7 +5,7 @@ resource "azurerm_redhat_openshift_cluster" "aro" {
   tags                = var.tags
 
   cluster_profile {
-    domain      = var.domain
+    domain      = "${var.cluster_name}.${var.domain}"
     version     = var.cluster_version
     pull_secret = var.pull_secret
   }
