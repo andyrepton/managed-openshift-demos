@@ -1,0 +1,27 @@
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  annotations:
+    olm.providedAPIs: GitLab.v1beta1.apps.gitlab.com
+  generateName: gitlab-system-
+  name: gitlab-system
+  namespace: gitlab-system
+spec:
+  targetNamespaces:
+  - gitlab-system
+  upgradeStrategy: Default
+---
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  labels:
+    operators.coreos.com/gitlab-operator-kubernetes.gitlab-system: ""
+  name: gitlab-operator-kubernetes
+  namespace: gitlab-system
+spec:
+  channel: stable
+  installPlanApproval: Automatic
+  name: gitlab-operator-kubernetes
+  source: certified-operators
+  sourceNamespace: openshift-marketplace
+  startingCSV: gitlab-operator-kubernetes.v2.5.2

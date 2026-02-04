@@ -1,0 +1,28 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  labels:
+    operators.coreos.com/nfd.openshift-nfd: ""
+  name: nfd
+  namespace: openshift-nfd
+spec:
+  channel: stable
+  installPlanApproval: Automatic
+  name: nfd
+  source: redhat-operators
+  sourceNamespace: openshift-marketplace
+  startingCSV: nfd.4.19.0-202510211212
+---
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  annotations:
+    olm.providedAPIs: NodeFeature.v1alpha1.nfd.k8s-sigs.io,NodeFeature.v1alpha1.nfd.openshift.io,NodeFeatureDiscovery.v1.nfd.openshift.io,NodeFeatureGroup.v1alpha1.nfd.k8s-sigs.io,NodeFeatureRule.v1alpha1.nfd.k8s-sigs.io,NodeFeatureRule.v1alpha1.nfd.openshift.io
+  generateName: openshift-nfd-
+  generation: 1
+  name: openshift-nfd
+  namespace: openshift-nfd
+spec:
+  targetNamespaces:
+  - openshift-nfd
+  upgradeStrategy: Default

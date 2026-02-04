@@ -1,0 +1,23 @@
+apiVersion: apps.gitlab.com/v1beta1
+kind: GitLab
+metadata:
+  name: gitlab
+  namespace: gitlab-system
+spec:
+  chart:
+    values:
+      certmanager:
+        install: false
+      global:
+        hosts:
+          domain: apps.rosa.poc-andyr.igwn.p3.openshiftapps.com
+        ingress:
+          annotations:
+            route.openshift.io/termination: edge
+          class: none
+      nginx-ingress:
+        enabled: false
+      postgresql:
+        primary:
+          extendedConfiguration: max_connections = 200
+    version: 9.5.2

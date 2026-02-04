@@ -1,0 +1,38 @@
+# Attach model to vllm server. This is an NVIDIA template
+# Save as: inferenceservice.yaml
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  annotations:
+    openshift.io/display-name: mistral-small-3-1-24b-instruct-2503-fp8-dynamic # OPTIONAL CHANGE
+    serving.kserve.io/deploymentMode: RawDeployment
+  name: mistral-small-3-1-24b-instruct-2503-fp8-dynamic          # specify model name. This value will be used to invoke the model in the payload
+  labels:
+    opendatahub.io/dashboard: 'true'
+spec:
+  predictor:
+    maxReplicas: 1
+    minReplicas: 1
+    model:
+      args:
+      - --max_model_len
+      - "71568"
+      modelFormat:
+        name: vLLM
+      name: ''
+      resources:
+        limits:
+          cpu: '2'			# this is model specific
+          memory: 8Gi		# this is model specific
+          nvidia.com/gpu: '1'	# this is accelerator specific
+        requests:			# same comment for this block
+          cpu: '1'
+          memory: 4Gi
+          nvidia.com/gpu: '1'
+      runtime: vllm-cuda-runtime	# must match the ServingRuntime name above
+      storageUri: oci://registry.redhat.io/rhelai1/modelcar-mistral-small-3-1-24b-instruct-2503-fp8-dynamic:1.5
+    tolerations:
+    - effect: NoSchedule
+      key: nvidia.com/gpu
+      operator: Exists
+
