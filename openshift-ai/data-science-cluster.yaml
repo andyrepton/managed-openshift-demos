@@ -36,4 +36,5 @@ spec:
       managementState: Managed
     trainingoperator:
       managementState: Removed
-
+    modelregistry:
+      managementState: Managed

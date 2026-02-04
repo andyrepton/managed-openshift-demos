@@ -11,4 +11,16 @@ spec:
   name: rhods-operator
   source: redhat-operators
   sourceNamespace: openshift-marketplace
-  startingCSV: rhods-operator.2.13.0
+  startingCSV: rhods-operator.2.25.0
+---
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  annotations:
+    olm.providedAPIs: Auth.v1alpha1.services.platform.opendatahub.io,CodeFlare.v1alpha1.components.platform.opendatahub.io,DSCInitialization.v1.dscinitialization.opendatahub.io,Dashboard.v1alpha1.components.platform.opendatahub.io,DataScienceCluster.v1.datasciencecluster.opendatahub.io,DataSciencePipelines.v1alpha1.components.platform.opendatahub.io,FeastOperator.v1alpha1.components.platform.opendatahub.io,FeatureTracker.v1.features.opendatahub.io,HardwareProfile.v1alpha1.infrastructure.opendatahub.io,Kserve.v1alpha1.components.platform.opendatahub.io,Kueue.v1alpha1.components.platform.opendatahub.io,LlamaStackOperator.v1alpha1.components.platform.opendatahub.io,ModelController.v1alpha1.components.platform.opendatahub.io,ModelMeshServing.v1alpha1.components.platform.opendatahub.io,ModelRegistry.v1alpha1.components.platform.opendatahub.io,Monitoring.v1alpha1.services.platform.opendatahub.io,Ray.v1alpha1.components.platform.opendatahub.io,ServiceMesh.v1alpha1.services.platform.opendatahub.io,TrainingOperator.v1alpha1.components.platform.opendatahub.io,TrustyAI.v1alpha1.components.platform.opendatahub.io,Workbenches.v1alpha1.components.platform.opendatahub.io
+  generateName: redhat-ods-operator-
+  generation: 1
+  name: redhat-ods-operator
+  namespace: redhat-ods-operator
+spec:
+  upgradeStrategy: Default
