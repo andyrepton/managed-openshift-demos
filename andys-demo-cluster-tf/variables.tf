@@ -1,6 +1,6 @@
 variable "openshift_version" {
   type        = string
-  default     = "4.19.4"
+  default     = "4.20.11"
   description = "Desired version of OpenShift for the cluster, for example '4.1.0'. If version is greater than the currently running version, an upgrade will be scheduled."
 }
 
@@ -186,7 +186,7 @@ variable "deploy_lokistack_machine_pool" {
 
 variable "deploy_ai_machine_pool" {
   type        = bool
-  description = "Should this deploy additional nodes to demo OpenShift Logging? Note that this will also make the required policies, roles and bucket to deploy lokistack"
+  description = "Should this deploy additional nodes to demo OpenShift AI?"
 }
 
 variable "domain" {

@@ -20,9 +20,9 @@ module "rosa-ai-machine-pool" {
   }
 
   taints = [{
-    key           = "NotebooksOnly",
-    value         = "yes",
+    key           = "nvidia.com/gpu",
+    value         = "present",
     schedule_type = "NoSchedule"
   }]
-  replicas = 2
+  replicas = 1
 }
