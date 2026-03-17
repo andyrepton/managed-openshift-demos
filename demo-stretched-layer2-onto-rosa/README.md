@@ -28,6 +28,24 @@ FACTORY FLOOR (L2)           AWS VPC / ROSA CLUSTER (L3)
  (Profinet RT)                (Central Router)            (PCS 7 / App)
 ```
 
+```
+FACTORY SITE (Simulator)          OPENSHIFT CLOUD (Hub)              APP NAMESPACE (Spoke)
+[ 192.168.100.1 ]               [ 192.168.100.10 ]                 [ No IP Required ]
+       |                                |                                  |
+   ( br-hub )                      ( br-hub )                         ( br-spoke )
+       |                                |                                  |
+    [tap0] <==== OpenVPN Tunnel ====> [tap0]                               |
+    (L2)           (UDP 1194)         (L2)                                 |
+                                        |                                  |
+                                   [vxlan-hub] <===== VXLAN Tunnel ===== [vxlan-spoke]
+                                      (L2)            (UDP 4789)            (L2)
+                                                                             |
+                                                                      ( Multus CNI )
+                                                                             |
+                                                                     [ Windows VM Pod ]
+                                                                     [ 192.168.100.50 ]
+```
+
 Mermaid diagram:
 
 ![Mermaid diagram of solution](./stretched-l2-example.png)

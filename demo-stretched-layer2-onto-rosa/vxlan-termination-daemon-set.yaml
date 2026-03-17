@@ -62,12 +62,12 @@ spec:
             microdnf install -y iproute
             
             # 1. Create the local bridge for VMs to plug into
-            ip link add br-industrial type bridge
-            ip link set br-industrial up
+            ip link add br-spoke type bridge
+            ip link set br-spoke up
             
             # 2. Establish VXLAN tunnel back to the HUB
             ip link add vxlan-spoke type vxlan id 100 remote $HUB_NODE_IP dstport 4789
-            ip link set vxlan-spoke master br-industrial
+            ip link set vxlan-spoke master br-spoke
             ip link set vxlan-spoke up
             
             echo "Spoke bridge and VXLAN tunnel active."

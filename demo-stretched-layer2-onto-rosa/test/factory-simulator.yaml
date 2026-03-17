@@ -85,8 +85,21 @@ spec:
         command: ["/bin/sh", "-c"]
         args:
           - |
-            # Start OpenVPN pointing to the mounted config file
-            openvpn --config /etc/openvpn/config/server.conf
+            # 1. Setup Bridge & IP
+            ip link add br-hub type bridge
+            ip link set br-hub up
+            ip addr add 192.168.100.1/24 dev br-hub
+            
+            # 2. Start OpenVPN
+            openvpn --config /etc/openvpn/config/server.conf --daemon
+            
+            # 3. Wait for tap0 and plug it in
+            until ip link show tap0; do sleep 2; done
+            ip link set tap0 master br-hub
+            ip link set tap0 up
+            
+            echo "SIMULATOR READY - IP 192.168.100.1"
+            tail -f /dev/null
         volumeMounts:
         - name: vpn-certs
           mountPath: /etc/openvpn/certs

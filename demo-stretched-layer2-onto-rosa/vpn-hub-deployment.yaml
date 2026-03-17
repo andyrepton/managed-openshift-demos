@@ -28,6 +28,7 @@ spec:
             # 1. Initialize the Hub Bridge
             ip link add br-hub type bridge
             ip link set br-hub up
+            ip addr add 192.168.100.10/24 dev br-hub
             
             # 2. Start OpenVPN
             openvpn --config /etc/openvpn/config/client.conf --daemon
@@ -42,7 +43,7 @@ spec:
             ip link set vxlan-hub master br-hub
             ip link set vxlan-hub up
             
-            echo "Hub fully initialized and bridged."
+            echo "HUB READY - IP 192.168.100.10"
             tail -f /dev/null
         volumeMounts:
         - name: vpn-config
