@@ -14,25 +14,23 @@ spec:
         app: industrial-hub
     spec:
       hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet # needed to lookup internal dns
       # Link to the privileged ServiceAccount created earlier
       serviceAccountName: industrial-admin 
       containers:
       - name: gateway
-        image: registry.access.redhat.com/ubi9/ubi:latest
+        image: image-registry.openshift-image-registry.svc:5000/industrial-network/industrial-networking-tools:latest
         securityContext:
           privileged: true
         command: ["/bin/sh", "-c"]
         args:
           - |
-            # Install necessary networking and VPN tools
-            dnf install -y iproute procps-ng bridge-utils openvpn
-            
             # 1. Initialize the Hub Bridge
             ip link add br-hub type bridge
             ip link set br-hub up
             
             # 2. Start OpenVPN
-            openvpn --config /etc/openvpn/client.conf --daemon
+            openvpn --config /etc/openvpn/config/client.conf --daemon
             until ip link show tap0; do sleep 2; done
             ip link set tap0 master br-hub
             ip link set tap0 up
@@ -40,7 +38,7 @@ spec:
             # 3. Create the VXLAN VTEP Hub
             # We dynamically pull the Node IP for the VXLAN local endpoint
             NODE_IP=$(ip route get 1.1.1.1 | awk '{print $7}')
-            ip link add vxlan-hub type vxlan id 100 dstport 4789 local $NODE_IP
+            ip link add vxlan-hub type vxlan id 101 dstport 4789 local $NODE_IP
             ip link set vxlan-hub master br-hub
             ip link set vxlan-hub up
             
@@ -48,8 +46,32 @@ spec:
             tail -f /dev/null
         volumeMounts:
         - name: vpn-config
-          mountPath: /etc/openvpn
+          mountPath: /etc/openvpn/config
+        - name: vpn-certs
+          mountPath: /etc/openvpn/certs
       volumes:
       - name: vpn-config
         secret:
+          secretName: factory-vpn-config
+      - name: vpn-certs
+        secret:
           secretName: factory-vpn-auth
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: industrial-hub-service
+  namespace: industrial-network
+spec:
+  selector:
+    app: industrial-hub
+  ports:
+    - name: vxlan
+      protocol: UDP
+      port: 4789
+      targetPort: 4789
+    - name: vpn-mgmt
+      protocol: TCP
+      port: 1194
+      targetPort: 1194
+  type: ClusterIP

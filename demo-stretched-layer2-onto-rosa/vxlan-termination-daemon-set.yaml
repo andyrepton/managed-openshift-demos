@@ -13,8 +13,42 @@ spec:
         app: industrial-spoke
     spec:
       hostNetwork: true
-      # Link to the privileged ServiceAccount
+      dnsPolicy: ClusterFirstWithHostNet # needed to lookup internal dns
       serviceAccountName: industrial-admin
+      initContainers:
+      - name: discover-hub
+        image: registry.access.redhat.com/ubi9/ubi-minimal:latest
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            microdnf install -y jq
+            
+            # This is needed to find the node ip of where the hub is running
+            # 1. Prepare API credentials
+            KUBE_TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+            KUBE_CA=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+            API_URL="https://kubernetes.default.svc/api/v1/namespaces/industrial-network/pods?labelSelector=app%3Dindustrial-hub"
+
+            echo "Querying Kubernetes API for Industrial Hub..."
+            
+            HUB_IP=""
+            while [ -z "$HUB_IP" ] || [ "$HUB_IP" == "null" ]; do
+              # Query the API and extract the hostIP of the first pod in the list
+              HUB_IP=$(curl --cacert $KUBE_CA \
+                -H "Authorization: Bearer $KUBE_TOKEN" \
+                -s $API_URL | jq -r '.items[0].status.hostIP')
+              
+              if [ -z "$HUB_IP" ] || [ "$HUB_IP" == "null" ]; then
+                echo "Hub not found or not scheduled yet. Retrying in 5s..."
+                sleep 5
+              fi
+            done
+
+            echo "Found Hub at Node IP: $HUB_IP"
+            echo "$HUB_IP" > /etc/config/hub-ip
+        volumeMounts:
+        - name: config-share
+          mountPath: /etc/config
       containers:
       - name: spoke
         image: registry.access.redhat.com/ubi9/ubi-minimal:latest
@@ -23,6 +57,8 @@ spec:
         command: ["/bin/sh", "-c"]
         args:
           - |
+            # Wait for initContainer to write the IP
+            HUB_NODE_IP=$(cat /etc/config/hub-ip)
             microdnf install -y iproute
             
             # 1. Create the local bridge for VMs to plug into
@@ -30,10 +66,15 @@ spec:
             ip link set br-industrial up
             
             # 2. Establish VXLAN tunnel back to the HUB
-            # REPLACE <HUB_NODE_IP> with the internal IP of the Node running the Hub Pod
-            ip link add vxlan-spoke type vxlan id 100 remote <HUB_NODE_IP> dstport 4789
+            ip link add vxlan-spoke type vxlan id 100 remote $HUB_NODE_IP dstport 4789
             ip link set vxlan-spoke master br-industrial
             ip link set vxlan-spoke up
             
             echo "Spoke bridge and VXLAN tunnel active."
             tail -f /dev/null
+        volumeMounts:
+        - name: config-share
+          mountPath: /etc/config
+      volumes:
+      - name: config-share
+        emptyDir: {}

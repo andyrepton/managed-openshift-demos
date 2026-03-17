@@ -90,3 +90,4 @@ Why Discounted: Managing a VPN client per-pod was inefficient. It led to massive
 Why Discounted: ROSA does not support adding additional NICs to nodes, and we did not want to use custom AMIs or init scripts to set this up
 
 
+# Testing the solution

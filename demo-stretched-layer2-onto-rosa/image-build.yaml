@@ -1,0 +1,38 @@
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: industrial-networking-tools
+  namespace: industrial-network
+spec:
+  lookupPolicy:
+    local: true
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: industrial-networking-build
+  namespace: industrial-network
+spec:
+  source:
+    type: Dockerfile
+    dockerfile: |
+      FROM registry.access.redhat.com/ubi9/ubi:latest
+      # 1. Install EPEL for OpenVPN
+      RUN dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm && \
+          # 2. Install the required toolset
+          dnf install -y openvpn && \
+          dnf clean all
+  strategy:
+    type: Docker
+    dockerStrategy:
+      from:
+        kind: DockerImage
+        name: registry.access.redhat.com/ubi9/ubi:latest
+  output:
+    to:
+      kind: ImageStreamTag
+      name: industrial-networking-tools:latest
+  triggers:
+    - type: ImageChange
+      imageChange: {}
+    - type: ConfigChange
