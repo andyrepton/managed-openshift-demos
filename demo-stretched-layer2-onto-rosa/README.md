@@ -6,6 +6,7 @@ A customer approached the Black Belt team looking for a way for legacy systems, 
 
 ## Overview
 
+```
 FACTORY FLOOR (L2)           AWS VPC / ROSA CLUSTER (L3)
 ==================           ===============================================
 
@@ -25,6 +26,7 @@ FACTORY FLOOR (L2)           AWS VPC / ROSA CLUSTER (L3)
       |                              |                           |
   Physical Wire                The "Patch Panel"           The Workload
  (Profinet RT)                (Central Router)            (PCS 7 / App)
+```
 
 Mermaid diagram:
 
