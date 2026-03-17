@@ -14,6 +14,8 @@ spec:
         app: industrial-hub
     spec:
       hostNetwork: true
+      nodeSelector:
+        industrial-role: hub # Target our nominated Hub node
       dnsPolicy: ClusterFirstWithHostNet # needed to lookup internal dns
       # Link to the privileged ServiceAccount created earlier
       serviceAccountName: industrial-admin 
@@ -28,21 +30,32 @@ spec:
             # 1. Initialize the Hub Bridge
             ip link add br-hub type bridge
             ip link set br-hub up
-            ip addr add 192.168.100.10/24 dev br-hub
-            
-            # 2. Start OpenVPN
-            openvpn --config /etc/openvpn/config/client.conf --daemon
-            until ip link show tap0; do sleep 2; done
-            ip link set tap0 master br-hub
-            ip link set tap0 up
-            
-            # 3. Create the VXLAN VTEP Hub
-            # We dynamically pull the Node IP for the VXLAN local endpoint
-            NODE_IP=$(ip route get 1.1.1.1 | awk '{print $7}')
-            ip link add vxlan-hub type vxlan id 101 dstport 4789 local $NODE_IP
+            ip addr add 192.168.100.10/24 dev br-hub 2>/dev/null
+
+            # 2. Setup VXLAN Hub (VNI 200) - Listening on primary interface
+            PRIMARY_IF=$(ip route | grep default | awk '{print $5}' | head -n1)
+            ip link delete vxlan-hub 2>/dev/null
+            ip link add vxlan-hub type vxlan id 200 dev $PRIMARY_IF dstport 4789
             ip link set vxlan-hub master br-hub
             ip link set vxlan-hub up
-            
+
+            # 3. Security: Allow foreign MACs to cross the bridge
+            ip link set ens5 promisc on
+            ip link set br-hub promisc on
+            echo 0 > /proc/sys/net/ipv4/conf/all/rp_filter
+
+            # 4. Background task: Plug OpenVPN tap0 into the bridge once it's alive
+            (
+              until ip link show tap0; do sleep 2; done
+              ip link set tap0 master br-hub
+              ip link set tap0 up
+              ip link set tap0 promisc on
+              echo "--- L2 BRIDGE LINKED (tap0 <-> br-hub <-> vxlan-hub) ---"
+            ) &
+
+            # Start OpenVPN
+            openvpn --config /etc/openvpn/config/client.conf --status /dev/stdout 1
+
             echo "HUB READY - IP 192.168.100.10"
             tail -f /dev/null
         volumeMounts:

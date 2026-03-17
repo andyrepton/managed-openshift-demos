@@ -1,0 +1,28 @@
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: windows-engineering-station
+  namespace: industrial-spoke
+spec:
+  running: true
+  template:
+    spec:
+      domain:
+        devices:
+          interfaces:
+            # 1. Standard Cluster Network (Masquerade for Internet/API)
+            - name: default
+              masquerade: {}
+            # 2. The Industrial Bridge (L2 Pass-through)
+            - name: industrial-net
+              bridge: {} 
+        resources:
+          requests:
+            memory: 8Gi
+            cpu: 4
+      networks:
+        - name: default
+          pod: {}
+        - name: industrial-net
+          multus:
+            networkName: industrial-bridge-network

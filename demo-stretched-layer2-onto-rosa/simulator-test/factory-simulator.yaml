@@ -85,20 +85,39 @@ spec:
         command: ["/bin/sh", "-c"]
         args:
           - |
-            # 1. Setup Bridge & IP
-            ip link add br-hub type bridge
-            ip link set br-hub up
-            ip addr add 192.168.100.1/24 dev br-hub
-            
-            # 2. Start OpenVPN
+            # 1. Start OpenVPN in Daemon Mode
+            echo "--- STARTING OPENVPN (DAEMON) ---"
             openvpn --config /etc/openvpn/config/server.conf --daemon
-            
-            # 3. Wait for tap0 and plug it in
-            until ip link show tap0; do sleep 2; done
+
+            # 2. Wait for tap0 to exist (Sequential)
+            echo "--- WAITING FOR tap0 ---"
+            MAX_RETRIES=30
+            COUNT=0
+            while [ $COUNT -lt $MAX_RETRIES ]; do
+              if ip link show tap0 >/dev/null 2>&1; then
+                echo "--- tap0 DETECTED ---"
+                break
+              fi
+              sleep 1
+               COUNT=$((COUNT+1))
+            done
+
+            # 3. Setup Bridge and Plug in tap0
+            echo "--- CONFIGURING BRIDGE ---"
+            ip link add br-hub type bridge 2>/dev/null || true
+            ip link set br-hub up
+    
+            # Ensure IP is set
+            ip addr add 192.168.100.1/24 dev br-hub 2>/dev/null || true
+    
+            # Connect tap0
             ip link set tap0 master br-hub
             ip link set tap0 up
-            
-            echo "SIMULATOR READY - IP 192.168.100.1"
+            ip link set tap0 promisc on
+
+            echo "--- SIMULATOR READY (L2 LINK ACTIVE) ---"
+    
+            # 4. Keep container alive and stream logs
             tail -f /dev/null
         volumeMounts:
         - name: vpn-certs

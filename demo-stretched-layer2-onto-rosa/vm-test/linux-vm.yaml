@@ -1,0 +1,40 @@
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: fedora-test-station
+  namespace: industrial-spoke
+spec:
+  running: true
+  template:
+    spec:
+      domain:
+        devices:
+          interfaces:
+            - name: default
+              masquerade: {}
+            - name: industrial-net
+              bridge: {} # Plugs into br-spoke via Multus
+        resources:
+          requests:
+            memory: 2Gi
+            cpu: 1
+      networks:
+        - name: default
+          pod: {}
+        - name: industrial-net
+          multus:
+            networkName: industrial-bridge-network
+      volumes:
+        - name: containerdisk
+          containerDisk:
+            image: quay.io/containerdisks/fedora:latest
+        - name: cloudinit
+          cloudInitNoCloud:
+            userData: |
+              #cloud-config
+              password: fedora
+              chpasswd: { expire: False }
+              runcmd:
+                # eth1 is usually the second interface (Multus)
+                - ip addr add 192.168.100.51/24 dev eth1
+                - ip link set eth1 up
