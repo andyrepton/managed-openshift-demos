@@ -1,0 +1,19 @@
+apiVersion: kubevirt.io/v1
+kind: VirtualMachineInstance
+metadata:
+  name: windows-industrial-controller
+  namespace: industrial-vms
+spec:
+  domain:
+    devices:
+      interfaces:
+        - name: default
+          masquerade: {}
+        - name: factory-nic
+          bridge: {} # Bridges the VM into the node's br-industrial
+  networks:
+    - name: default
+      pod: {}
+    - name: factory-nic
+      multus:
+        networkName: industrial-l2-network # Must match the NAD name

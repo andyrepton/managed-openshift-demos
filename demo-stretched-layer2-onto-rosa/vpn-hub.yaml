@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: industrial-hub
+  namespace: industrial-network
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: industrial-hub
+  template:
+    metadata:
+      labels:
+        app: industrial-hub
+    spec:
+      hostNetwork: true
+      serviceAccountName: industrial-admin # Needs 'privileged' SCC in OpenShift
+      containers:
+      - name: gateway
+        image: registry.access.redhat.com/ubi9/ubi:latest
+        securityContext:
+          privileged: true
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            dnf install -y iproute procps-ng bridge-utils openvpn
+            # 1. Create the Bridge
+            ip link add br-hub type bridge
+            ip link set br-hub up
+            
+            # 2. Start VPN (Config must be provided via Secret)
+            openvpn --config /etc/openvpn/client.conf --daemon
+            until ip link show tap0; do sleep 1; done
+            ip link set tap0 master br-hub
+            ip link set tap0 up
+            
+            # 3. Create the VXLAN VTEP 
+            # Note: We use the Node IP as the local VTEP address
+            NODE_IP=$(ip route get 1.1.1.1 | awk '{print $7}')
+            ip link add vxlan-hub type vxlan id 100 dstport 4789 local $NODE_IP
+            ip link set vxlan-hub master br-hub
+            ip link set vxlan-hub up
+            
+            tail -f /dev/null
+        volumeMounts:
+        - name: vpn-config
+          mountPath: /etc/openvpn
+      volumes:
+      - name: vpn-config
+        secret:
+          secretName: factory-vpn-auth
