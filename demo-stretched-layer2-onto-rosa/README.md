@@ -53,7 +53,7 @@ Since AWS VPCs are strictly Layer 3 and do not support native broadcast/multicas
 | **M-Bus / Modbus** | **YES** | Most M-Bus/IP gateways use standard IP polling; L2 stretch simplifies discovery. |
 | **UDP Broadcasts**| **YES** | Destination `255.255.255.255` is preserved across the tunnel. |
 
-## 📝 Technical Checklist & "The AWS Catch"
+## Some gotchas to test
 
 ### 1. Disable Source/Destination Check (Critical)
 AWS EC2 instances drop traffic if the source MAC/IP doesn't match the instance's own metadata. Because our VMs use "Factory" MAC addresses that don't belong to AWS, **you must disable the Source/Destination Check** on all ROSA worker nodes.
