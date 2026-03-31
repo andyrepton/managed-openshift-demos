@@ -1,23 +1,22 @@
 variable "openshift_version" {
   type        = string
-  default     = "4.16.4"
+  default     = "4.21.6"
   description = "Desired version of OpenShift for the cluster, for example '4.1.0'. If version is greater than the currently running version, an upgrade will be scheduled."
-}
-
-variable "create_vpc" {
-  type        = bool
-  description = "Would you like to make a new VPC for your ROSA cluster? true or false"
 }
 
 # ROSA Cluster info
 variable "cluster_name" {
-  default     = null
+  default     = "andyr-autonode"
   type        = string
   description = "The name of the ROSA cluster to create"
 }
 
-variable "additional_tags" {
-  default = {}
+variable "tags" {
+  default = {
+    Terraform   = "true"
+    Environment = "dev"
+    TFOwner     = "mobb@redhat.com"
+  }
   description = "Additional AWS resource tags"
   type        = map(string)
 }
@@ -65,34 +64,11 @@ variable "max_replicas" {
   default     = 3
 }
 
-variable "proxy" {
-  default     = null
-  description = "cluster-wide HTTP or HTTPS proxy settings"
-  type = object({
-    http_proxy              = string           # required  http proxy
-    https_proxy             = string           # required  https proxy
-    additional_trust_bundle = optional(string) # a string contains contains a PEM-encoded X.509 certificate bundle that will be added to the nodes' trusted certificate store.
-    no_proxy                = optional(string) # no proxy
-  })
-}
-
-variable "aws_subnet_ids" {
-  type        = list(any)
-  description = "A list of either the public or public + private subnet IDs to use for the cluster blocks to use for the cluster"
-  default     = ["subnet-01234567890abcdef", "subnet-01234567890abcdef", "subnet-01234567890abcdef"]
-}
-
-
-variable "private_cluster" {
-  type        = bool
-  description = "Do you want this cluster to be private? true or false"
-}
-
 #VPC Info
 variable "vpc_name" {
   type        = string
   description = "VPC Name"
-  default     = "poc-andyr-vpc"
+  default     = "andyr-autonode-vpc"
 }
 
 variable "vpc_cidr_block" {
@@ -122,19 +98,8 @@ variable "single_nat_gateway" {
 #AWS Info
 variable "aws_region" {
   type    = string
-  default = "us-east-2"
+  default = "us-east-1"
 }
-
-#variable "admin_username" {
-#  type        = string
-#  description = "The username for the admin user"
-#}
-
-#variable "admin_password" {
-#  type        = string
-#  description = "The password for the admin user"
-#  sensitive   = true
-#}
 
 variable "default_aws_tags" {
   type        = map(string)
@@ -142,29 +107,3 @@ variable "default_aws_tags" {
   default     = {}
 }
 
-# Demo pool stuff
-
-variable "deploy_virt_machine_pool" {
-  type        = bool
-  description = "Should this deploy a metal node to demo OpenShift virt?"
-}
-
-variable "deploy_graviton_machine_pool" {
-  type        = bool
-  description = "Should this deploy a graviton node to demo ARM containers on OpenShift?"
-}
-
-variable "deploy_lokistack_machine_pool" {
-  type        = bool
-  description = "Should this deploy additional nodes to demo OpenShift Logging? Note that this will also make the required policies, roles and bucket to deploy lokistack"
-}
-
-variable "deploy_ai_machine_pool" {
-  type        = bool
-  description = "Should this deploy additional nodes to demo OpenShift Logging? Note that this will also make the required policies, roles and bucket to deploy lokistack"
-}
-
-variable "properties" {
-  description = "Extra properties for ROSA"
-  default = {}
-}

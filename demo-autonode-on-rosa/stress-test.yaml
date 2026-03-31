@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stress-load
+  labels:
+    app: stress-load
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: stress-load
+  template:
+    metadata:
+      labels:
+        app: stress-load
+    spec:
+      nodeSelector:
+        autonode: "true"
+      containers:
+      - name: stress
+        image: progrium/stress@sha256:e34d56d60f5caae79333cee395aae93b74791d50e3841986420d23c2ee4697bf
+        imagePullPolicy: IfNotPresent
+        command: ["stress"]
+        args: ["--cpu", "2", "--timeout", "600"]
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "64Mi"
+          limits:
+            cpu: "500m"
+            memory: "128Mi"
+

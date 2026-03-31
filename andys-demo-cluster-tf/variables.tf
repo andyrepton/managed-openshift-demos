@@ -32,11 +32,7 @@ variable "cluster_name" {
 }
 
 variable "tags" {
-  default = {
-    Terraform   = "true"
-    Environment = "dev"
-    TFOwner     = "mobb@redhat.com"
-  }
+  default = {}
   description = "Additional AWS resource tags"
   type        = map(string)
 }
@@ -64,7 +60,6 @@ variable "worker_node_replicas" {
   description = "Number of worker nodes to provision. Single zone clusters need at least 2 nodes, multizone clusters need at least 3 nodes"
   type        = number
 }
-
 
 variable "autoscaling_enabled" {
   description = "Enables autoscaling. This variable requires you to set a maximum and minimum replicas range using the `max_replicas` and `min_replicas` variables."
@@ -111,7 +106,7 @@ variable "private_cluster" {
 variable "vpc_name" {
   type        = string
   description = "VPC Name"
-  default     = "mobb-tf-vpc"
+  default     = "poc-andyr-vpc"
 }
 
 variable "vpc_cidr_block" {
@@ -143,17 +138,6 @@ variable "aws_region" {
   type    = string
   default = "eu-west-1"
 }
-
-#variable "admin_username" {
-#  type        = string
-#  description = "The username for the admin user"
-#}
-
-#variable "admin_password" {
-#  type        = string
-#  description = "The password for the admin user"
-#  sensitive   = true
-#}
 
 variable "default_aws_tags" {
   type        = map(string)
