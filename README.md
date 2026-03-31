@@ -51,3 +51,4 @@ This is an ever-growing repository. If you find a bug or have a suggestion for a
 -----
 
 *Maintained by [Andy Repton](https://github.com/andyrepton)*
+*Some README files in this repository have been generated and/or edited by Gemini. All code has been created by the author*
