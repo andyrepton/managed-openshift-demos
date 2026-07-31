@@ -1,0 +1,59 @@
+aws_region          = "eu-west-1"
+cluster_name_prefix = "bg"
+
+cluster_pairs = {
+  "production" = {
+    blue_cidr     = "10.0.0.0/24"
+    green_cidr    = "10.0.1.0/24"
+    blue_version  = "4.17.10"
+    green_version = "4.17.10"
+    replicas      = 3
+    machine_type  = "m5.xlarge"
+
+    # Additional machine pools (applied to both blue and green clusters)
+    machine_pools = {
+      "infra" = {
+        name          = "infra"
+        instance_type = "m5.2xlarge"
+        replicas      = 3
+        subnet_index  = 0 # Index into private subnets (0, 1, or 2 for each AZ)
+        labels = {
+          "node-role.kubernetes.io/infra" = ""
+        }
+        taints = [{
+          key           = "node-role.kubernetes.io/infra"
+          value         = ""
+          schedule_type = "NoSchedule"
+        }]
+      }
+    }
+  }
+  "staging" = {
+    blue_cidr     = "10.0.2.0/24"
+    green_cidr    = "10.0.3.0/24"
+    blue_version  = "4.17.10"
+    green_version = "4.17.10"
+    replicas      = 3
+    machine_type  = "m5.xlarge"
+  }
+}
+
+# Example: grant a service account in the production-blue cluster access to S3
+irsa_roles = {
+  "prod-blue-s3-reader" = {
+    cluster_key     = "production-blue"
+    role_name       = "s3-reader"
+    namespace       = "my-app"
+    service_account = "s3-reader-sa"
+    policy_arns     = ["arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"]
+  }
+}
+
+default_aws_tags = {
+  ManagedBy = "terraform"
+  Project   = "rosa-blue-green"
+}
+
+tags = {
+  Environment = "demo"
+}
