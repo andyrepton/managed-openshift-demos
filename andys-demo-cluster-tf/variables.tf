@@ -142,7 +142,7 @@ variable "single_nat_gateway" {
 #AWS Info
 variable "aws_region" {
   type    = string
-  default = "eu-west-1"
+  default = "eu-west-2"
 }
 
 variable "default_aws_tags" {
