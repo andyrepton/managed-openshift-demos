@@ -1,0 +1,38 @@
+apiVersion: hco.kubevirt.io/v1beta1
+kind: HyperConverged
+metadata:
+  name: kubevirt-hyperconverged
+  namespace: openshift-cnv
+spec:
+  featureGates:
+    enableCommonBootImageImport: false
+  infra:
+    nodePlacement:
+      tolerations:
+        - effect: NoSchedule
+          key: metal
+          operator: Exists
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                - key: beta.kubernetes.io/instance-type
+                  operator: In
+                  values:
+                  - "c3-standard-192-metal"
+  workloads:
+    nodePlacement:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: beta.kubernetes.io/instance-type
+                    operator: In
+                    values:
+                    - c3-standard-192-metal
+      tolerations:
+        - effect: NoSchedule
+          key: metal
+          operator: Exists

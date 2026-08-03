@@ -1,0 +1,59 @@
+apiVersion: machine.openshift.io/v1beta1
+kind: MachineSet
+metadata:
+  annotations:
+    capacity.cluster-autoscaler.kubernetes.io/labels: kubernetes.io/arch=amd64
+  labels:
+    machine.openshift.io/cluster-api-cluster: poc-andyr-4m8v8
+  name: poc-andyr-virt-workers
+  namespace: openshift-machine-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      machine.openshift.io/cluster-api-cluster: poc-andyr-4m8v8
+      machine.openshift.io/cluster-api-machineset: poc-andyr-virt-workers
+  template:
+    metadata:
+      labels:
+        machine.openshift.io/cluster-api-cluster: poc-andyr-4m8v8
+        machine.openshift.io/cluster-api-machine-role: worker
+        machine.openshift.io/cluster-api-machine-type: worker
+        machine.openshift.io/cluster-api-machineset: poc-andyr-virt-workers
+    spec:
+      taints:
+        # Add a taint so only CNV can use it
+        - effect: NoSchedule
+          key: metal
+          value: "true"
+      providerSpec:
+        onHostMaintenance: Terminate
+        value:
+          apiVersion: machine.openshift.io/v1beta1
+          canIPForward: false
+          credentialsSecret:
+            name: gcp-cloud-credentials
+          deletionProtection: false
+          disks:
+          - autoDelete: true
+            boot: true
+            image: projects/rhcos-cloud/global/images/rhcos-418-94-202501221327-0-gcp-x86-64
+            labels: {}
+            sizeGb: 128
+            type: hyperdisk-balanced
+          kind: GCPMachineProviderSpec
+          machineType: c3-standard-192-metal
+          networkInterfaces:
+          - network: poc-andyr-vpc
+            subnetwork: poc-andyr-worker-subnet
+          projectID: mobb-demo
+          region: europe-west4
+          serviceAccounts:
+          - email: osd-worker-f58r@mobb-demo.iam.gserviceaccount.com
+            scopes:
+            - https://www.googleapis.com/auth/cloud-platform
+          tags:
+          - poc-andyr-4m8v8-worker
+          userDataSecret:
+            name: worker-user-data
+          zone: europe-west4-c

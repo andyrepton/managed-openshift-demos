@@ -1,0 +1,69 @@
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  labels:
+    app: my-testvm-multicloud
+    os.template.kubevirt.io/fedora: "true"
+    vm.kubevirt.io/template: fedora42-httpd-multicloud
+    vm.kubevirt.io/template.namespace: default
+  name: my-multicloud-vm
+  namespace: default
+spec:
+  runStrategy: Always
+  template:
+    metadata:
+      annotations:
+        kubevirt.io/pci-topology-version: v3
+        vm.kubevirt.io/flavor: small
+        vm.kubevirt.io/os: fedora
+        vm.kubevirt.io/workload: server
+      creationTimestamp: null
+      labels:
+        expose: my-testvm-multicloud
+        kubevirt.io/domain: my-testvm-multicloud
+        kubevirt.io/size: small
+    spec:
+      architecture: amd64
+      domain:
+        cpu:
+          cores: 1
+          sockets: 1
+          threads: 1
+        devices:
+          disks:
+          - disk:
+              bus: virtio
+            name: rootdisk
+          - disk:
+              bus: virtio
+            name: cloudinitdisk
+          interfaces:
+          - masquerade: {}
+            model: virtio
+            name: default
+          rng: {}
+        features:
+          acpi: {}
+          smm:
+            enabled: true
+        firmware:
+          bootloader:
+            bios: {}
+        machine:
+          type: q35
+        memory:
+          guest: 2Gi
+        resources: {}
+      hostname: my-testvm-multicloud
+      networks:
+      - name: default
+        pod: {}
+      terminationGracePeriodSeconds: 180
+      volumes:
+      - dataVolume:
+          name: demo-datavolume
+        name: rootdisk
+      - cloudInitNoCloud:
+          secretRef:
+            name: fedora42-httpd-multicloud-secret
+        name: cloudinitdisk

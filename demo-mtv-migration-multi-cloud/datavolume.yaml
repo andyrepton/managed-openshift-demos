@@ -1,0 +1,15 @@
+apiVersion: cdi.kubevirt.io/v1beta1
+kind: DataVolume
+metadata:
+  annotations:
+    cdi.kubevirt.io/storage.usePopulator: "true"
+  name: demo-datavolume
+  namespace: default
+spec:
+  source:
+    registry:
+      url: docker://quay.io/vhernandomartin/fedora-httpd-multicloud:v5.3
+  storage:
+    resources:
+      requests:
+        storage: 7Gi

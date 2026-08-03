@@ -6,29 +6,57 @@ In a managed environment, the cloud provider and Red Hat handle the cluster's li
 
 -----
 
-## 🚀 Demo Categories
+## Demo Categories
 
 ### Infrastructure & Scaling
 
-  * **[AutoNode on ROSA](./demo-autonode-on-rosa):** Use Karpenter-based scaling to dynamically provision "right-sized" EC2 instances.
+* **[AutoNode on ROSA](./demo-autonode-on-rosa):** Karpenter-based dynamic node provisioning for ROSA HCP.
+* **[Graviton on ROSA](./demo-graviton-on-rosa):** Multi-architecture builds and ARM64/Graviton node deployment.
+* **[Multi-Region ROSA](./demo-multi-region-rosa):** Multi-region failover with Route53 and Global Accelerator.
+* **[Stretched Layer 2 onto ROSA](./demo-stretched-layer2-onto-rosa):** Bridge factory-floor L2 protocols to VMs on ROSA via VXLAN/VPN.
 
-### AWS Integration & Modernization
+### AWS Integration
 
-  * **[S3 Buckets via ACK](./demo-deploy-s3-buckets-with-ack):** Provision AWS S3 buckets directly from OpenShift using the AWS Controllers for Kubernetes (ACK).
-  * **[CloudWatch Logging](./demo-forward-logs-to-aws-cloudwatch):** Forward OpenShift cluster and application logs to AWS CloudWatch.
-  * **[CloudWatch Metrics](./demo-forward-metrics-to-aws-cloudwatch):** Export cluster metrics to AWS for centralized monitoring.
+* **[S3 Buckets via ACK](./demo-deploy-s3-buckets-with-ack):** Kubernetes-native S3 bucket provisioning with AWS Controllers for Kubernetes.
+* **[CloudWatch Metrics](./demo-forward-metrics-to-aws-cloudwatch):** Export Prometheus metrics to AWS CloudWatch dashboards.
 
-### Application Services & Networking
+### Observability & Logging
 
-  * **[Service Mesh App Deployment](./demo-deploying-an-app-with-service-mesh):** Deploy a microservices application integrated with OpenShift Service Mesh.
+* **[OpenShift Logging with LokiStack](./demo-openshift-logging):** Deploy LokiStack-based logging on ROSA.
+* **[Multi-Namespace Log & Metrics Forwarding](./demo-multi-namespace-log-metrics-forwarding):** Per-team log/metrics forwarding to New Relic using COO and OpenTelemetry.
 
-### Developer Experience
+### Virtualization & Migration
 
-  * **[Red Hat Dev Spaces](./openshift-devspaces):** Set up cloud-native IDEs for consistent development environments.
+* **[Deploy a VM with OpenShift Virt](./demo-deploying-a-vm-with-openshift-virt):** VM lifecycle management on managed OpenShift.
+* **[OpenShift Virt on OSD (GCP)](./demo-openshift-virt-on-osd):** OpenShift Virtualization on bare-metal GCP instances.
+* **[Multi-Cloud VM Migration (MTV)](./demo-mtv-migration-multi-cloud):** Cross-cluster VM migration with the Migration Toolkit for Virtualization.
+
+### AI & Machine Learning
+
+* **[OpenShift AI on ROSA](./demo-openshift-ai-on-rosa):** GPU-accelerated object detection model serving with RHOAI.
+* **[Model as a Service (MaaS)](./demo-maas-on-rosa):** LLM inference via OpenAI-compatible MaaS API.
+* **[GitLab Duo on ROSA](./demo-gitlab-duo-on-rosa):** GitLab + Duo AI code assistant with in-cluster LLM serving.
+
+### Developer Experience & GitOps
+
+* **[Segregated GitOps](./demo-deploying-segregated-gitops):** Per-team ArgoCD instances managed by a central platform team.
+* **[Source-to-Image & Dev Spaces](./demo-source2image):** Build and deploy from source with S2I and browser-based IDEs.
+* **[Service Mesh App Deployment](./demo-deploying-an-app-with-service-mesh):** Enroll applications in OpenShift Service Mesh.
+
+### Deprecated
+
+* **[Cluster Logging with Elasticsearch](./demo-deploying-cluster-logging-with-elasticsearch):** _(Deprecated)_ Legacy EFK stack. See [OpenShift Logging](./demo-openshift-logging) instead.
+* **[Forward Logs to CloudWatch](./demo-forward-logs-to-aws-cloudwatch):** _(Deprecated)_ Legacy log forwarding with Fluentd. See [OpenShift Logging](./demo-openshift-logging) instead.
+
+### Work in Progress
+
+* **[Continue on ROSA](./demo-continue-on-rosa):** AI code assistant integration (WIP).
+* **[GitLab on OpenShift](./demo-gitlab-on-openshift):** Basic GitLab operator deployment (WIP -- see [GitLab Duo on ROSA](./demo-gitlab-duo-on-rosa) for a complete setup).
+* **[OpenShift Virt on ROSA](./demo-openshift-virt-on-rosa):** OpenShift Virtualization on ROSA (WIP).
 
 -----
 
-## 🛠️ General Prerequisites
+## General Prerequisites
 
 While each demo has its own specific requirements, you will generally need:
 
@@ -37,18 +65,22 @@ While each demo has its own specific requirements, you will generally need:
 3.  The `rosa` or `az` CLI (depending on the provider).
 4.  `terraform` (for infrastructure-based demos).
 
-## Terraform pre-start
+## Terraform Pre-start
 
-The `andys-demo-cluster-tf` folder has my working terraform code to build `rosa` and `aro` clusters, which can be used as a baseline
+The `andys-demo-cluster-tf` folder has working Terraform code to build ROSA and ARO clusters, which can be used as a baseline. See the `.tfvars` files for preset configurations:
 
-## 🤝 Contributing
+* `basic_rosa.tfvars` -- ROSA HCP cluster only.
+* `basic_aro.tfvars` -- ARO cluster only.
+* `ai_rosa.tfvars` -- ROSA with AI/GPU machine pool enabled.
+
+## Contributing
 
 This is an ever-growing repository. If you find a bug or have a suggestion for a new demo:
 
 1.  **Open an Issue:** To report bugs or request features.
-2.  **Submit a PR:** Contributions are welcome\! Please ensure your demo includes a README following the established friendly, technical style.
+2.  **Submit a PR:** Contributions are welcome! Please ensure your demo includes a README following the established style.
 
 -----
 
 *Maintained by [Andy Repton](https://github.com/andyrepton)*
-*Some README files in this repository have been generated and/or edited by Gemini. All code has been created by the author*
+*Some README files in this repository have been generated and/or edited by AI assistants. All code has been created by the author.*
