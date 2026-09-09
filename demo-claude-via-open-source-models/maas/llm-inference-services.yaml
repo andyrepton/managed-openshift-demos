@@ -1,0 +1,118 @@
+apiVersion: serving.kserve.io/v1alpha2
+kind: LLMInferenceService
+metadata:
+  name: granite-4-1-30b
+  namespace: claude-code-demo
+  annotations:
+    openshift.io/display-name: Granite 4.1 30B
+  labels:
+    opendatahub.io/dashboard: "true"
+spec:
+  model:
+    uri: pvc://granite-4-1-30b-model-storage/granite-4-1-30b
+    name: granite-4-1-30b
+  baseRefs:
+    - name: v3-4-4-kserve-config-llm-template-nvidia-cuda
+    - name: v3-4-4-kserve-config-llm-router-route
+  router:
+    gateway:
+      refs:
+        - name: maas-default-gateway
+          namespace: openshift-ingress
+  replicas: 1
+  template:
+    containers:
+      - name: main
+        image: registry.redhat.io/rhaii/vllm-cuda-rhel9:3.5.0
+        args:
+          - --max-model-len=131072
+          - --quantization=fp8
+          - --enable-auto-tool-choice
+          - --tool-call-parser=granite4
+          - --served-model-name=claude-sonnet-5
+          - --served-model-name=claude-sonnet-4-20250514
+          - --served-model-name=claude-sonnet-5-20250219
+          - --served-model-name=claude-3-5-sonnet-20241022
+          - --served-model-name=claude-haiku-4-5-20251001
+          - --served-model-name=claude-3-5-haiku-20241022
+          - --served-model-name=granite-4-1-30b
+        env:
+          - name: VLLM_USE_DEEP_GEMM
+            value: "0"
+        resources:
+          limits:
+            cpu: "4"
+            memory: 16Gi
+            nvidia.com/gpu: "1"
+          requests:
+            cpu: "2"
+            memory: 8Gi
+            nvidia.com/gpu: "1"
+    tolerations:
+      - effect: NoSchedule
+        key: nvidia.com/gpu
+        operator: Exists
+---
+apiVersion: serving.kserve.io/v1alpha2
+kind: LLMInferenceService
+metadata:
+  name: qwen3-6-27b
+  namespace: claude-code-demo
+  annotations:
+    openshift.io/display-name: Qwen 3.6 27B FP8
+  labels:
+    opendatahub.io/dashboard: "true"
+spec:
+  model:
+    uri: pvc://qwen3-6-27b-model-storage/qwen3-6-27b
+    name: qwen3-6-27b
+  baseRefs:
+    - name: v3-4-4-kserve-config-llm-template-nvidia-cuda
+    - name: v3-4-4-kserve-config-llm-router-route
+  router:
+    gateway:
+      refs:
+        - name: maas-default-gateway
+          namespace: openshift-ingress
+  replicas: 1
+  template:
+    containers:
+      - name: main
+        image: registry.redhat.io/rhaii/vllm-cuda-rhel9:3.5.0
+        args:
+          - --max-model-len=262144
+          - --enable-auto-tool-choice
+          - --tool-call-parser=qwen3_coder
+          - --reasoning-parser=qwen3
+          - --language-model-only
+          - --chat-template=/etc/chat-template/qwen/chat_template.jinja
+          - --served-model-name=claude-opus-5
+          - --served-model-name=claude-opus-4-20250514
+          - --served-model-name=claude-3-opus-20240229
+          - --served-model-name=claude-fable-5
+          - --served-model-name=fable-5-sonnet-20250312
+          - --served-model-name=qwen3-6-27b
+        env:
+          - name: VLLM_USE_DEEP_GEMM
+            value: "0"
+        resources:
+          limits:
+            cpu: "4"
+            memory: 16Gi
+            nvidia.com/gpu: "1"
+          requests:
+            cpu: "2"
+            memory: 8Gi
+            nvidia.com/gpu: "1"
+        volumeMounts:
+          - name: qwen-chat-template
+            mountPath: /etc/chat-template/qwen
+            readOnly: true
+    tolerations:
+      - effect: NoSchedule
+        key: nvidia.com/gpu
+        operator: Exists
+    volumes:
+      - name: qwen-chat-template
+        configMap:
+          name: qwen-chat-template

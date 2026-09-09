@@ -1,0 +1,46 @@
+apiVersion: serving.kserve.io/v1alpha1
+kind: ServingRuntime
+metadata:
+  name: vllm-cuda-runtime
+  namespace: claude-code-demo
+  annotations:
+    openshift.io/display-name: vLLM NVIDIA GPU ServingRuntime for KServe
+    opendatahub.io/recommended-accelerators: '["nvidia.com/gpu"]'
+  labels:
+    opendatahub.io/dashboard: "true"
+spec:
+  annotations:
+    prometheus.io/port: "8080"
+    prometheus.io/path: "/metrics"
+  multiModel: false
+  supportedModelFormats:
+    - autoSelect: true
+      name: vLLM
+  containers:
+    - name: kserve-container
+      image: registry.redhat.io/rhaii/vllm-cuda-rhel9:3.5.0
+      command:
+        - python
+        - -m
+        - vllm.entrypoints.openai.api_server
+      args:
+        - "--port=8080"
+        - "--model=/mnt/models"
+        - "--served-model-name={{.Name}}"
+      env:
+        - name: HF_HOME
+          value: /tmp/hf_home
+        - name: VLLM_USE_DEEP_GEMM
+          value: "0"
+      volumeMounts:
+        - name: qwen-chat-template
+          mountPath: /etc/chat-template/qwen
+          readOnly: true
+      ports:
+        - containerPort: 8080
+          protocol: TCP
+  volumes:
+    - name: qwen-chat-template
+      configMap:
+        name: qwen-chat-template
+        optional: true

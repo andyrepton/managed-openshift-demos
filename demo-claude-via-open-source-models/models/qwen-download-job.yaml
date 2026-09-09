@@ -1,0 +1,44 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: download-qwen3-6-27b
+  namespace: claude-code-demo
+spec:
+  ttlSecondsAfterFinished: 600
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: download
+          image: python:3.11-slim
+          command:
+            - /bin/bash
+            - -c
+            - |
+              pip install -q huggingface_hub &&
+              /tmp/.local/bin/hf download \
+                RedHatAI/Qwen3.6-27B-FP8 \
+                --local-dir /models/qwen3-6-27b \
+                --token "$HF_TOKEN"
+          env:
+            - name: HOME
+              value: /tmp
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hf-token
+                  key: token
+          volumeMounts:
+            - name: model-storage
+              mountPath: /models
+          resources:
+            requests:
+              cpu: "2"
+              memory: 4Gi
+            limits:
+              cpu: "4"
+              memory: 8Gi
+      volumes:
+        - name: model-storage
+          persistentVolumeClaim:
+            claimName: qwen3-6-27b-model-storage

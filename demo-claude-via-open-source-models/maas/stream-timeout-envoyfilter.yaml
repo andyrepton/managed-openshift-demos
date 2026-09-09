@@ -1,0 +1,29 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: maas-stream-timeout
+  namespace: openshift-ingress
+spec:
+  workloadSelector:
+    labels:
+      gateway.networking.k8s.io/gateway-name: maas-default-gateway
+  configPatches:
+    # Increase stream idle timeout to handle long-running streaming responses
+    - applyTo: NETWORK_FILTER
+      match:
+        context: GATEWAY
+        listener:
+          filterChain:
+            filter:
+              name: envoy.filters.network.http_connection_manager
+      patch:
+        operation: MERGE
+        value:
+          typed_config:
+            '@type': type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+            stream_idle_timeout: 0s  # Disable stream idle timeout
+            request_timeout: 0s       # Disable request timeout
+            common_http_protocol_options:
+              idle_timeout: 0s        # Disable connection idle timeout
+              max_stream_duration:
+                max_stream_duration: 0s  # Disable max stream duration

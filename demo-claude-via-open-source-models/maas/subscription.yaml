@@ -1,0 +1,32 @@
+# MaaSSubscription grants access to models with token limits.
+# Users in the specified OpenShift groups can create API keys
+# scoped to this subscription.
+#
+# To add users to the group:
+#   oc adm groups new claude-code-users
+#   oc adm groups add-users claude-code-users alice bob charlie
+apiVersion: maas.opendatahub.io/v1alpha1
+kind: MaaSSubscription
+metadata:
+  name: claude-code-demo-subscription
+  namespace: models-as-a-service
+spec:
+  owner:
+    groups:
+      - name: claude-code-users
+  modelRefs:
+    - name: granite-4-1-30b
+      namespace: claude-code-demo
+      billingRate:
+        perToken: "0.0001"
+      tokenRateLimits:
+        - limit: 100000000
+          window: "1h"
+    - name: qwen3-6-27b
+      namespace: claude-code-demo
+      billingRate:
+        perToken: "0.0001"
+      tokenRateLimits:
+        - limit: 100000000
+          window: "1h"
+  priority: 10

@@ -1,0 +1,16 @@
+# Patch for MaaS Gateway Service to enable TCP keepalive
+# This prevents idle connection timeouts during long-running requests
+apiVersion: v1
+kind: Service
+metadata:
+  name: maas-default-gateway-data-science-gateway-class
+  namespace: openshift-ingress
+  annotations:
+    # AWS ELB idle timeout (default 60s, increase to 10 minutes)
+    service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout: "600"
+spec:
+  # Enable session affinity to keep connections to same backend
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800  # 3 hours

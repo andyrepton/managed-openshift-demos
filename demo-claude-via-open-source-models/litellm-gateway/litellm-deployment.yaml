@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: litellm-gateway
+  namespace: claude-code-demo
+  labels:
+    app: litellm-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: litellm-gateway
+  template:
+    metadata:
+      labels:
+        app: litellm-gateway
+    spec:
+      containers:
+        - name: litellm
+          image: ghcr.io/berriai/litellm:main-latest
+          args:
+            - --config
+            - /etc/litellm/config.yaml
+            - --port
+            - "4000"
+          ports:
+            - containerPort: 4000
+              protocol: TCP
+          env:
+            - name: LITELLM_MASTER_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: litellm-api-key
+                  key: master-key
+            - name: LITELLM_REQUEST_TIMEOUT
+              value: "600"
+            - name: LITELLM_NUM_RETRIES
+              value: "0"
+            # aiohttp client timeouts (prevent socket read timeout)
+            - name: AIOHTTP_TOTAL_TIMEOUT
+              value: "0"
+            - name: AIOHTTP_SOCK_READ_TIMEOUT
+              value: "0"
+            - name: AIOHTTP_SOCK_CONNECT_TIMEOUT
+              value: "60"
+            # TCP keepalive for long-running connections
+            - name: AIOHTTP_KEEPALIVE_TIMEOUT
+              value: "0"
+          volumeMounts:
+            - name: config
+              mountPath: /etc/litellm
+              readOnly: true
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+          readinessProbe:
+            httpGet:
+              path: /health/liveliness
+              port: 4000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health/liveliness
+              port: 4000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+      volumes:
+        - name: config
+          configMap:
+            name: litellm-config

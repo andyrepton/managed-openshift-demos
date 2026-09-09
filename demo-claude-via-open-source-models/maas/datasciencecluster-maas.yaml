@@ -1,0 +1,7 @@
+# Do NOT apply this file directly — it would overwrite your existing DSC.
+# Instead, patch the existing DataScienceCluster to add modelsAsService:
+#
+#   oc patch datasciencecluster default-dsc --type=merge \
+#     -p '{"spec":{"components":{"kserve":{"modelsAsService":{"managementState":"Managed"}}}}}'
+#
+# This adds MaaS support under kserve without touching any other components.

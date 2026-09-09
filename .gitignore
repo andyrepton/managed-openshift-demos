@@ -2,3 +2,6 @@
 *terraform.tfstate*
 *.key*
 *.pem*
+**/hf-token-secret.yaml
+**/litellm-secret.yaml
+**/postgres-secret.yaml
