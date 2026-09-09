@@ -61,15 +61,14 @@ Both routes pass through the MaaS gateway for authentication and usage tracking 
 ## Directory Layout
 
 ```
-cluster-setup/      Cluster prerequisites (operators, RHOAI configuration)
-  cluster-setup/operators/        Operator subscriptions (NFD, NVIDIA GPU, cert-manager, RHOAI)
-  cluster-setup/ai-project/       Namespace, DataScienceCluster, and vLLM ServingRuntime
-models/             Model storage, downloads, and InferenceServices (see models/README.md)
-maas/               Models-as-a-Service setup with authentication and usage tracking (see maas/README.md)
-litellm-litellm-gateway/    LiteLLM API translation layer (Anthropic ↔ OpenAI)
-scripts/            Test scripts for models and MaaS API
-alternatives/       Alternative approaches (direct vLLM without MaaS)
-docs/               Documentation and blog posts
+cluster-setup/          Cluster prerequisites (operators, RHOAI configuration)
+  operators/            Operator subscriptions (NFD, NVIDIA GPU, cert-manager, COO, OTel, RHOAI)
+  ai-project/           Namespace, DataScienceCluster, and vLLM ServingRuntime
+models/                 Model PVCs, download jobs, chat templates, LLMInferenceServices
+maas/                   MaaS infrastructure (RHCL, Kuadrant, Authorino, PostgreSQL, gateway, auth)
+litellm-gateway/        LiteLLM API translation layer (Anthropic ↔ OpenAI)
+alternatives/           Alternative approaches (direct vLLM without MaaS)
+docs/                   Documentation and blog posts
 ```
 
 ## Prerequisites
@@ -110,17 +109,19 @@ Ensure your ARO cluster has a GPU machine pool. Refer to the `aro/` module in `a
 
 ### Step 2: Install Prerequisite Operators
 
-RHOAI v3 requires cert-manager. Install it first, then the GPU operators.
-
 ```bash
 # cert-manager (required by RHOAI v3)
 oc apply -f cluster-setup/operators/cert-manager.yaml
 oc wait --for=condition=Available deployment -n cert-manager-operator --all --timeout=300s
+
+# Cluster Observability Operator (required for MaaS usage dashboards)
+oc apply -f cluster-setup/operators/cluster-observability-operator.yaml
+
+# Red Hat build of OpenTelemetry (required for MaaS metrics collection)
+oc apply -f cluster-setup/operators/opentelemetry.yaml
 ```
 
 ### Step 3: Install GPU Operators
-
-Install the GPU operators in order, waiting for each to be ready before proceeding.
 
 ```bash
 # Node Feature Discovery
@@ -157,17 +158,14 @@ oc apply -f cluster-setup/operators/rhoai.yaml
 oc wait --for=condition=Available deployment -n redhat-ods-operator --all --timeout=600s
 ```
 
-> **Note on Service Mesh**: The RHOAI v3 docs list OpenShift Service Mesh as a dependency for KServe, but this appears to apply primarily to the deprecated Serverless/Knative mode. For RawDeployment mode (which this demo uses), Service Mesh should not be required. If you encounter issues with KServe not starting, try installing the Service Mesh operator as well.
-
 ### Step 5: Configure OpenShift AI
 
 ```bash
 # Create the project namespace
 oc apply -f cluster-setup/ai-project/namespace.yaml
 
-# Deploy the DataScienceCluster (enables KServe)
+# Deploy the DataScienceCluster (enables KServe + MaaS via aigateway)
 oc apply -f cluster-setup/ai-project/data-science-cluster.yaml
-
 ```
 
 Wait for KServe to be fully ready (this can take several minutes on first install):
@@ -183,16 +181,73 @@ Then deploy the vLLM ServingRuntime:
 oc apply -f cluster-setup/ai-project/serving-runtime.yaml
 ```
 
-### Step 6: Download and Deploy Models
+### Step 6: Set Up MaaS Infrastructure
 
-First, create a HuggingFace token secret. Edit `models/hf-token-secret.yaml` and replace `REPLACE_WITH_YOUR_HF_TOKEN` with your actual token (this file is gitignored to prevent accidental credential leaks):
+MaaS provides Red Hat-native API key authentication, per-user token quotas, and usage tracking. All commands in this step use files from the `maas/` directory.
 
 ```bash
+# Enable User Workload Monitoring (for Prometheus metrics)
+oc apply -f maas/monitoring.yaml
+
+# Install Red Hat Connectivity Link (provides Kuadrant + Authorino)
+oc apply -f maas/operator.yaml
+oc get csv -n openshift-operators -w
+# Wait for rhcl-operator to show "Succeeded"
+
+# Create Kuadrant instance
+oc apply -f maas/kuadrant.yaml
+oc wait --for=condition=Ready kuadrant/kuadrant -n kuadrant-system --timeout=300s
+
+# Set up Authorino (API key validation)
+oc apply -f maas/authorino.yaml
+```
+
+Deploy PostgreSQL (MaaS stores API keys and subscriptions here):
+
+```bash
+# Generate a password and update postgres.yaml
+PG_PASSWORD=$(openssl rand -base64 16 | tr -d '=+/')
+echo "PostgreSQL password: $PG_PASSWORD"
+# Replace BOTH instances of REPLACE_WITH_GENERATED_PASSWORD in maas/postgres.yaml
+
+oc apply -f maas/postgres.yaml
+oc wait --for=condition=Available deployment/postgres \
+  -n redhat-ods-applications --timeout=120s
+```
+
+Create the MaaS gateway:
+
+```bash
+# Label namespace for gateway access
+oc apply -f maas/namespace-label.yaml
+
+# Create the gateway
+oc apply -f maas/gateway.yaml
+oc wait --for=condition=Programmed gateway/maas-default-gateway \
+  -n openshift-ingress --timeout=120s
+```
+
+Enable Gen AI Studio in the dashboard:
+
+```bash
+oc patch odhdashboardconfig odh-dashboard-config \
+  -n redhat-ods-applications --type=merge \
+  -p '{"spec":{"dashboardConfig":{"genAiStudio":true,"observabilityDashboard":true}}}'
+```
+
+### Step 7: Download and Deploy Models
+
+Create a HuggingFace token secret (this file is gitignored to prevent accidental credential leaks):
+
+```bash
+# Edit models/hf-token-secret.yaml and replace REPLACE_WITH_YOUR_HF_TOKEN
 oc apply -f models/hf-token-secret.yaml
+
+# Create PVCs and start downloads
 oc apply -f models/granite-pvc.yaml
-oc apply -f models/qwen-pvc.yaml
+oc apply -f models/qwen3-8-pvc.yaml
 oc apply -f models/granite-download-job.yaml
-oc apply -f models/qwen-download-job.yaml
+oc apply -f models/qwen3-8-download-job.yaml
 ```
 
 Monitor download progress:
@@ -205,7 +260,7 @@ oc logs -f job/download-granite-4-1-30b -n claude-code-demo
 oc logs -f job/download-qwen3-8-27b -n claude-code-demo
 ```
 
-Once downloads complete, deploy the Qwen chat template and InferenceServices:
+Once downloads complete, deploy the chat template and LLMInferenceServices:
 
 ```bash
 # Qwen needs a custom chat template because the default rejects system
@@ -223,51 +278,97 @@ oc get llminferenceservice -n claude-code-demo -w
 # Both should show READY=True after ~5 minutes
 ```
 
-### Step 7: Deploy the LiteLLM Gateway
+### Step 8: Register Models and Create User Access
 
-First, generate a strong API key and create the Secret. The gateway is exposed via a public Route, so this key protects it from unauthorised access:
+Register the models with MaaS, create a user group, and set up token quotas:
 
 ```bash
-# Generate a random API key
+# Register models with MaaS
+oc apply -f maas/model-refs.yaml
+
+# Create auth policy granting access to the user group
+oc apply -f maas/auth-policy.yaml
+
+# Create user group and add yourself
+oc adm groups new claude-code-users
+oc adm groups add-users claude-code-users $(oc whoami)
+
+# Create subscription with token limits
+oc apply -f maas/subscription.yaml
+```
+
+Verify:
+
+```bash
+oc get maasmodelrefs -n claude-code-demo
+oc get maasauthpolicies -n models-as-a-service
+oc get maassubscriptions -n models-as-a-service
+```
+
+Create a MaaS API key (for direct Cursor access):
+
+```bash
+CLUSTER_DOMAIN=$(oc get ingresses.config.openshift.io cluster -o jsonpath='{.spec.domain}')
+MAAS_API="https://maas.${CLUSTER_DOMAIN}/maas-api"
+
+MAAS_KEY=$(curl -sS \
+  -H "Authorization: Bearer $(oc whoami -t)" \
+  -H "Content-Type: application/json" \
+  -X POST \
+  -d '{
+    "name": "claude-code-key",
+    "description": "API key for Claude Code demo",
+    "subscription": "claude-code-demo-subscription"
+  }' \
+  "${MAAS_API}/v1/api-keys" | jq -r .key)
+
+echo "Your MaaS API key: $MAAS_KEY"
+echo "Save this — it is only shown once."
+```
+
+### Step 9: Deploy the LiteLLM Gateway
+
+Claude Code uses the Anthropic Messages API, which requires a translation layer to reach vLLM's OpenAI-compatible backend. LiteLLM handles this and provides model name aliasing.
+
+Generate a LiteLLM API key and deploy:
+
+```bash
 export LITELLM_KEY="sk-$(openssl rand -hex 24)"
 echo "Your LiteLLM API key: $LITELLM_KEY"
 echo "Save this — you'll need it for Claude Code configuration."
 
-# Create the secret with the generated key
 oc create secret generic litellm-api-key \
   --from-literal=master-key="$LITELLM_KEY" \
   -n claude-code-demo
-```
 
-Then deploy the gateway:
-
-```bash
 oc apply -f litellm-gateway/litellm-config.yaml
 oc apply -f litellm-gateway/litellm-deployment.yaml
 oc apply -f litellm-gateway/litellm-service.yaml
 oc apply -f litellm-gateway/litellm-route.yaml
-```
 
-Wait for the gateway to be ready:
-
-```bash
 oc wait --for=condition=Available deployment/litellm-gateway -n claude-code-demo --timeout=120s
 ```
 
-Get the gateway URL:
+### Step 10: Apply Streaming Timeout Fixes
+
+The MaaS gateway has default timeouts that kill long-running streaming responses. Apply these fixes:
+
+```bash
+# Stream idle timeout override (sets to infinite)
+oc apply -f maas/stream-timeout-envoyfilter.yaml
+
+# Payload processing timeout override (MaaS controller sets 300s, this overrides to infinite)
+oc apply -f maas/payload-processing-timeout-override.yaml
+```
+
+### Step 11: Test the Setup
+
+The first request to each model may be slow (30-60s) while vLLM compiles CUDA graphs. Send a warm-up request first.
 
 ```bash
 export GATEWAY_URL=$(oc get route litellm-gateway -n claude-code-demo -o jsonpath='{.spec.host}')
-echo "Gateway URL: https://$GATEWAY_URL"
-```
 
-### Step 8: Test the Gateway
-
-The first request to each model may fail or be slow while vLLM warms up. Send a quick warm-up request first, then test properly.
-
-**Warm up both models (ignore errors on first attempt):**
-
-```bash
+# Warm up (ignore errors on first attempt)
 curl -s -X POST "https://$GATEWAY_URL/v1/messages" \
   -H "x-api-key: $LITELLM_KEY" \
   -H "anthropic-version: 2023-06-01" \
@@ -412,7 +513,7 @@ oc get nodes -l nvidia.com/gpu.present=true
 oc get pods -n nvidia-gpu-operator | grep -v Completed
 
 # Models are serving
-oc get inferenceservice -n claude-code-demo
+oc get llminferenceservice -n claude-code-demo
 
 # Gateway is healthy
 oc get pods -n claude-code-demo -l app=litellm-gateway
@@ -432,36 +533,21 @@ For tasks 1-5, switch between Granite and Qwen inside the same Claude Code sessi
 
 ### Known Limitations with Open-Source Models
 
-- **Tool use**: File reading, editing, and bash commands may not work reliably — these require the model to emit correctly formatted tool calls. Qwen3.8 has native tool calling support via `qwen3_coder`; Granite 4.1 has native support via `granite4`
-- **Web search**: Claude Code's built-in web search is a native Anthropic API feature and is not available with open-source models. Attempting it will produce an error
-- **Extended thinking**: Not available with open-source models
-- **Prompt caching**: Not available
-- **Long context**: Granite is configured for 131K tokens, Qwen for 262K (vs Claude's 200K)
-- **Multi-step reasoning**: Open-source models may struggle with complex, multi-tool workflows
-- **First request latency**: vLLM compiles CUDA graphs on the first request after startup, causing 30-60 second delays. Subsequent requests are fast
+- **Tool use**: File reading, editing, and bash commands may not work reliably — these require the model to emit correctly formatted tool calls. Qwen3.8 has native tool calling support via `qwen3_coder` and Granite 4.1 via `granite4`, which handle most straightforward tool calls. Complex multi-tool chains are where quality drops off compared to Claude
+- **Web search**: Claude Code's built-in web search is a native Anthropic API feature and is not available with open-source models. Attempting it will produce an error. There is no workaround — web search requires Anthropic's backend. However, in testing, the model reliably falls back onto the Fetch method, which works the same.
+- **Extended thinking**: Claude's extended thinking feature is not available. Qwen3.8 has its own reasoning mode (`<think>` tags) which is stripped from output by `--reasoning-parser qwen3`. Claude Code sends `reasoning_effort: "high"` which the custom chat template maps to `medium` (vLLM only accepts `xhigh`/`medium`/`low`, and `xhigh` causes empty responses ~17% of the time)
+- **System messages mid-conversation**: Claude Code sends system messages mid-conversation for tool context. Both Qwen and Granite's default chat templates reject this. Fixed with a custom chat template (`models/qwen-chat-template.yaml`) that allows system messages anywhere. Granite's built-in template handles this natively
+- **Prompt caching**: Not available — all tokens are processed on every request. This increases latency and GPU utilisation compared to Claude's cached prompt handling
+- **Long context**: Granite is configured for 131K tokens, Qwen for 262K (vs Claude's 200K). Context is comparable, but without prompt caching, long contexts are more expensive to process
+- **Multi-step reasoning**: Open-source models may struggle with complex, multi-tool workflows that require planning across many steps. Single-step tasks (code generation, file edits, explanations) work well
+- **First request latency**: vLLM compiles CUDA graphs on the first request after startup, causing 30-60 second delays. Step 11 includes a warm-up step to trigger this before you start using Claude Code
+- **Streaming timeouts**: The MaaS gateway's payload processing has 300s default timeouts that kill long-running responses. Step 10 applies EnvoyFilter overrides to disable these. LiteLLM is configured with a 180s per-request timeout and 2 retries, so transient failures recover in ~3 minutes instead of hanging for 10
 
 ## Usage Monitoring (MaaS)
 
-When using MaaS, RHOAI provides built-in Perses dashboards for monitoring token usage, authorized calls, and rate limiting per user and model. Setting this up requires three operator prerequisites and two configuration patches.
+RHOAI provides built-in Perses dashboards for monitoring token usage, authorized calls, and rate limiting per user and model. The Cluster Observability Operator and OpenTelemetry operator are already installed (Step 2). Two additional patches enable the dashboards.
 
-### Step 1: Install Operator Prerequisites
-
-The observability stack requires the Cluster Observability Operator (COO) and the Red Hat build of OpenTelemetry:
-
-```bash
-oc apply -f cluster-setup/operators/cluster-observability-operator.yaml
-oc apply -f cluster-setup/operators/opentelemetry.yaml
-```
-
-Wait for both to be ready:
-
-```bash
-oc get csv -n openshift-cluster-observability-operator | grep observability
-oc get csv -n openshift-opentelemetry-operator | grep opentelemetry
-# Both should show Phase: Succeeded
-```
-
-### Step 2: Configure Metrics in DSCI
+### Configure Metrics in DSCI
 
 Patch the DSCInitialization to enable metrics collection with storage. This triggers the RHOAI operator to auto-create the MonitoringStack, Perses server, Prometheus, and Thanos querier in `redhat-ods-monitoring`:
 
@@ -483,7 +569,7 @@ oc get dsci default-dsci -o yaml | grep -A 3 'MonitoringStackAvailable\|PersesAv
 # Both should show status: "True"
 ```
 
-### Step 3: Enable MaaS Telemetry
+### Enable MaaS Telemetry
 
 Patch the MaasTenantConfig to enable per-user and per-model usage metrics:
 
@@ -500,18 +586,9 @@ spec:
 
 > **Note:** Enabling `captureUser` logs user identity per request — ensure GDPR/privacy compliance before enabling in production.
 
-### Step 4: Enable the Dashboard UI
-
-Enable the observability dashboard in the OpenShift AI console:
-
-```bash
-oc patch odhdashboardconfig odh-dashboard-config -n redhat-ods-applications \
-  --type=merge -p '{"spec":{"dashboardConfig":{"observabilityDashboard":true}}}'
-```
-
 ### Accessing the Dashboard
 
-The MaaS usage dashboard is available in the OpenShift AI console at **Observe & monitor → Dashboard**. It shows:
+The `observabilityDashboard` flag was enabled in Step 6. The MaaS usage dashboard is available in the OpenShift AI console at **Observe & monitor → Dashboard**. It shows:
 
 - **Authorized calls** per model and user
 - **Token usage** (input/output) per model
@@ -520,35 +597,8 @@ The MaaS usage dashboard is available in the OpenShift AI console at **Observe &
 
 The dashboards are auto-managed Perses dashboards (`PersesDashboard` resources in `redhat-ods-monitoring`). There are no CLI or REST API endpoints for usage data — the dashboard is the only interface in RHOAI 3.5.
 
-### MaaS Migration: kserve → aigateway
-
-In RHOAI 3.5, `spec.components.kserve.modelsAsService` is deprecated. Migrate to `spec.components.aigateway.modelsAsAService`:
-
-```bash
-oc patch datasciencecluster default-dsc --type=merge -p '
-spec:
-  components:
-    aigateway:
-      modelsAsAService:
-        managementState: Managed
-'
-```
-
-Once the aigateway component is managing MaaS, clear the deprecated field:
-
-```bash
-oc patch datasciencecluster default-dsc --type=json -p '
-[{"op": "remove", "path": "/spec/components/kserve/modelsAsService"}]
-'
-```
 
 ## Alternative Approaches
-
-### Models-as-a-Service (MaaS)
-
-RHOAI 3.5 includes a Models-as-a-Service feature that provides Red Hat-native API key authentication, per-user token quotas, and usage tracking via Kuadrant and Authorino. This is the **primary recommended setup**. See **[maas/README.md](maas/README.md)** for the full setup guide.
-
-**Note:** RHOAI 3.4.x had a Kuadrant operator reconciliation loop bug that dropped connections every 30-60 seconds. This was fixed upstream in Kuadrant Operator v1.5.3 ([PR #2184](https://github.com/Kuadrant/kuadrant-operator/pull/2184)) and should be resolved in RHOAI 3.5. If still occurring, scale down the Kuadrant operator as a workaround — see **[docs/kuadrant-reconciliation-loop-bug.md](docs/kuadrant-reconciliation-loop-bug.md)** for details.
 
 ### Direct vLLM (No MaaS)
 
@@ -557,8 +607,17 @@ vLLM natively supports the Anthropic Messages API, so Claude Code can connect di
 ## Cleanup
 
 ```bash
-# Remove LLMInferenceServices, chat templates, and gateway
+# Remove LiteLLM gateway
 oc delete -f litellm-gateway/
+
+# Remove MaaS access and timeout fixes
+oc delete -f maas/subscription.yaml
+oc delete -f maas/auth-policy.yaml
+oc delete -f maas/model-refs.yaml
+oc delete envoyfilter maas-payload-processing-timeout-override -n openshift-ingress
+oc delete -f maas/stream-timeout-envoyfilter.yaml
+
+# Remove LLMInferenceServices and chat templates
 oc delete -f models/granite-llm-inference-service.yaml
 oc delete -f models/qwen3-8-llm-inference-service.yaml
 oc delete -f models/qwen-chat-template.yaml
@@ -568,6 +627,13 @@ oc delete -f models/granite-download-job.yaml
 oc delete -f models/qwen3-8-download-job.yaml
 oc delete -f models/granite-pvc.yaml
 oc delete -f models/qwen3-8-pvc.yaml
+
+# Remove MaaS infrastructure
+oc delete -f maas/gateway.yaml
+oc delete -f maas/postgres.yaml
+oc delete -f maas/authorino.yaml
+oc delete -f maas/kuadrant.yaml
+oc delete -f maas/operator.yaml
 
 # Remove AI project
 oc delete -f cluster-setup/ai-project/serving-runtime.yaml
@@ -579,6 +645,8 @@ oc delete -f cluster-setup/operators/nvidia-cluster-policy.yaml
 oc delete -f cluster-setup/operators/nvidia-gpu-operator.yaml
 oc delete -f cluster-setup/operators/nfd-instance.yaml
 oc delete -f cluster-setup/operators/nfd.yaml
+oc delete -f cluster-setup/operators/opentelemetry.yaml
+oc delete -f cluster-setup/operators/cluster-observability-operator.yaml
 oc delete -f cluster-setup/operators/rhoai.yaml
 
 # Tear down the cluster (if using terraform)
