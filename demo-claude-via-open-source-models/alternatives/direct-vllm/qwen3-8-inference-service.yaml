@@ -1,0 +1,42 @@
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  annotations:
+    openshift.io/display-name: Qwen 3.8 27B INT4
+    serving.kserve.io/deploymentMode: RawDeployment
+  name: qwen3-8-27b
+  namespace: claude-code-demo
+  labels:
+    opendatahub.io/dashboard: "true"
+spec:
+  predictor:
+    maxReplicas: 1
+    minReplicas: 1
+    model:
+      args:
+        - --max-model-len
+        - "262144"
+        - --enable-auto-tool-choice
+        - --tool-call-parser
+        - qwen3_coder
+        - --reasoning-parser
+        - qwen3
+        - --language-model-only
+      modelFormat:
+        name: vLLM
+      name: ""
+      resources:
+        limits:
+          cpu: "4"
+          memory: 16Gi
+          nvidia.com/gpu: "1"
+        requests:
+          cpu: "2"
+          memory: 8Gi
+          nvidia.com/gpu: "1"
+      runtime: vllm-cuda-runtime
+      storageUri: pvc://qwen3-8-27b-model-storage/qwen3-8-27b
+    tolerations:
+      - effect: NoSchedule
+        key: nvidia.com/gpu
+        operator: Exists

@@ -1,8 +1,8 @@
 # Kuadrant EnvoyFilter Reconciliation Loop Bug
 
-**Affected Versions:** RHOAI 3.4.4 with Kuadrant/RHCL 1.4  
+**Affected Versions:** RHOAI 3.4.x with Kuadrant/RHCL < 1.5.3  
 **Severity:** High - Causes connection drops every 45-60 seconds during long-running requests  
-**Status:** Known bug, workaround available
+**Status:** Fixed upstream in Kuadrant Operator v1.5.3 ([PR #2184](https://github.com/Kuadrant/kuadrant-operator/pull/2184), merged 26 Aug 2026). RHOAI 3.5 should include the fix.
 
 ## Problem
 
@@ -31,16 +31,14 @@ oc logs -n openshift-operators deployment/kuadrant-operator-controller-manager -
 
 ## Root Cause
 
-The Kuadrant operator continuously rebuilds the WASM plugin configuration, likely due to:
-
-1. A feedback loop between AuthPolicy/TokenRateLimitPolicy updates
-2. A bug in RHCL 1.4 WASM plugin hash calculation
-3. Istio/Envoy version incompatibility with Kuadrant
+Go's `sort.Sort` is not stable. When a Gateway has multiple listeners sharing the same hostname attached to the same HTTPRoute, multiple topological paths produce action sets with identical sort keys. The non-deterministic ordering causes the generated WASM configuration to differ between reconciliation runs, producing a different EnvoyFilter each cycle — triggering an infinite update loop.
 
 Each EnvoyFilter update triggers an Envoy hot restart which:
 1. Removes old filter chains (`filter_chain_is_being_removed`)
 2. Kills active HTTP connections mid-stream
 3. Causes the 45-second timeout pattern (time between updates)
+
+**Fix (upstream):** [PR #2184](https://github.com/Kuadrant/kuadrant-operator/pull/2184) added rule index, match index, and a unique identifier (derived from topological path hash) as tie-breakers to the sort, ensuring fully deterministic ordering. Shipped in Kuadrant Operator v1.5.3 (03 Sep 2026).
 
 ## Temporary Workaround (Testing Only)
 
@@ -95,7 +93,7 @@ This is a Kuadrant/RHCL bug. Open a case with Red Hat OpenShift AI support:
 > Kuadrant operator enters infinite reconciliation loop updating EnvoyFilter every second, causing Envoy hot restarts that drop active connections with `filter_chain_is_being_removed`. This breaks long-running streaming responses in Models-as-a-Service.
 
 **Reproducer:**
-1. Deploy RHOAI 3.4.4 with MaaS enabled
+1. Deploy RHOAI 3.4.x with MaaS enabled (bug fixed in 3.5 / Kuadrant v1.5.3)
 2. Create LLMInferenceService with TokenRateLimitPolicy
 3. Send long-running streaming request (>60 seconds)
 4. Observe EnvoyFilter generation increasing continuously
@@ -104,9 +102,9 @@ This is a Kuadrant/RHCL bug. Open a case with Red Hat OpenShift AI support:
 **Expected:** EnvoyFilter should only update when policies change  
 **Actual:** EnvoyFilter updates every second regardless of policy changes
 
-### Option 3: Wait for RHOAI 3.5+
+### Option 3: Upgrade to RHOAI 3.5+
 
-Kuadrant and RHCL are under active development. Future releases may fix this issue.
+The fix shipped in Kuadrant Operator v1.5.3 (03 Sep 2026). RHOAI 3.5 should include this fix. After upgrading, verify the EnvoyFilter generation stays stable and re-enable the Kuadrant operator.
 
 ## Applied Workarounds in This Demo
 
@@ -166,11 +164,11 @@ oc scale deployment/kuadrant-operator-controller-manager -n openshift-operators 
 - [Kuadrant Operator GitHub](https://github.com/Kuadrant/kuadrant-operator)
 - [RHCL Documentation](https://docs.redhat.com/en/documentation/red_hat_connectivity_link/)
 - [Envoy Hot Restart](https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/operations/hot_restart)
-- [MaaS Tech Preview Limitations](https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.4/html/govern_llm_access_with_models-as-a-service/)
+- [MaaS Documentation](https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.5/html/govern_llm_access_with_models-as-a-service/)
 
 ---
 
 **Created:** 2026-09-08  
-**Last Updated:** 2026-09-08  
-**RHOAI Version:** 3.4.4  
-**Kuadrant Version:** Unknown (bundled with RHOAI 3.4.4)
+**Last Updated:** 2026-09-09  
+**RHOAI Version:** 3.5 (bug affected 3.4.x, fixed upstream in Kuadrant v1.5.3)  
+**Upstream Fix:** [kuadrant-operator PR #2184](https://github.com/Kuadrant/kuadrant-operator/pull/2184), shipped in v1.5.3 (03 Sep 2026)

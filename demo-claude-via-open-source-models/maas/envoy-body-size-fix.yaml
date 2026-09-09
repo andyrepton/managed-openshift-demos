@@ -1,0 +1,60 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: maas-increase-body-size
+  namespace: openshift-ingress
+spec:
+  workloadSelector:
+    labels:
+      gateway.networking.k8s.io/gateway-name: maas-default-gateway
+  configPatches:
+    # Increase per-route buffer limits for request/response bodies
+    - applyTo: ROUTE_CONFIGURATION
+      match:
+        context: GATEWAY
+      patch:
+        operation: MERGE
+        value:
+          per_filter_config:
+            envoy.filters.http.buffer:
+              '@type': type.googleapis.com/envoy.extensions.filters.http.buffer.v3.BufferPerRoute
+              buffer:
+                max_request_bytes: 52428800  # 50MB (up from default ~1-4MB)
+
+    # Increase HTTP connection manager limits
+    - applyTo: NETWORK_FILTER
+      match:
+        context: GATEWAY
+        listener:
+          filterChain:
+            filter:
+              name: envoy.filters.network.http_connection_manager
+      patch:
+        operation: MERGE
+        value:
+          typed_config:
+            '@type': type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+            max_request_headers_kb: 96  # Up from default 60KB
+            http2_protocol_options:
+              max_concurrent_streams: 1000
+              initial_stream_window_size: 268435456  # 256MB (up from 64KB)
+              initial_connection_window_size: 268435456  # 256MB (up from 64KB)
+
+    # Add buffer filter if not present (for streaming large responses)
+    - applyTo: HTTP_FILTER
+      match:
+        context: GATEWAY
+        listener:
+          filterChain:
+            filter:
+              name: envoy.filters.network.http_connection_manager
+              subFilter:
+                name: envoy.filters.http.router
+      patch:
+        operation: INSERT_BEFORE
+        value:
+          name: envoy.filters.http.buffer
+          typed_config:
+            '@type': type.googleapis.com/envoy.extensions.filters.http.buffer.v3.Buffer
+            max_request_bytes: 52428800  # 50MB
+  priority: 20  # Higher than payload-processing (10)

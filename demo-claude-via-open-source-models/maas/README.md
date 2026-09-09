@@ -2,7 +2,7 @@
 
 Enable Red Hat-native API key authentication, rate limiting, and usage tracking for vLLM model endpoints using RHOAI Models-as-a-Service.
 
-> **Note**: MaaS is a Technology Preview feature in RHOAI 3.4 and 3.5. It is the future direction for model serving governance in OpenShift AI.
+> **Note**: MaaS is available in RHOAI 3.5. It is the recommended approach for model serving governance in OpenShift AI.
 
 ## Why MaaS
 
@@ -25,7 +25,7 @@ Cursor ----------------------^
 
 ## Prerequisites
 
-- RHOAI 3.4+ installed
+- RHOAI 3.5+ installed
 - OpenShift 4.19+
 - cert-manager operator installed (from base demo)
 - Models downloaded to PVCs (from base demo)
@@ -120,14 +120,15 @@ oc patch odhdashboardconfig odh-dashboard-config \
 
 ## Step 9: Deploy Models as LLMInferenceServices
 
-MaaS uses `LLMInferenceService` (not `InferenceService`). These are similar to the base demo's InferenceServices but include a `router.gateway.refs` section that connects them to the MaaS gateway:
+MaaS uses `LLMInferenceService` (not `InferenceService`). These are similar to the base demo's InferenceServices but include a `router.gateway.refs` section that connects them to the MaaS gateway. The model definitions live in the `models/` directory:
 
 ```bash
 # If using MaaS, delete the existing InferenceServices first
 oc delete inferenceservice granite-4-1-30b qwen3-6-27b -n claude-code-demo 2>/dev/null
 
 # Deploy as LLMInferenceServices
-oc apply -f llm-inference-services.yaml
+oc apply -f ../models/granite-llm-inference-service.yaml
+oc apply -f ../models/qwen-llm-inference-service.yaml
 
 # Wait for models to load
 oc get llminferenceservice -n claude-code-demo -w
@@ -208,27 +209,22 @@ claude
 
 ## Troubleshooting
 
-### ⚠️ CRITICAL: Kuadrant Reconciliation Loop Bug
+### Kuadrant Reconciliation Loop Bug (Fixed in v1.5.3)
 
 **Symptom**: Connections drop every 45-60 seconds with `ServerDisconnectedError` or `TransferEncodingError`. Envoy logs show `filter_chain_is_being_removed`.
 
-**Root Cause**: Kuadrant operator is stuck in an infinite reconciliation loop, updating the EnvoyFilter **every second**. Each update triggers an Envoy hot restart that kills active connections.
+**Root Cause**: Non-deterministic `sort.Sort` ordering in Kuadrant caused the EnvoyFilter to be regenerated every second. Fixed upstream in [PR #2184](https://github.com/Kuadrant/kuadrant-operator/pull/2184), shipped in Kuadrant Operator v1.5.3 (03 Sep 2026). RHOAI 3.5 should include the fix.
 
-**Evidence**:
+**If still occurring on RHOAI 3.5**:
 ```bash
-# EnvoyFilter generation increases continuously (should be static)
-oc get envoyfilter -n openshift-ingress kuadrant-maas-default-gateway -o jsonpath='{.metadata.generation}'
-```
+# Verify: EnvoyFilter generation should be static
+watch -n 1 "oc get envoyfilter -n openshift-ingress kuadrant-maas-default-gateway -o jsonpath='{.metadata.generation}'"
 
-**Fix (Temporary - Testing Only)**:
-```bash
-# Scale down Kuadrant operator to freeze EnvoyFilter
+# Workaround: Scale down Kuadrant operator
 oc scale deployment/kuadrant-operator-controller-manager -n openshift-operators --replicas=0
 ```
 
 **Full details:** See [docs/kuadrant-reconciliation-loop-bug.md](../docs/kuadrant-reconciliation-loop-bug.md)
-
-**Permanent Solution:** Bypass MaaS gateway and connect LiteLLM directly to vLLM KServe endpoints (loses usage tracking).
 
 ---
 
@@ -277,13 +273,14 @@ See the data-science-gateway ConfigMap memory fix in `gateway.yaml` — increase
 | `gateway.yaml` | MaaS gateway + memory ConfigMap |
 | `namespace-label.yaml` | Gateway access label for redhat-ods-applications |
 | `datasciencecluster-maas.yaml` | DSC with modelsAsService enabled |
-| `llm-inference-services.yaml` | LLMInferenceService for both models |
+| `../models/granite-llm-inference-service.yaml` | LLMInferenceService for Granite |
+| `../models/qwen-llm-inference-service.yaml` | LLMInferenceService for Qwen |
 | `model-refs.yaml` | MaaSModelRef registrations |
 | `auth-policy.yaml` | MaaSAuthPolicy granting group access |
 | `subscription.yaml` | MaaSSubscription with token limits |
 
 ## References
 
-- [RHOAI 3.4 MaaS Documentation](https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.4/html/govern_llm_access_with_models-as-a-service/)
+- [RHOAI 3.5 MaaS Documentation](https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.5/html/govern_llm_access_with_models-as-a-service/)
 - [Community Deployment Guide](https://github.com/rh-aiservices-bu/rhoai-maas-guide)
 - [Upstream MaaS Repository](https://github.com/opendatahub-io/models-as-a-service)

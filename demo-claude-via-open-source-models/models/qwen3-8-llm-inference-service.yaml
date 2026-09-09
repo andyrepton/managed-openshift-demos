@@ -1,0 +1,48 @@
+apiVersion: serving.kserve.io/v1alpha2
+kind: LLMInferenceService
+metadata:
+  name: qwen3-8-27b
+  namespace: claude-code-demo
+  annotations:
+    openshift.io/display-name: Qwen 3.8 27B INT4
+  labels:
+    opendatahub.io/dashboard: "true"
+spec:
+  model:
+    uri: pvc://qwen3-8-27b-model-storage/qwen3-8-27b
+    name: qwen3-8-27b
+  baseRefs:
+    - name: v3-4-4-kserve-config-llm-template-nvidia-cuda
+    - name: v3-4-4-kserve-config-llm-router-route
+  router:
+    gateway:
+      refs:
+        - name: maas-default-gateway
+          namespace: openshift-ingress
+  replicas: 1
+  template:
+    containers:
+      - name: main
+        image: registry.redhat.io/rhaii/vllm-cuda-rhel9:3.5.0
+        args:
+          - --max-model-len=262144
+          - --enable-auto-tool-choice
+          - --tool-call-parser=qwen3_coder
+          - --reasoning-parser=qwen3
+          - --language-model-only
+        env:
+          - name: VLLM_USE_DEEP_GEMM
+            value: "0"
+        resources:
+          limits:
+            cpu: "4"
+            memory: 16Gi
+            nvidia.com/gpu: "1"
+          requests:
+            cpu: "2"
+            memory: 8Gi
+            nvidia.com/gpu: "1"
+    tolerations:
+      - effect: NoSchedule
+        key: nvidia.com/gpu
+        operator: Exists

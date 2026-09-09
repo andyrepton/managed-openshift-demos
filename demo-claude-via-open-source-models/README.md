@@ -421,15 +421,9 @@ For tasks 1-5, switch between Granite and Qwen inside the same Claude Code sessi
 
 ### Models-as-a-Service (MaaS)
 
-RHOAI 3.4+ includes a Models-as-a-Service feature that provides Red Hat-native API key authentication, per-user token quotas, and usage tracking via Kuadrant and Authorino. This is the **primary recommended setup**. See **[maas/README.md](maas/README.md)** for the full setup guide.
+RHOAI 3.5 includes a Models-as-a-Service feature that provides Red Hat-native API key authentication, per-user token quotas, and usage tracking via Kuadrant and Authorino. This is the **primary recommended setup**. See **[maas/README.md](maas/README.md)** for the full setup guide.
 
-**⚠️ CRITICAL Known Issue (RHOAI 3.4.4):** The Kuadrant operator has a reconciliation loop bug that updates EnvoyFilters every second, causing Envoy hot restarts that drop active connections after 30-60 seconds. **Temporary workaround:** Scale down the Kuadrant operator after initial setup:
-
-```bash
-oc scale deployment/kuadrant-operator-controller-manager -n openshift-operators --replicas=0
-```
-
-This freezes MaaS policies but stops the connection drops. See **[docs/kuadrant-reconciliation-loop-bug.md](docs/kuadrant-reconciliation-loop-bug.md)** for full details and permanent solutions.
+**Note:** RHOAI 3.4.x had a Kuadrant operator reconciliation loop bug that dropped connections every 30-60 seconds. This was fixed upstream in Kuadrant Operator v1.5.3 ([PR #2184](https://github.com/Kuadrant/kuadrant-operator/pull/2184)) and should be resolved in RHOAI 3.5. If still occurring, scale down the Kuadrant operator as a workaround — see **[docs/kuadrant-reconciliation-loop-bug.md](docs/kuadrant-reconciliation-loop-bug.md)** for details.
 
 ### Direct vLLM (No MaaS)
 
@@ -440,8 +434,8 @@ vLLM natively supports the Anthropic Messages API, so Claude Code can connect di
 ```bash
 # Remove InferenceServices, chat templates, and gateway
 oc delete -f litellm-gateway/
-oc delete -f models/granite-inference-service.yaml
-oc delete -f models/qwen-inference-service.yaml
+oc delete -f models/granite-llm-inference-service.yaml
+oc delete -f models/qwen-llm-inference-service.yaml
 oc delete -f models/qwen-chat-template.yaml
 
 # Remove download jobs and PVCs
@@ -525,9 +519,9 @@ Run `/status` inside Claude Code to check the connection.
 
 **Symptom:** Connections drop mid-stream with `ServerDisconnectedError` or `TransferEncodingError`.
 
-**Cause:** Kuadrant operator reconciliation loop bug (RHOAI 3.4.4) causes continuous Envoy hot restarts.
+**Cause:** Kuadrant operator reconciliation loop bug (fixed upstream in Kuadrant v1.5.3, should be resolved in RHOAI 3.5).
 
-**Fix:** Scale down the Kuadrant operator:
+**Fix:** If still occurring on RHOAI 3.5, scale down the Kuadrant operator:
 ```bash
 oc scale deployment/kuadrant-operator-controller-manager -n openshift-operators --replicas=0
 ```

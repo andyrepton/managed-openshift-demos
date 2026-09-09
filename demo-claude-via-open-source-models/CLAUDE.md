@@ -22,10 +22,10 @@ Both models are downloaded from HuggingFace to PVCs via Kubernetes Jobs, then se
 
 - `operators/` — NFD, NVIDIA GPU Operator, cert-manager, and RHOAI operator installation YAMLs
 - `ai-project/` — Namespace, DataScienceCluster, and vLLM ServingRuntime
-- `models/` — PVCs, HuggingFace download Jobs, chat template ConfigMaps, and InferenceServices for each model
+- `models/` — PVCs, HuggingFace download Jobs, chat template ConfigMaps, and LLMInferenceServices for each model
 - `gateway/` — LiteLLM proxy deployment (ConfigMap, Deployment, Service, Route)
 - `native-vllm/` — Direct vLLM connection (no LiteLLM)
-- `native-vllm/maas/` — Models-as-a-Service setup (RHCL, Kuadrant, Authorino, PostgreSQL, LLMInferenceServices, MaaSAuthPolicy, MaaSSubscription). Tech Preview in RHOAI 3.4/3.5. MaaS only serves OpenAI API — Claude Code still needs LiteLLM for Anthropic API translation, but Cursor can connect directly
+- `native-vllm/maas/` — Models-as-a-Service infrastructure (RHCL, Kuadrant, Authorino, PostgreSQL, MaaSAuthPolicy, MaaSSubscription). LLMInferenceService definitions are in `models/`. MaaS supports both OpenAI and Anthropic APIs — Cursor can connect directly, Claude Code can use LiteLLM or connect directly
 - `docs/` — Blog post drafts and testing plan
 
 ## Cluster provisioning
@@ -55,19 +55,20 @@ unset ANTHROPIC_API_KEY
 
 ## OpenShift AI version
 
-This demo targets **RHOAI v3** (currently on 3.4.3, using 3.5 vLLM image). Key v3 details:
+This demo runs on **RHOAI 3.5**. Key details:
 - DataScienceCluster API is `v2` (changed from `v1` in RHOAI v2)
 - ModelMesh and Serverless deployment modes are deprecated — KServe RawDeployment is the standard
 - vLLM image: `registry.redhat.io/rhaii/vllm-cuda-rhel9:3.5.0` (ships vLLM 0.24.0)
+- llm-d is the default inference orchestration layer (uses vLLM underneath)
 - Requires cert-manager operator as a prerequisite
 
 ### vLLM version compatibility
 
-Using the RHOAI 3.5 vLLM image (`registry.redhat.io/rhaii/vllm-cuda-rhel9:3.5.0`) which ships **vLLM v0.24.0+rhaiv.9**. This satisfies Qwen3.6-27B's requirement of >= 0.19.0. RHOAI 3.4's native image shipped v0.18.0 which caused empty responses and broken tool calling with Qwen3.6. Both models work correctly on vLLM 0.24.0.
+RHOAI 3.5 ships vLLM v0.24.0 via `registry.redhat.io/rhaii/vllm-cuda-rhel9:3.5.0`. This satisfies Qwen3.6-27B's requirement of >= 0.19.0. Both models work correctly on vLLM 0.24.0.
 
 ## Gotchas discovered during setup
 
-- **vLLM image registry**: RHOAI v3 moved from `rhoai` to `rhaii` registry namespace. We use the 3.5 image (`registry.redhat.io/rhaii/vllm-cuda-rhel9:3.5.0`) on RHOAI 3.4.3 for vLLM 0.24.0 support
+- **vLLM image registry**: RHOAI v3 moved from `rhoai` to `rhaii` registry namespace (`registry.redhat.io/rhaii/vllm-cuda-rhel9:3.5.0`)
 - **Qwen system message rejection**: Qwen's default chat template rejects system messages that aren't first in the conversation. Claude Code sends system messages mid-conversation for tool context. Fixed with a custom chat template that allows system messages anywhere
 - **Qwen thinking mode**: Qwen3.6 enables thinking/reasoning by default (`<think>` tags), which wastes tokens. Use `--reasoning-parser qwen3` to strip them — do NOT use `/no_think` in the template as it causes empty responses on Qwen3.6's hybrid Mamba/attention architecture
 - **Qwen vision encoder**: Qwen3.6 is multimodal but we only need text. Use `--language-model-only` to disable the vision encoder and free VRAM for KV cache
@@ -80,7 +81,7 @@ Using the RHOAI 3.5 vLLM image (`registry.redhat.io/rhaii/vllm-cuda-rhel9:3.5.0`
 - **Route timeout**: OpenShift Routes default to 30s timeout. Set `haproxy.router.openshift.io/timeout: 10m` for long-running model responses. Without this, Qwen's extended thinking responses get cut off mid-stream with `TransferEncodingError` or `ServerDisconnectedError` in LiteLLM logs
 - **LiteLLM resources**: Under high load or concurrent long-running requests, LiteLLM needs at least 2Gi memory and 2 CPUs. Set `LITELLM_REQUEST_TIMEOUT=600` and `LITELLM_NUM_RETRIES=0` to handle long responses from vLLM (Qwen extended thinking can take 60-120s)
 - **MaaS gateway streaming timeouts**: When using LiteLLM → MaaS → vLLM (instead of LiteLLM → vLLM direct), the Istio/Envoy gateway has default stream idle timeouts (5 minutes) and payload processing timeouts (300s) that kill long-running responses. Apply `maas/stream-timeout-envoyfilter.yaml` and patch `payload-processing` EnvoyFilter to set all timeouts to `0s` (infinite). Without this, streaming responses >5 minutes fail with `TransferEncodingError: Not enough data to satisfy transfer length header`
-- **Kuadrant reconciliation loop bug (CRITICAL)**: In RHOAI 3.4.4, the Kuadrant operator enters an infinite reconciliation loop, updating the EnvoyFilter every second. Each update triggers an Envoy hot restart that kills active connections with `filter_chain_is_being_removed` after 30-60 seconds. **Temporary workaround**: Scale down the Kuadrant operator (`oc scale deployment/kuadrant-operator-controller-manager -n openshift-operators --replicas=0`). This freezes the EnvoyFilter but disables dynamic policy updates. See `docs/kuadrant-reconciliation-loop-bug.md` for full details and permanent solutions
+- **Kuadrant reconciliation loop bug**: Fixed upstream in Kuadrant Operator v1.5.3 ([PR #2184](https://github.com/Kuadrant/kuadrant-operator/pull/2184)) — caused by non-deterministic `sort.Sort` ordering of WASM config. Root cause: Go's unstable sort produced different EnvoyFilter content each reconciliation cycle, triggering infinite updates and Envoy hot restarts. RHOAI 3.5 should include the fix. If still occurring, scale down the Kuadrant operator (`oc scale deployment/kuadrant-operator-controller-manager -n openshift-operators --replicas=0`). See `docs/kuadrant-reconciliation-loop-bug.md` for details
 - **GPU scheduling on updates**: When updating the ServingRuntime, KServe's default RollingUpdate strategy tries to create new pods before terminating old ones. With GPUs fully allocated, this deadlocks. Delete InferenceServices first, apply changes, then recreate
 - **Model name mapping**: Claude Code sends many different model ID strings (claude-sonnet-5, claude-opus-5, claude-sonnet-4-20250514, etc.). All must be mapped in the LiteLLM config
 
@@ -88,7 +89,7 @@ Using the RHOAI 3.5 vLLM image (`registry.redhat.io/rhaii/vllm-cuda-rhel9:3.5.0`
 
 - **Model names**: vLLM serves models with their real names (`granite-4-1-30b`, `qwen3-6-27b`) as primary identifiers. Claude model names (claude-sonnet-5, etc.) are aliases configured in both vLLM `--served-model-name` args and LiteLLM config
 - **MaaS + Anthropic API**: MaaS **does** support the Anthropic Messages API format (not just OpenAI). Claude Code can connect directly to MaaS without LiteLLM, but LiteLLM provides convenient model name aliasing
-- **Kuadrant bug workaround active**: If using MaaS, the Kuadrant operator should be scaled to 0 replicas to prevent connection drops during long requests (see gotchas above)
+- **Kuadrant bug**: Fixed upstream in Kuadrant v1.5.3, should be resolved in RHOAI 3.5. If still occurring, scale Kuadrant operator to 0 replicas (see gotchas above)
 - **LiteLLM handles API translation** using the `hosted_vllm/` provider prefix when connecting to vLLM via MaaS
 - **Tool use** (file reading, editing) may not work reliably with all open-source models — Qwen 3.6 and Granite 4.1 both have native tool calling support but quality varies
 - **Extended thinking, prompt caching**, and other Claude-specific features are unavailable when using open-source models

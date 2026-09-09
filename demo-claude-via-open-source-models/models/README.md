@@ -8,20 +8,33 @@ This directory contains model downloads, storage, and InferenceService configura
 |-------|------|----------|----------------|--------------|
 | IBM Granite 4.1 30B | 30B params | General coding, fast responses | 131K tokens | FP8 (on-the-fly) |
 | Qwen 3.6 27B | 27B params | Complex coding, SWE-bench 77.2% | 262K tokens | FP8 (pre-quantized) |
+| Qwen 3.8 27B | 27B params | Complex coding, SWE-bench Pro 61.7, DeepSWE 42.2 | 262K tokens (native, YaRN to 1M) | INT4 (compressed-tensors, ~19.5GB) |
 
 ## Directory Structure
 
 ```
 models/
-├── README.md                        # This file
-├── granite-pvc.yaml                 # Storage for Granite model
-├── granite-download-job.yaml        # HuggingFace download job
-├── granite-inference-service.yaml  # KServe InferenceService
-├── qwen-pvc.yaml                    # Storage for Qwen model
-├── qwen-download-job.yaml           # HuggingFace download job
-├── qwen-chat-template.yaml          # Custom chat template ConfigMap
-└── qwen-inference-service.yaml     # KServe InferenceService
+├── README.md                            # This file
+├── hf-token-secret.yaml                 # HuggingFace token for gated models
+├── granite-pvc.yaml                     # Storage for Granite model
+├── granite-download-job.yaml            # HuggingFace download job
+├── granite-llm-inference-service.yaml   # LLMInferenceService (MaaS)
+├── qwen-pvc.yaml                        # Storage for Qwen model
+├── qwen-download-job.yaml               # HuggingFace download job
+├── qwen-chat-template.yaml              # Custom chat template ConfigMap
+└── qwen-llm-inference-service.yaml      # LLMInferenceService (MaaS)
 ```
+
+## Deploying Models
+
+These `LLMInferenceService` resources deploy models via the MaaS gateway, which provides API key auth, rate limiting, and usage tracking. Requires the MaaS stack from `maas/`.
+
+```bash
+oc apply -f granite-llm-inference-service.yaml
+oc apply -f qwen-llm-inference-service.yaml
+```
+
+For a simpler setup without MaaS (no auth or usage tracking), see `alternatives/direct-vllm/` which has plain KServe `InferenceService` resources.
 
 ## Adding a New Model
 

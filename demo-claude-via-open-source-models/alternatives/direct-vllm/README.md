@@ -126,7 +126,7 @@ The native vLLM approach has no built-in auth. The routes above are publicly acc
 
 ### Option 1: OpenShift AI Models-as-a-Service (MaaS) -- Recommended
 
-RHOAI 3.4 includes a GA Models-as-a-Service feature that provides enterprise-grade API key authentication, rate limiting, and usage tracking. This is the recommended auth approach for a full Red Hat stack.
+RHOAI 3.5 includes a Models-as-a-Service feature that provides enterprise-grade API key authentication, rate limiting, and usage tracking. This is the recommended auth approach for a full Red Hat stack.
 
 See **[maas/README.md](maas/README.md)** for the complete setup guide with YAML manifests.
 
@@ -183,6 +183,6 @@ Claude Code injects a per-request hash in the system prompt that can defeat vLLM
 
 - [vLLM Claude Code integration docs](https://docs.vllm.ai/en/latest/serving/integrations/claude_code/)
 - [Claude Code on OpenShift with vLLM (Piotr Minkowski)](https://piotrminkowski.com/2026/02/27/claude-code-on-openshift-with-vllm-and-dev-spaces/)
-- [RHOAI Models-as-a-Service docs](https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.4/html/govern_llm_access_with_models-as-a-service/)
+- [RHOAI Models-as-a-Service docs](https://docs.redhat.com/en/documentation/red_hat_openshift_ai_self-managed/3.5/html/govern_llm_access_with_models-as-a-service/)
 - [MaaS API key management blog](https://www.redhat.com/en/blog/protecting-enterprise-ai-how-manage-api-keys-models-service-maas)
 - [vLLM Anthropic API PR #22627](https://github.com/vllm-project/vllm/pull/22627)
