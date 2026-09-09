@@ -45,6 +45,7 @@ Both routes pass through the MaaS gateway for authentication and usage tracking 
 - **Data protection**: Code and prompts never leave your infrastructure when using the local model
 - **Cost management**: Open-source models are free to run (you pay only for compute)
 - **Flexibility**: Swap to Claude when the local model can't handle the task
+- **Same user experience**: Teams can continue to use the tooling they are already comfortable with
 
 ## Models
 
