@@ -12,8 +12,8 @@ spec:
     uri: pvc://qwen3-6-27b-model-storage/qwen3-6-27b
     name: qwen3-6-27b
   baseRefs:
-    - name: v3-5-0-kserve-config-llm-template-nvidia-cuda
-    - name: v3-5-0-kserve-config-llm-router-route
+    - name: v3-4-4-kserve-config-llm-template-nvidia-cuda
+    - name: v3-4-4-kserve-config-llm-router-route
   router:
     gateway:
       refs:

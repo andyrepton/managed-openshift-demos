@@ -14,7 +14,7 @@ Claude Code → Anthropic API → Claude (when ANTHROPIC_BASE_URL is unset)
 ## Models
 
 - **Granite 4.1 30B** (`ibm-granite/granite-4.1-30b`): IBM text-only coding model, 131K context, BF16 with on-the-fly FP8 quantisation, `--tool-call-parser granite4`
-- **Qwen3.6-27B** (`RedHatAI/Qwen3.6-27B-FP8`): Best open-source coding model (77.2% SWE-bench), FP8 quantised, `--tool-call-parser qwen3_coder`, `--reasoning-parser qwen3`, `--language-model-only`
+- **Qwen3.8-27B** (`Qwen/Qwen3.8-27B-INT4`): Best open-source coding model (SWE-bench Pro 61.7, DeepSWE 42.2), INT4 quantised, 262K context (YaRN to 1M), `--tool-call-parser qwen3_coder`, `--reasoning-parser qwen3`, `--language-model-only`
 
 Both models are downloaded from HuggingFace to PVCs via Kubernetes Jobs, then served by vLLM through KServe InferenceServices.
 
@@ -72,7 +72,8 @@ RHOAI 3.5 ships vLLM v0.24.0 via `registry.redhat.io/rhaii/vllm-cuda-rhel9:3.5.0
 - **Qwen system message rejection**: Qwen's default chat template rejects system messages that aren't first in the conversation. Claude Code sends system messages mid-conversation for tool context. Fixed with a custom chat template that allows system messages anywhere
 - **Qwen thinking mode**: Qwen3.6 enables thinking/reasoning by default (`<think>` tags), which wastes tokens. Use `--reasoning-parser qwen3` to strip them — do NOT use `/no_think` in the template as it causes empty responses on Qwen3.6's hybrid Mamba/attention architecture
 - **Qwen vision encoder**: Qwen3.6 is multimodal but we only need text. Use `--language-model-only` to disable the vision encoder and free VRAM for KV cache
-- **Chat template tool format**: The custom Qwen chat template must use the native `<function=name><parameter=key>value</parameter></function>` format inside `<tool_call>` tags — NOT the Hermes-style JSON format. The `qwen3_coder` parser only recognises the native format. Our template is the model's built-in template with only the system message restriction removed
+- **Chat template tool format**: The custom Qwen chat template must use the native `<function=name><parameter=key>value</parameter></function>` format inside `<tool_call>` tags — NOT the Hermes-style JSON format. The `qwen3_coder` parser only recognises the native format. Our template is the model's built-in template with the system message restriction removed and `reasoning_effort` alias mapping added
+- **Qwen 3.8 reasoning_effort mismatch**: Claude Code sends `reasoning_effort: "high"` but vLLM's Qwen3 parser only accepts `xhigh`, `medium`, and `low`. The custom chat template maps `high` → `medium` before validation ([QwenLM/Qwen3.8#217](https://github.com/QwenLM/Qwen3.8/issues/217)). Mapping to `xhigh` was avoided because it causes empty responses ~17% of the time (Qwen3.8#216). The template is backward-compatible with Qwen 3.6 (which doesn't use `reasoning_effort`)
 - **DeepGemm on Blackwell**: vLLM 0.24 auto-disables DeepGemm in the APIServer but not the EngineCore, causing a crash (`Unknown recipe`). Set `VLLM_USE_DEEP_GEMM=0` in the ServingRuntime env vars
 - **Granite FP8**: No pre-quantised RedHatAI FP8 variant available — use `ibm-granite/granite-4.1-30b` (BF16) with `--quantization fp8` for on-the-fly quantisation
 - **LiteLLM provider prefix**: Use `hosted_vllm/` instead of `openai/` for the model prefix in LiteLLM config — it handles vLLM-specific behaviour better
@@ -82,16 +83,17 @@ RHOAI 3.5 ships vLLM v0.24.0 via `registry.redhat.io/rhaii/vllm-cuda-rhel9:3.5.0
 - **LiteLLM resources**: Under high load or concurrent long-running requests, LiteLLM needs at least 2Gi memory and 2 CPUs. Set `LITELLM_REQUEST_TIMEOUT=600` and `LITELLM_NUM_RETRIES=0` to handle long responses from vLLM (Qwen extended thinking can take 60-120s)
 - **MaaS gateway streaming timeouts**: When using LiteLLM → MaaS → vLLM (instead of LiteLLM → vLLM direct), the Istio/Envoy gateway has default stream idle timeouts (5 minutes) and payload processing timeouts (300s) that kill long-running responses. Apply `maas/stream-timeout-envoyfilter.yaml` and patch `payload-processing` EnvoyFilter to set all timeouts to `0s` (infinite). Without this, streaming responses >5 minutes fail with `TransferEncodingError: Not enough data to satisfy transfer length header`
 - **Kuadrant reconciliation loop bug**: Fixed upstream in Kuadrant Operator v1.5.3 ([PR #2184](https://github.com/Kuadrant/kuadrant-operator/pull/2184)) — caused by non-deterministic `sort.Sort` ordering of WASM config. Root cause: Go's unstable sort produced different EnvoyFilter content each reconciliation cycle, triggering infinite updates and Envoy hot restarts. RHOAI 3.5 should include the fix. If still occurring, scale down the Kuadrant operator (`oc scale deployment/kuadrant-operator-controller-manager -n openshift-operators --replicas=0`). See `docs/kuadrant-reconciliation-loop-bug.md` for details
+- **LLMInferenceService baseRefs**: Use `v3-4-4` baseRef names (e.g. `v3-4-4-kserve-config-llm-template-nvidia-cuda`) even on RHOAI 3.5. The RHOAI 3.5 operator auto-resolves them to v3-5-0 presets. Using `v3-5-0-kserve-config-llm-template-nvidia-cuda` directly causes `ConfigNotFound` errors despite the LLMInferenceServiceConfig existing on the cluster
 - **GPU scheduling on updates**: When updating the ServingRuntime, KServe's default RollingUpdate strategy tries to create new pods before terminating old ones. With GPUs fully allocated, this deadlocks. Delete InferenceServices first, apply changes, then recreate
 - **Model name mapping**: Claude Code sends many different model ID strings (claude-sonnet-5, claude-opus-5, claude-sonnet-4-20250514, etc.). All must be mapped in the LiteLLM config
 
 ## Important notes
 
-- **Model names**: vLLM serves models with their real names (`granite-4-1-30b`, `qwen3-6-27b`) as primary identifiers. Claude model names (claude-sonnet-5, etc.) are aliases configured in both vLLM `--served-model-name` args and LiteLLM config
+- **Model names**: vLLM serves models with their real names (`granite-4-1-30b`, `qwen3-8-27b`) as primary identifiers. Claude model names (claude-sonnet-5, etc.) are aliases configured in both vLLM `--served-model-name` args and LiteLLM config
 - **MaaS + Anthropic API**: MaaS **does** support the Anthropic Messages API format (not just OpenAI). Claude Code can connect directly to MaaS without LiteLLM, but LiteLLM provides convenient model name aliasing
 - **Kuadrant bug**: Fixed upstream in Kuadrant v1.5.3, should be resolved in RHOAI 3.5. If still occurring, scale Kuadrant operator to 0 replicas (see gotchas above)
 - **LiteLLM handles API translation** using the `hosted_vllm/` provider prefix when connecting to vLLM via MaaS
-- **Tool use** (file reading, editing) may not work reliably with all open-source models — Qwen 3.6 and Granite 4.1 both have native tool calling support but quality varies
+- **Tool use** (file reading, editing) may not work reliably with all open-source models — Qwen 3.8 and Granite 4.1 both have native tool calling support but quality varies
 - **Extended thinking, prompt caching**, and other Claude-specific features are unavailable when using open-source models
 - **First request** after vLLM startup is slow (30-60s) due to CUDA graph compilation — warm up models before demo
 - **aiohttp timeout configuration**: LiteLLM deployment includes environment variables to disable socket read timeouts for long-running streaming responses

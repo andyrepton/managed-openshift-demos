@@ -12,8 +12,8 @@ spec:
     uri: pvc://granite-4-1-30b-model-storage/granite-4-1-30b
     name: granite-4-1-30b
   baseRefs:
-    - name: v3-5-0-kserve-config-llm-template-nvidia-cuda
-    - name: v3-5-0-kserve-config-llm-router-route
+    - name: v3-4-4-kserve-config-llm-template-nvidia-cuda
+    - name: v3-4-4-kserve-config-llm-router-route
   router:
     gateway:
       refs:

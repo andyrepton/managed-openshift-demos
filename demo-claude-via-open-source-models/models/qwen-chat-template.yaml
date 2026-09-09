@@ -156,6 +156,18 @@ data:
         {%- if enable_thinking is defined and enable_thinking is false %}
             {{- '<think>\n\n</think>\n\n' }}
         {%- else %}
-            {{- '<think>\n' }}
+            {%- set raw_effort = reasoning_effort|default('xhigh') %}
+            {%- set effort_alias = {'high': 'medium'} %}
+            {%- set resolved_effort = effort_alias.get(raw_effort, raw_effort) %}
+            {%- if resolved_effort not in ('xhigh', 'medium', 'low') %}
+                {{- raise_exception('Unexpected reasoning effort ' ~ raw_effort ~ '. Supported types are xhigh (default), medium, and low.') }}
+            {%- endif %}
+            {%- if resolved_effort == 'low' %}
+                {{- '<think>\n' }}
+            {%- elif resolved_effort == 'medium' %}
+                {{- '<think>\n' }}
+            {%- else %}
+                {{- '<think>\n' }}
+            {%- endif %}
         {%- endif %}
     {%- endif %}

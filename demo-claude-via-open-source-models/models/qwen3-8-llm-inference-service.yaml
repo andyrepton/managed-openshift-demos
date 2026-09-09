@@ -30,6 +30,13 @@ spec:
           - --tool-call-parser=qwen3_coder
           - --reasoning-parser=qwen3
           - --language-model-only
+          - --chat-template=/etc/chat-template/qwen/chat_template.jinja
+          - --served-model-name=claude-opus-5
+          - --served-model-name=claude-opus-4-20250514
+          - --served-model-name=claude-3-opus-20240229
+          - --served-model-name=claude-fable-5
+          - --served-model-name=fable-5-sonnet-20250312
+          - --served-model-name=qwen3-8-27b
         env:
           - name: VLLM_USE_DEEP_GEMM
             value: "0"
@@ -42,7 +49,15 @@ spec:
             cpu: "2"
             memory: 8Gi
             nvidia.com/gpu: "1"
+        volumeMounts:
+          - name: qwen-chat-template
+            mountPath: /etc/chat-template/qwen
+            readOnly: true
     tolerations:
       - effect: NoSchedule
         key: nvidia.com/gpu
         operator: Exists
+    volumes:
+      - name: qwen-chat-template
+        configMap:
+          name: qwen-chat-template

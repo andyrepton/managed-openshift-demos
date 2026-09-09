@@ -23,28 +23,28 @@ data:
       # Opus models → Qwen via MaaS
       - model_name: "claude-opus-4-20250514"
         litellm_params:
-          model: hosted_vllm/qwen3-6-27b
-          api_base: http://maas-default-gateway-data-science-gateway-class.openshift-ingress.svc.cluster.local/claude-code-demo/qwen3-6-27b/v1
+          model: hosted_vllm/qwen3-8-27b
+          api_base: http://maas-default-gateway-data-science-gateway-class.openshift-ingress.svc.cluster.local/claude-code-demo/qwen3-8-27b/v1
           api_key: "sk-oai-VfPW5Bp5roY4xAY8_fbLmHrOfxbzBr7WQpDJl7sYbV6JmKJPcJKuFm4wRooD"
           drop_params: true
       - model_name: "claude-opus-5"
         litellm_params:
-          model: hosted_vllm/qwen3-6-27b
-          api_base: http://maas-default-gateway-data-science-gateway-class.openshift-ingress.svc.cluster.local/claude-code-demo/qwen3-6-27b/v1
+          model: hosted_vllm/qwen3-8-27b
+          api_base: http://maas-default-gateway-data-science-gateway-class.openshift-ingress.svc.cluster.local/claude-code-demo/qwen3-8-27b/v1
           api_key: "sk-oai-VfPW5Bp5roY4xAY8_fbLmHrOfxbzBr7WQpDJl7sYbV6JmKJPcJKuFm4wRooD"
           drop_params: true
 
       # Fable → Qwen via MaaS
       - model_name: "claude-fable-5"
         litellm_params:
-          model: hosted_vllm/qwen3-6-27b
-          api_base: http://maas-default-gateway-data-science-gateway-class.openshift-ingress.svc.cluster.local/claude-code-demo/qwen3-6-27b/v1
+          model: hosted_vllm/qwen3-8-27b
+          api_base: http://maas-default-gateway-data-science-gateway-class.openshift-ingress.svc.cluster.local/claude-code-demo/qwen3-8-27b/v1
           api_key: "sk-oai-VfPW5Bp5roY4xAY8_fbLmHrOfxbzBr7WQpDJl7sYbV6JmKJPcJKuFm4wRooD"
           drop_params: true
       - model_name: "fable-5-sonnet-20250312"
         litellm_params:
-          model: hosted_vllm/qwen3-6-27b
-          api_base: http://maas-default-gateway-data-science-gateway-class.openshift-ingress.svc.cluster.local/claude-code-demo/qwen3-6-27b/v1
+          model: hosted_vllm/qwen3-8-27b
+          api_base: http://maas-default-gateway-data-science-gateway-class.openshift-ingress.svc.cluster.local/claude-code-demo/qwen3-8-27b/v1
           api_key: "sk-oai-VfPW5Bp5roY4xAY8_fbLmHrOfxbzBr7WQpDJl7sYbV6JmKJPcJKuFm4wRooD"
           drop_params: true
 
@@ -83,18 +83,18 @@ data:
           api_base: http://maas-default-gateway-data-science-gateway-class.openshift-ingress.svc.cluster.local/claude-code-demo/granite-4-1-30b/v1
           api_key: "sk-oai-VfPW5Bp5roY4xAY8_fbLmHrOfxbzBr7WQpDJl7sYbV6JmKJPcJKuFm4wRooD"
           drop_params: true
-      - model_name: "qwen3-6-27b"
+      - model_name: "qwen3-8-27b"
         litellm_params:
-          model: hosted_vllm/qwen3-6-27b
-          api_base: http://maas-default-gateway-data-science-gateway-class.openshift-ingress.svc.cluster.local/claude-code-demo/qwen3-6-27b/v1
+          model: hosted_vllm/qwen3-8-27b
+          api_base: http://maas-default-gateway-data-science-gateway-class.openshift-ingress.svc.cluster.local/claude-code-demo/qwen3-8-27b/v1
           api_key: "sk-oai-VfPW5Bp5roY4xAY8_fbLmHrOfxbzBr7WQpDJl7sYbV6JmKJPcJKuFm4wRooD"
           drop_params: true
 
       # Legacy Opus → Qwen via MaaS
       - model_name: "claude-3-opus-20240229"
         litellm_params:
-          model: hosted_vllm/qwen3-6-27b
-          api_base: http://maas-default-gateway-data-science-gateway-class.openshift-ingress.svc.cluster.local/claude-code-demo/qwen3-6-27b/v1
+          model: hosted_vllm/qwen3-8-27b
+          api_base: http://maas-default-gateway-data-science-gateway-class.openshift-ingress.svc.cluster.local/claude-code-demo/qwen3-8-27b/v1
           api_key: "sk-oai-VfPW5Bp5roY4xAY8_fbLmHrOfxbzBr7WQpDJl7sYbV6JmKJPcJKuFm4wRooD"
           drop_params: true
 
