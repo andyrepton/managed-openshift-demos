@@ -7,7 +7,8 @@ This demo connects Claude Code to open-source LLMs running on OpenShift AI (ROSA
 ## Architecture
 
 ```
-Claude Code → LiteLLM Gateway (Anthropic→OpenAI translation) → vLLM → Open Source Model
+Claude Code → LiteLLM Gateway (Anthropic→OpenAI translation) → MaaS Gateway → vLLM → Open Source Model
+Cursor      → MaaS Gateway (OpenAI API, direct) → vLLM → Open Source Model
 Claude Code → Anthropic API → Claude (when ANTHROPIC_BASE_URL is unset)
 ```
 
@@ -61,6 +62,7 @@ This demo runs on **RHOAI 3.5**. Key details:
 - vLLM image: `registry.redhat.io/rhaii/vllm-cuda-rhel9:3.5.0` (ships vLLM 0.24.0)
 - llm-d is the default inference orchestration layer (uses vLLM underneath)
 - Requires cert-manager operator as a prerequisite
+- MaaS observability requires Cluster Observability Operator + Red Hat build of OpenTelemetry operator, plus `spec.monitoring.metrics.storage` configured in the DSCI
 
 ### vLLM version compatibility
 
@@ -80,12 +82,14 @@ RHOAI 3.5 ships vLLM v0.24.0 via `registry.redhat.io/rhaii/vllm-cuda-rhel9:3.5.0
 - **LiteLLM drop_params**: Set `drop_params: true` to silently handle Anthropic-specific parameters (like extended thinking) that vLLM doesn't support
 - **LiteLLM health probes**: The `/health` endpoint requires an API key when a master key is set. Use `/health/liveliness` for Kubernetes probes
 - **Route timeout**: OpenShift Routes default to 30s timeout. Set `haproxy.router.openshift.io/timeout: 10m` for long-running model responses. Without this, Qwen's extended thinking responses get cut off mid-stream with `TransferEncodingError` or `ServerDisconnectedError` in LiteLLM logs
-- **LiteLLM resources**: Under high load or concurrent long-running requests, LiteLLM needs at least 2Gi memory and 2 CPUs. Set `LITELLM_REQUEST_TIMEOUT=600` and `LITELLM_NUM_RETRIES=0` to handle long responses from vLLM (Qwen extended thinking can take 60-120s)
+- **LiteLLM resources**: Under high load or concurrent long-running requests, LiteLLM needs at least 2Gi memory and 2 CPUs. Set `LITELLM_REQUEST_TIMEOUT=180` (enough for Qwen's worst-case TTFT with extended thinking) and `LITELLM_NUM_RETRIES=2` so transient failures retry in ~3 minutes instead of hanging for 10
 - **MaaS gateway streaming timeouts**: When using LiteLLM → MaaS → vLLM (instead of LiteLLM → vLLM direct), the Istio/Envoy gateway has default stream idle timeouts (5 minutes) and payload processing timeouts (300s) that kill long-running responses. Apply `maas/stream-timeout-envoyfilter.yaml` and patch `payload-processing` EnvoyFilter to set all timeouts to `0s` (infinite). Without this, streaming responses >5 minutes fail with `TransferEncodingError: Not enough data to satisfy transfer length header`
 - **Kuadrant reconciliation loop bug**: Fixed upstream in Kuadrant Operator v1.5.3 ([PR #2184](https://github.com/Kuadrant/kuadrant-operator/pull/2184)) — caused by non-deterministic `sort.Sort` ordering of WASM config. Root cause: Go's unstable sort produced different EnvoyFilter content each reconciliation cycle, triggering infinite updates and Envoy hot restarts. RHOAI 3.5 should include the fix. If still occurring, scale down the Kuadrant operator (`oc scale deployment/kuadrant-operator-controller-manager -n openshift-operators --replicas=0`). See `docs/kuadrant-reconciliation-loop-bug.md` for details
 - **LLMInferenceService baseRefs**: Use `v3-4-4` baseRef names (e.g. `v3-4-4-kserve-config-llm-template-nvidia-cuda`) even on RHOAI 3.5. The RHOAI 3.5 operator auto-resolves them to v3-5-0 presets. Using `v3-5-0-kserve-config-llm-template-nvidia-cuda` directly causes `ConfigNotFound` errors despite the LLMInferenceServiceConfig existing on the cluster
 - **GPU scheduling on updates**: When updating the ServingRuntime, KServe's default RollingUpdate strategy tries to create new pods before terminating old ones. With GPUs fully allocated, this deadlocks. Delete InferenceServices first, apply changes, then recreate
 - **Model name mapping**: Claude Code sends many different model ID strings (claude-sonnet-5, claude-opus-5, claude-sonnet-4-20250514, etc.). All must be mapped in the LiteLLM config
+- **MaaS DSC field migration**: In RHOAI 3.5, `spec.components.kserve.modelsAsService` is deprecated. Use `spec.components.aigateway.modelsAsAService` instead. The deprecated field still works but emits a warning on every apply
+- **MaaS observability prerequisites**: The "Observe & monitor" dashboard in RHOAI requires three things: (1) Cluster Observability Operator installed, (2) Red Hat build of OpenTelemetry operator installed, (3) `spec.monitoring.metrics.storage` configured in the DSCI (not just `metrics: {}`). Without all three, `MonitoringStackAvailable` and `PersesAvailable` stay False and no dashboards appear. The Perses server, MonitoringStack, UIPlugin, and datasources are all auto-created by the RHOAI operator once prerequisites are met. Additionally, `MaasTenantConfig` must have `spec.telemetry.enabled: true` with `captureModelUsage: true` for usage dashboards to populate
 
 ## Important notes
 

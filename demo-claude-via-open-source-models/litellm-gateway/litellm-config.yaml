@@ -99,7 +99,8 @@ data:
           drop_params: true
 
     litellm_settings:
-      request_timeout: 600
+      request_timeout: 180
+      num_retries: 2
       modify_params: true
       drop_params: true
 

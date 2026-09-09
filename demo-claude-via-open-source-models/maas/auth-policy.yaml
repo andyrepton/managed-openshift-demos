@@ -7,7 +7,7 @@ spec:
   modelRefs:
     - name: granite-4-1-30b
       namespace: claude-code-demo
-    - name: qwen3-6-27b
+    - name: qwen3-8-27b
       namespace: claude-code-demo
   subjects:
     groups:

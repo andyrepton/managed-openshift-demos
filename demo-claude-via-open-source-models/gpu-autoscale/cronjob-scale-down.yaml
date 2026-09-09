@@ -1,0 +1,66 @@
+# Scale the GPU machine pool to 0 in the evening.
+#
+# Schedules use the cluster's timezone (check `date` on the API server / node;
+# typically UTC on ROSA). Adjust for your local time before applying.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: gpu-pool-scale-down
+  namespace: claude-code-demo
+  labels:
+    app.kubernetes.io/name: gpu-pool-scaler
+    app.kubernetes.io/component: scale-down
+spec:
+  schedule: "15 21 * * *"   # 21:15 daily — verify cluster timezone first
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 5
+  failedJobsHistoryLimit: 10
+  jobTemplate:
+    spec:
+      backoffLimit: 1       # scale-down failing = we keep paying; one retry
+      activeDeadlineSeconds: 1800   # give it 30 min then give up
+      template:
+        spec:
+          restartPolicy: Never
+          # Placeholder — replace with your built + pushed image
+          # (docker buildx build --platform linux/amd64 -t quay.io/<your-org>/gpu-pool-scaler:latest ...)
+          image: quay.io/REPLACE_WITH_YOUR_ORG/gpu-pool-scaler:latest
+          imagePullPolicy: IfNotPresent
+          # g7e pool is taint-tolerated; run on a cheap node
+          containers:
+            - name: scaler
+              env:
+                # Client credentials (preferred) or offline token — whichever
+                # keys exist in the ocm-client Secret. optional: true so the
+                # pod starts whether the Secret uses one shape or the other.
+                - name: OCM_CLIENT_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: ocm-client
+                      key: client-id
+                      optional: true
+                - name: OCM_CLIENT_SECRET
+                  valueFrom:
+                    secretKeyRef:
+                      name: ocm-client
+                      key: client-secret
+                      optional: true
+                - name: OCM_OFFLINE_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: ocm-client
+                      key: offline-token
+                      optional: true
+                - name: CLUSTER_ID
+                  value: "2se5gi3k8ssrahi8iatg5arudlomk9rp"
+                - name: POOL_NAME
+                  value: "poc-andyr-gpu"
+                - name: TARGET_REPLICAS
+                  value: "0"
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  cpu: 200m
+                  memory: 128Mi

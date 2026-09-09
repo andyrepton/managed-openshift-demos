@@ -1,0 +1,49 @@
+# The MaaS controller sets payload-processing EnvoyFilter with 300s timeouts
+# on the ext_proc filters (ipp and ipp-pre). This kills streaming responses
+# that take longer than 5 minutes. Since the controller owns that resource and
+# reconciles it back to 300s, we override it with a higher-priority filter.
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: maas-payload-processing-timeout-override
+  namespace: openshift-ingress
+spec:
+  priority: 11
+  workloadSelector:
+    labels:
+      gateway.networking.k8s.io/gateway-name: maas-default-gateway
+  configPatches:
+  - applyTo: HTTP_FILTER
+    match:
+      context: GATEWAY
+      listener:
+        filterChain:
+          filter:
+            name: envoy.filters.network.http_connection_manager
+            subFilter:
+              name: envoy.filters.http.ext_proc.ipp-pre
+    patch:
+      operation: MERGE
+      value:
+        typed_config:
+          '@type': type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExternalProcessor
+          grpc_service:
+            timeout: 0s
+          message_timeout: 0s
+  - applyTo: HTTP_FILTER
+    match:
+      context: GATEWAY
+      listener:
+        filterChain:
+          filter:
+            name: envoy.filters.network.http_connection_manager
+            subFilter:
+              name: envoy.filters.http.ext_proc.ipp
+    patch:
+      operation: MERGE
+      value:
+        typed_config:
+          '@type': type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExternalProcessor
+          grpc_service:
+            timeout: 0s
+          message_timeout: 0s

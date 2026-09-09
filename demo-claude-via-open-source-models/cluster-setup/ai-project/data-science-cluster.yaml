@@ -6,6 +6,9 @@ spec:
   components:
     codeflare:
       managementState: Removed
+    aigateway:
+      modelsAsAService:
+        managementState: Managed
     kserve:
       serving:
         ingressGateway:

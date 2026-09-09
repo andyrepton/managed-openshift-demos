@@ -4,27 +4,41 @@ Run Claude Code against open-source LLMs hosted on your own OpenShift cluster, k
 
 ## Architecture
 
+There are two routes into the models on the cluster: **LiteLLM** (with model name aliasing and Anthropic API translation) and **MaaS** (Red Hat-native auth, token quotas, and usage tracking). Both can be used simultaneously.
+
 ```
 Developer laptop                    OpenShift Cluster (ROSA / ARO)
-┌─────────────┐                    ┌──────────────────────────────────────┐
-│  Claude Code │─── Anthropic ────▶│  LiteLLM Gateway                    │
-│              │   Messages API    │  (serves both Anthropic & OpenAI)   │
-└──────────────┘                   │         │                           │
-┌─────────────┐                    │         │                           │
-│  Cursor     │─── OpenAI ────────▶│         │                           │
-│              │   Chat API        │         ▼ OpenAI Chat API           │
-└──────────────┘                   │  ┌──────────────┐ ┌──────────────┐ │
-       │                           │  │  vLLM        │ │  vLLM        │ │
-       │ unset                     │  │  Granite 30B │ │  Qwen 27B   │ │
-       │ ANTHROPIC_BASE_URL        │  │  (GPU node)  │ │  (GPU node)  │ │
-       ▼                           │  └──────────────┘ └──────────────┘ │
-┌──────────────┐                   └──────────────────────────────────────┘
-│ Anthropic API│                    OpenShift AI / KServe / vLLM
-│ (direct)     │
-└──────────────┘
+                                   ┌──────────────────────────────────────────────┐
+                                   │                                              │
+┌─────────────┐  Anthropic API     │  ┌────────────────┐    ┌──────────────────┐  │
+│  Claude Code │──────────────────▶│  │ LiteLLM Gateway│───▶│  MaaS Gateway    │  │
+│              │  (model aliasing) │  │ (Anthropic→OAI)│    │  (Kuadrant +     │  │
+└──────────────┘                   │  └────────────────┘    │   Authorino)     │  │
+                                   │                        │                  │  │
+┌─────────────┐  OpenAI API        │                        │  ┌────────────┐  │  │
+│  Cursor     │────────────────────│───────────────────────▶│  │ Auth +     │  │  │
+│              │  (direct to MaaS) │                        │  │ Quotas     │  │  │
+└──────────────┘                   │                        │  └────────────┘  │  │
+       │                           │                        └────────┬─────────┘  │
+       │ unset                     │                                 │             │
+       │ ANTHROPIC_BASE_URL        │                                 ▼             │
+       ▼                           │  ┌──────────────┐  ┌──────────────┐          │
+┌──────────────┐                   │  │  vLLM        │  │  vLLM        │          │
+│ Anthropic API│                   │  │  Granite 30B │  │  Qwen 27B   │          │
+│ (direct)     │                   │  │  (GPU node)  │  │  (GPU node)  │          │
+└──────────────┘                   │  └──────────────┘  └──────────────┘          │
+                                   └──────────────────────────────────────────────┘
+                                    OpenShift AI / KServe / MaaS / vLLM
 ```
 
-**LiteLLM** acts as a unified gateway serving both the Anthropic Messages API (for Claude Code) and the OpenAI Chat Completions API (for Cursor and other OpenAI-compatible tools). All requests are forwarded to vLLM's OpenAI-compatible backend.
+**Two routes to models:**
+
+| Route | API | Auth | Features | Best for |
+|-------|-----|------|----------|----------|
+| **LiteLLM → MaaS** | Anthropic Messages API | LiteLLM API key | Model name aliasing (use `/model` to swap), Anthropic→OpenAI translation | Claude Code |
+| **MaaS direct** | OpenAI Chat API | MaaS API key | Per-user token quotas, usage tracking dashboard, Red Hat-native auth | Cursor, multi-user setups |
+
+Both routes pass through the MaaS gateway for authentication and usage tracking before reaching vLLM.
 
 ## Why
 
@@ -37,12 +51,12 @@ Developer laptop                    OpenShift Cluster (ROSA / ARO)
 | Model | Source | Parameters | Quantisation | SWE-bench |
 |-------|--------|-----------|-------------|-----------|
 | [granite-4.1-30b](https://huggingface.co/ibm-granite/granite-4.1-30b) | IBM Granite | 30B | FP8 (on-the-fly) | — |
-| [Qwen3.6-27B-FP8](https://huggingface.co/RedHatAI/Qwen3.6-27B-FP8) | RedHatAI | 27B | FP8 dynamic | 77.2% |
+| [Qwen3.8-27B-FP8](https://huggingface.co/RedHatAI/Qwen3.8-27B-FP8) | RedHatAI | 27B | FP8 dynamic | — |
 
 ### Why these models
 
 - **Granite 4.1 30B** (`ibm-granite/granite-4.1-30b`) — IBM's text-only coding model with 131K context, native tool calling via `--tool-call-parser granite4`, and strong coding benchmarks. BF16 weights are quantised on-the-fly to FP8 by vLLM (`--quantization fp8`). Text-only architecture means no wasted VRAM on vision encoders. Part of the IBM/Red Hat ecosystem.
-- **Qwen3.6-27B** (`RedHatAI/Qwen3.6-27B-FP8`) — Scores 77.2% on SWE-bench Verified, supports native tool calling via `--tool-call-parser qwen3_coder`, and has 262K token native context. This is the highest-scoring open-source coding model that fits on a single GPU. Despite only being 27B parameters, it outperforms larger MoE models because dense models handle agentic coding workflows more reliably. `--language-model-only` disables the vision encoder to free VRAM for KV cache. `--reasoning-parser qwen3` strips internal `<think>` tags from output.
+- **Qwen3.8-27B** (`RedHatAI/Qwen3.8-27B-FP8`) — Successor to Qwen3.6, supports native tool calling via `--tool-call-parser qwen3_coder`, and has 262K token native context. Dense 27B architecture handles agentic coding workflows more reliably than larger MoE models. `--language-model-only` disables the vision encoder to free VRAM for KV cache. `--reasoning-parser qwen3` strips internal `<think>` tags from output. Requires a custom chat template to fix Claude Code compatibility issues (see gotchas in CLAUDE.md).
 
 ## Directory Layout
 
@@ -188,7 +202,7 @@ Monitor download progress:
 oc logs -f job/download-granite-4-1-30b -n claude-code-demo
 
 # Qwen (~20-30 minutes)
-oc logs -f job/download-qwen3-6-27b -n claude-code-demo
+oc logs -f job/download-qwen3-8-27b -n claude-code-demo
 ```
 
 Once downloads complete, deploy the Qwen chat template and InferenceServices:
@@ -198,14 +212,14 @@ Once downloads complete, deploy the Qwen chat template and InferenceServices:
 # messages mid-conversation (which Claude Code sends for tool context).
 # Granite uses its built-in template and needs no override.
 oc apply -f models/qwen-chat-template.yaml
-oc apply -f models/granite-inference-service.yaml
-oc apply -f models/qwen-inference-service.yaml
+oc apply -f models/granite-llm-inference-service.yaml
+oc apply -f models/qwen3-8-llm-inference-service.yaml
 ```
 
 Wait for models to load:
 
 ```bash
-oc get inferenceservice -n claude-code-demo -w
+oc get llminferenceservice -n claude-code-demo -w
 # Both should show READY=True after ~5 minutes
 ```
 
@@ -289,7 +303,7 @@ curl -s -X POST "https://$GATEWAY_URL/v1/messages" \
   -H "anthropic-version: 2023-06-01" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "qwen3-6-27b",
+    "model": "qwen3-8-27b",
     "max_tokens": 256,
     "messages": [{"role": "user", "content": "Write a Python function to reverse a linked list"}]
   }' | python3 -m json.tool
@@ -327,7 +341,7 @@ Use the `/model` command inside Claude Code to switch between local models witho
 
 Select from the model picker:
 - **Sonnet** → routes to Granite 4.1 30B on your cluster
-- **Opus** → routes to Qwen3.6-27B on your cluster
+- **Opus** → routes to Qwen3.8-27B on your cluster
 
 The LiteLLM gateway maps Claude model names to local vLLM endpoints, so switching models in Claude Code transparently switches which open-source model handles your requests.
 
@@ -338,32 +352,41 @@ vLLM serves the models with their **real names** as primary identifiers, with Cl
 | Model you select | vLLM serves as | Routes to |
 |------------------|----------------|-----------|
 | `granite-4-1-30b` | `granite-4-1-30b` | IBM Granite 4.1 30B (30B params, FP8) |
-| `qwen3-6-27b` | `qwen3-6-27b` | Qwen 3.6 27B FP8 (27B params, FP8) |
+| `qwen3-8-27b` | `qwen3-8-27b` | Qwen 3.8 27B FP8 (27B params, FP8) |
 | `claude-sonnet-5` | `granite-4-1-30b` | Granite (alias via LiteLLM) |
 | `claude-haiku-4-5-20251001` | `granite-4-1-30b` | Granite (alias via LiteLLM) |
-| `claude-opus-5` | `qwen3-6-27b` | Qwen (alias via LiteLLM) |
-| `claude-fable-5` | `qwen3-6-27b` | Qwen (alias via LiteLLM) |
+| `claude-opus-5` | `qwen3-8-27b` | Qwen (alias via LiteLLM) |
+| `claude-fable-5` | `qwen3-8-27b` | Qwen (alias via LiteLLM) |
 
-**Recommendation:** Use the real model names (`granite-4-1-30b`, `qwen3-6-27b`) for clarity. The Claude aliases are provided for convenience when switching between local and Anthropic models.
+**Recommendation:** Use the real model names (`granite-4-1-30b`, `qwen3-8-27b`) for clarity. The Claude aliases are provided for convenience when switching between local and Anthropic models.
 
 You can modify `litellm-gateway/litellm-config.yaml` to change these mappings or add more models. The config uses the `hosted_vllm/` LiteLLM provider prefix for optimal vLLM compatibility, with `drop_params: true` to silently handle Anthropic-specific parameters that vLLM doesn't support.
 
 ### Using with Cursor
 
-The same LiteLLM gateway serves an OpenAI-compatible API, so Cursor can connect directly without any translation layer.
+Cursor uses the OpenAI Chat Completions API, so it can connect either through LiteLLM or directly to MaaS.
+
+**Option 1: Via LiteLLM** (same gateway as Claude Code)
 
 In Cursor, go to **Settings → Models → OpenAI API** and configure:
 
-- **Base URL**: `https://<gateway-url>/v1`
-- **API Key**: your LiteLLM API key (same key used for Claude Code)
-- **Model**: `granite-4-1-30b` or `qwen3-6-27b`
+- **Base URL**: `https://<litellm-gateway-url>/v1`
+- **API Key**: your LiteLLM API key
+- **Model**: `granite-4-1-30b` or `qwen3-8-27b`
+
+**Option 2: Via MaaS direct** (per-user auth and token quotas)
+
+- **Base URL**: `https://<maas-gateway-url>/v1`
+- **API Key**: your MaaS API key (from `MaaSSubscription`)
+- **Model**: `granite-4-1-30b` or `qwen3-8-27b`
 
 ```bash
-# Get your gateway URL
-echo "https://$(oc get route litellm-gateway -n claude-code-demo -o jsonpath='{.spec.host}')/v1"
+# Get gateway URLs
+echo "LiteLLM: https://$(oc get route litellm-gateway -n claude-code-demo -o jsonpath='{.spec.host}')/v1"
+echo "MaaS:    https://$(oc get route -n openshift-ingress -l maas.opendatahub.io/gateway=maas-default-gateway -o jsonpath='{.items[0].spec.host}')/v1"
 ```
 
-Cursor uses the OpenAI Chat Completions API (`/v1/chat/completions`) while Claude Code uses the Anthropic Messages API (`/v1/messages`) — both are served by the same gateway with the same authentication and usage tracking.
+MaaS direct is recommended for multi-user setups as it provides per-user token quotas and usage tracking without requiring LiteLLM.
 
 ### Switching Back to Anthropic Claude
 
@@ -409,13 +432,115 @@ For tasks 1-5, switch between Granite and Qwen inside the same Claude Code sessi
 
 ### Known Limitations with Open-Source Models
 
-- **Tool use**: File reading, editing, and bash commands may not work reliably — these require the model to emit correctly formatted tool calls. Qwen3.6 has native tool calling support via `qwen3_coder`; Granite 4.1 has native support via `granite4`
+- **Tool use**: File reading, editing, and bash commands may not work reliably — these require the model to emit correctly formatted tool calls. Qwen3.8 has native tool calling support via `qwen3_coder`; Granite 4.1 has native support via `granite4`
 - **Web search**: Claude Code's built-in web search is a native Anthropic API feature and is not available with open-source models. Attempting it will produce an error
 - **Extended thinking**: Not available with open-source models
 - **Prompt caching**: Not available
 - **Long context**: Granite is configured for 131K tokens, Qwen for 262K (vs Claude's 200K)
 - **Multi-step reasoning**: Open-source models may struggle with complex, multi-tool workflows
 - **First request latency**: vLLM compiles CUDA graphs on the first request after startup, causing 30-60 second delays. Subsequent requests are fast
+
+## Usage Monitoring (MaaS)
+
+When using MaaS, RHOAI provides built-in Perses dashboards for monitoring token usage, authorized calls, and rate limiting per user and model. Setting this up requires three operator prerequisites and two configuration patches.
+
+### Step 1: Install Operator Prerequisites
+
+The observability stack requires the Cluster Observability Operator (COO) and the Red Hat build of OpenTelemetry:
+
+```bash
+oc apply -f cluster-setup/operators/cluster-observability-operator.yaml
+oc apply -f cluster-setup/operators/opentelemetry.yaml
+```
+
+Wait for both to be ready:
+
+```bash
+oc get csv -n openshift-cluster-observability-operator | grep observability
+oc get csv -n openshift-opentelemetry-operator | grep opentelemetry
+# Both should show Phase: Succeeded
+```
+
+### Step 2: Configure Metrics in DSCI
+
+Patch the DSCInitialization to enable metrics collection with storage. This triggers the RHOAI operator to auto-create the MonitoringStack, Perses server, Prometheus, and Thanos querier in `redhat-ods-monitoring`:
+
+```bash
+oc patch dsci default-dsci --type=merge -p '
+spec:
+  monitoring:
+    metrics:
+      storage:
+        retention: "7d"
+        size: "5Gi"
+'
+```
+
+Wait for the monitoring stack and Perses to become available:
+
+```bash
+oc get dsci default-dsci -o yaml | grep -A 3 'MonitoringStackAvailable\|PersesAvailable'
+# Both should show status: "True"
+```
+
+### Step 3: Enable MaaS Telemetry
+
+Patch the MaasTenantConfig to enable per-user and per-model usage metrics:
+
+```bash
+oc patch maastenantconfig default-tenant -n models-as-a-service --type=merge -p '
+spec:
+  telemetry:
+    enabled: true
+    metrics:
+      captureModelUsage: true
+      captureUser: true
+'
+```
+
+> **Note:** Enabling `captureUser` logs user identity per request — ensure GDPR/privacy compliance before enabling in production.
+
+### Step 4: Enable the Dashboard UI
+
+Enable the observability dashboard in the OpenShift AI console:
+
+```bash
+oc patch odhdashboardconfig odh-dashboard-config -n redhat-ods-applications \
+  --type=merge -p '{"spec":{"dashboardConfig":{"observabilityDashboard":true}}}'
+```
+
+### Accessing the Dashboard
+
+The MaaS usage dashboard is available in the OpenShift AI console at **Observe & monitor → Dashboard**. It shows:
+
+- **Authorized calls** per model and user
+- **Token usage** (input/output) per model
+- **Rate-limited requests** when token quotas are exceeded
+- **Request latency** breakdown
+
+The dashboards are auto-managed Perses dashboards (`PersesDashboard` resources in `redhat-ods-monitoring`). There are no CLI or REST API endpoints for usage data — the dashboard is the only interface in RHOAI 3.5.
+
+### MaaS Migration: kserve → aigateway
+
+In RHOAI 3.5, `spec.components.kserve.modelsAsService` is deprecated. Migrate to `spec.components.aigateway.modelsAsAService`:
+
+```bash
+oc patch datasciencecluster default-dsc --type=merge -p '
+spec:
+  components:
+    aigateway:
+      modelsAsAService:
+        managementState: Managed
+'
+```
+
+Once the aigateway component is managing MaaS, clear the deprecated field:
+
+```bash
+oc patch datasciencecluster default-dsc --type=json -p '
+[{"op": "remove", "path": "/spec/components/kserve/modelsAsService"}]
+'
+```
 
 ## Alternative Approaches
 
@@ -432,17 +557,17 @@ vLLM natively supports the Anthropic Messages API, so Claude Code can connect di
 ## Cleanup
 
 ```bash
-# Remove InferenceServices, chat templates, and gateway
+# Remove LLMInferenceServices, chat templates, and gateway
 oc delete -f litellm-gateway/
 oc delete -f models/granite-llm-inference-service.yaml
-oc delete -f models/qwen-llm-inference-service.yaml
+oc delete -f models/qwen3-8-llm-inference-service.yaml
 oc delete -f models/qwen-chat-template.yaml
 
 # Remove download jobs and PVCs
 oc delete -f models/granite-download-job.yaml
-oc delete -f models/qwen-download-job.yaml
+oc delete -f models/qwen3-8-download-job.yaml
 oc delete -f models/granite-pvc.yaml
-oc delete -f models/qwen-pvc.yaml
+oc delete -f models/qwen3-8-pvc.yaml
 
 # Remove AI project
 oc delete -f cluster-setup/ai-project/serving-runtime.yaml

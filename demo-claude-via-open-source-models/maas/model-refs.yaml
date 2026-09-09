@@ -11,9 +11,9 @@ spec:
 apiVersion: maas.opendatahub.io/v1alpha1
 kind: MaaSModelRef
 metadata:
-  name: qwen3-6-27b
+  name: qwen3-8-27b
   namespace: claude-code-demo
 spec:
   modelRef:
     kind: LLMInferenceService
-    name: qwen3-6-27b
+    name: qwen3-8-27b

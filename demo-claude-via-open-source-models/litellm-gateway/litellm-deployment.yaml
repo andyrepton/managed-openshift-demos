@@ -33,9 +33,9 @@ spec:
                   name: litellm-api-key
                   key: master-key
             - name: LITELLM_REQUEST_TIMEOUT
-              value: "600"
+              value: "180"
             - name: LITELLM_NUM_RETRIES
-              value: "0"
+              value: "2"
             # aiohttp client timeouts (prevent socket read timeout)
             - name: AIOHTTP_TOTAL_TIMEOUT
               value: "0"

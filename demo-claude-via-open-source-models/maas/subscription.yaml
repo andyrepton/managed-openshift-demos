@@ -22,7 +22,7 @@ spec:
       tokenRateLimits:
         - limit: 100000000
           window: "1h"
-    - name: qwen3-6-27b
+    - name: qwen3-8-27b
       namespace: claude-code-demo
       billingRate:
         perToken: "0.0001"
