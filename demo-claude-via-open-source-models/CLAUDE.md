@@ -15,19 +15,21 @@ Claude Code → Anthropic API → Claude (when ANTHROPIC_BASE_URL is unset)
 ## Models
 
 - **Granite 4.1 30B** (`ibm-granite/granite-4.1-30b`): IBM text-only coding model, 131K context, BF16 with on-the-fly FP8 quantisation, `--tool-call-parser granite4`
-- **Qwen3.8-27B** (`Qwen/Qwen3.8-27B-INT4`): Best open-source coding model (SWE-bench Pro 61.7, DeepSWE 42.2), INT4 quantised, 262K context (YaRN to 1M), `--tool-call-parser qwen3_coder`, `--reasoning-parser qwen3`, `--language-model-only`
+- **Qwen3.8-27B** (`RedHatAI/Qwen3.8-27B-INT4`): Best open-source coding model (SWE-bench Pro 61.7, DeepSWE 42.2), INT4 quantised, 262K context (YaRN to 1M), `--tool-call-parser qwen3_coder`, `--reasoning-parser qwen3`, `--language-model-only`
 
 Both models are downloaded from HuggingFace to PVCs via Kubernetes Jobs, then served by vLLM through KServe InferenceServices.
 
 ## Key directories
 
-- `operators/` — NFD, NVIDIA GPU Operator, cert-manager, and RHOAI operator installation YAMLs
-- `ai-project/` — Namespace, DataScienceCluster, and vLLM ServingRuntime
+- `cluster-setup/operators/` — NFD, NVIDIA GPU Operator, cert-manager, Cluster Observability, OpenTelemetry, and RHOAI operator installation YAMLs
+- `cluster-setup/ai-project/` — Namespace, DataScienceCluster, and vLLM ServingRuntime
 - `models/` — PVCs, HuggingFace download Jobs, chat template ConfigMaps, and LLMInferenceServices for each model
-- `gateway/` — LiteLLM proxy deployment (ConfigMap, Deployment, Service, Route)
-- `native-vllm/` — Direct vLLM connection (no LiteLLM)
-- `native-vllm/maas/` — Models-as-a-Service infrastructure (RHCL, Kuadrant, Authorino, PostgreSQL, MaaSAuthPolicy, MaaSSubscription). LLMInferenceService definitions are in `models/`. MaaS supports both OpenAI and Anthropic APIs — Cursor can connect directly, Claude Code can use LiteLLM or connect directly
+- `litellm-gateway/` — LiteLLM proxy deployment (ConfigMap, Deployment, Service, Route)
+- `maas/` — Models-as-a-Service infrastructure (RHCL, Kuadrant, Authorino, PostgreSQL, MaaSAuthPolicy, MaaSSubscription). LLMInferenceService definitions are in `models/`. MaaS supports both OpenAI and Anthropic APIs — Cursor can connect directly, Claude Code can use LiteLLM or connect directly
+- `alternatives/direct-vllm/` — Direct vLLM connection (no LiteLLM)
+- `gpu-autoscale/` — CronJob-based GPU machine pool scale up/down
 - `docs/` — Blog post drafts and testing plan
+- `private-docs/` — Non-public docs (blog drafts, user feedback analysis)
 
 ## Cluster provisioning
 

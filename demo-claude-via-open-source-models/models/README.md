@@ -7,8 +7,8 @@ This directory contains model downloads, storage, and InferenceService configura
 | Model | Size | Use Case | Context Length | Quantization |
 |-------|------|----------|----------------|--------------|
 | IBM Granite 4.1 30B | 30B params | General coding, fast responses | 131K tokens | FP8 (on-the-fly) |
-| Qwen 3.6 27B | 27B params | Complex coding, SWE-bench 77.2% | 262K tokens | FP8 (pre-quantized) |
 | Qwen 3.8 27B | 27B params | Complex coding, SWE-bench Pro 61.7, DeepSWE 42.2 | 262K tokens (native, YaRN to 1M) | INT4 (compressed-tensors, ~19.5GB) |
+| Qwen 3.6 27B *(legacy)* | 27B params | Kept for swap-back, not part of default setup | 262K tokens | FP8 (pre-quantized) |
 
 ## Directory Structure
 
@@ -19,10 +19,13 @@ models/
 ├── granite-pvc.yaml                     # Storage for Granite model
 ├── granite-download-job.yaml            # HuggingFace download job
 ├── granite-llm-inference-service.yaml   # LLMInferenceService (MaaS)
-├── qwen-pvc.yaml                        # Storage for Qwen model
-├── qwen-download-job.yaml               # HuggingFace download job
-├── qwen-chat-template.yaml              # Custom chat template ConfigMap
-└── qwen-llm-inference-service.yaml      # LLMInferenceService (MaaS)
+├── qwen-pvc.yaml                        # Storage for Qwen 3.6 model (legacy)
+├── qwen-download-job.yaml               # HuggingFace download job (legacy)
+├── qwen-chat-template.yaml              # Custom chat template ConfigMap (shared by Qwen 3.6/3.8)
+├── qwen-llm-inference-service.yaml      # LLMInferenceService for Qwen 3.6 (legacy)
+├── qwen3-8-pvc.yaml                     # Storage for Qwen 3.8 model
+├── qwen3-8-download-job.yaml            # HuggingFace download job
+└── qwen3-8-llm-inference-service.yaml   # LLMInferenceService (MaaS)
 ```
 
 ## Deploying Models
@@ -31,8 +34,10 @@ These `LLMInferenceService` resources deploy models via the MaaS gateway, which 
 
 ```bash
 oc apply -f granite-llm-inference-service.yaml
-oc apply -f qwen-llm-inference-service.yaml
+oc apply -f qwen3-8-llm-inference-service.yaml
 ```
+
+The `qwen-*.yaml` files (Qwen 3.6) are kept for swap-back but are not part of the default setup.
 
 For a simpler setup without MaaS (no auth or usage tracking), see `alternatives/direct-vllm/` which has plain KServe `InferenceService` resources.
 
@@ -45,7 +50,8 @@ Follow these steps to add a new model to your cluster:
 Create a PersistentVolumeClaim sized appropriately for your model. FP8-quantized models typically need:
 - **7B models**: 10-15GB
 - **13B models**: 20-30GB
-- **27-30B models**: 40-60GB
+- **27-30B models, INT4**: ~20-25GB (e.g. the 20Gi Qwen 3.8 PVC)
+- **27-30B models, FP8/BF16**: 40-100GB (e.g. the 100Gi Granite PVC for BF16 weights + headroom)
 - **70B+ models**: 80-150GB
 
 ```yaml

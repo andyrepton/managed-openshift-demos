@@ -18,8 +18,8 @@ No additional gateway, no API format translation, pure Red Hat stack.
 
 The base demo must already be deployed:
 
-- Operators installed (`operators/`)
-- OpenShift AI configured (`ai-project/`)
+- Operators installed (`cluster-setup/operators/`)
+- OpenShift AI configured (`cluster-setup/ai-project/`)
 - At least one model deployed as an InferenceService (`models/`)
 
 The existing InferenceServices (`granite-4-1-30b` and `qwen3-6-27b`) and ServingRuntime (`vllm-cuda-runtime`) work as-is. The vLLM version shipped with RHOAI v3 (3.3+) includes the Anthropic API endpoint by default -- no ServingRuntime changes are needed.

@@ -8,4 +8,4 @@ spec:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 100Gi
+      storage: 100Gi  # BF16 30B weights (~60GB) plus headroom for on-the-fly FP8 quantisation — do not shrink

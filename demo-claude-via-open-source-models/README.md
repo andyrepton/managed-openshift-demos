@@ -52,12 +52,12 @@ Both routes pass through the MaaS gateway for authentication and usage tracking 
 | Model | Source | Parameters | Quantisation | SWE-bench |
 |-------|--------|-----------|-------------|-----------|
 | [granite-4.1-30b](https://huggingface.co/ibm-granite/granite-4.1-30b) | IBM Granite | 30B | FP8 (on-the-fly) | — |
-| [Qwen3.8-27B-FP8](https://huggingface.co/RedHatAI/Qwen3.8-27B-FP8) | RedHatAI | 27B | FP8 dynamic | — |
+| [Qwen3.8-27B-INT4](https://huggingface.co/RedHatAI/Qwen3.8-27B-INT4) | RedHatAI | 27B | INT4 (compressed-tensors) | — |
 
 ### Why these models
 
 - **Granite 4.1 30B** (`ibm-granite/granite-4.1-30b`) — IBM's text-only coding model with 131K context, native tool calling via `--tool-call-parser granite4`, and strong coding benchmarks. BF16 weights are quantised on-the-fly to FP8 by vLLM (`--quantization fp8`). Text-only architecture means no wasted VRAM on vision encoders. Part of the IBM/Red Hat ecosystem.
-- **Qwen3.8-27B** (`RedHatAI/Qwen3.8-27B-FP8`) — Successor to Qwen3.6, supports native tool calling via `--tool-call-parser qwen3_coder`, and has 262K token native context. Dense 27B architecture handles agentic coding workflows more reliably than larger MoE models. `--language-model-only` disables the vision encoder to free VRAM for KV cache. `--reasoning-parser qwen3` strips internal `<think>` tags from output. Requires a custom chat template to fix Claude Code compatibility issues (see gotchas in CLAUDE.md).
+- **Qwen3.8-27B** (`RedHatAI/Qwen3.8-27B-INT4`) — Successor to Qwen3.6, supports native tool calling via `--tool-call-parser qwen3_coder`, and has 262K token native context. Dense 27B architecture handles agentic coding workflows more reliably than larger MoE models. `--language-model-only` disables the vision encoder to free VRAM for KV cache. `--reasoning-parser qwen3` strips internal `<think>` tags from output. Requires a custom chat template to fix Claude Code compatibility issues (see gotchas in CLAUDE.md).
 
 ## Directory Layout
 
@@ -454,7 +454,7 @@ vLLM serves the models with their **real names** as primary identifiers, with Cl
 | Model you select | vLLM serves as | Routes to |
 |------------------|----------------|-----------|
 | `granite-4-1-30b` | `granite-4-1-30b` | IBM Granite 4.1 30B (30B params, FP8) |
-| `qwen3-8-27b` | `qwen3-8-27b` | Qwen 3.8 27B FP8 (27B params, FP8) |
+| `qwen3-8-27b` | `qwen3-8-27b` | Qwen 3.8 27B (27B params, INT4) |
 | `claude-sonnet-5` | `granite-4-1-30b` | Granite (alias via LiteLLM) |
 | `claude-haiku-4-5-20251001` | `granite-4-1-30b` | Granite (alias via LiteLLM) |
 | `claude-opus-5` | `qwen3-8-27b` | Qwen (alias via LiteLLM) |

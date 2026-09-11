@@ -156,7 +156,7 @@ data:
         {%- if enable_thinking is defined and enable_thinking is false %}
             {{- '<think>\n\n</think>\n\n' }}
         {%- else %}
-            {%- set raw_effort = reasoning_effort|default('xhigh') %}
+            {%- set raw_effort = reasoning_effort|default('medium') %}
             {%- set effort_alias = {'high': 'medium'} %}
             {%- set resolved_effort = effort_alias.get(raw_effort, raw_effort) %}
             {%- if resolved_effort not in ('xhigh', 'medium', 'low') %}

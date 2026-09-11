@@ -126,7 +126,7 @@ Run each task across all three configurations. Record results in the table below
 
 ### Task 2: Code explanation
 
-**Prompt**: "Read the file `gateway/litellm-config.yaml` and explain what it does"
+**Prompt**: "Read the file `litellm-gateway/litellm-config.yaml` and explain what it does"
 
 | Config | Read file? | Explanation accurate? | Notes |
 |--------|-----------|----------------------|-------|
