@@ -1,21 +1,17 @@
 data "aws_availability_zones" "available" {}
 
 locals {
-  # Extract availability zone names for the specified region, limit it to 3 if multi az or 1 if single
-  region_azs = var.multi_az ? slice([for zone in data.aws_availability_zones.available.names : format("%s", zone)], 0, 3) : slice([for zone in data.aws_availability_zones.available.names : format("%s", zone)], 0, 1)
+  region_azs           = var.multi_az ? slice([for zone in data.aws_availability_zones.available.names : format("%s", zone)], 0, 3) : slice([for zone in data.aws_availability_zones.available.names : format("%s", zone)], 0, 1)
+  path                 = coalesce(var.path, "/")
+  worker_node_replicas = var.multi_az ? 3 : 2
+  cluster_name         = coalesce(var.cluster_name, "rosa-${random_string.random_name.result}")
+  private_subnet_id    = var.create_vpc ? module.vpc[0].private_subnets[0] : var.aws_subnet_ids[0]
 }
 
 resource "random_string" "random_name" {
   length  = 6
   special = false
   upper   = false
-}
-
-locals {
-  path                 = coalesce(var.path, "/")
-  worker_node_replicas = var.multi_az ? 3 : 2
-  # If cluster_name is not null, use that, otherwise generate a random cluster name
-  cluster_name = coalesce(var.cluster_name, "rosa-${random_string.random_name.result}")
 }
 
 module "rosa-hcp" {

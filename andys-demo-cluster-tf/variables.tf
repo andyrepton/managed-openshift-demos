@@ -1,195 +1,232 @@
 variable "rosa_openshift_version" {
   type        = string
   default     = "4.22.12"
-  description = "Desired version of OpenShift for the cluster, for example '4.1.0'. If version is greater than the currently running version, an upgrade will be scheduled."
+  description = "Desired version of OpenShift for the ROSA cluster."
 }
 
 variable "aro_openshift_version" {
   type        = string
   default     = "4.20.15"
-  description = "Desired version of OpenShift for the cluster, for example '4.1.0'. If version is greater than the currently running version, an upgrade will be scheduled."
+  description = "Desired version of OpenShift for the ARO cluster."
+}
+
+variable "osd_openshift_version" {
+  type        = string
+  default     = "4.18.1"
+  description = "Desired version of OpenShift for the OSD cluster."
 }
 
 variable "create_rosa" {
   type        = bool
-  description = "Would you like to make a ROSA cluster?"
+  default     = false
+  description = "Create a ROSA HCP cluster."
 }
 
 variable "create_aro" {
   type        = bool
-  description = "Would you like to make an ARO cluster?"
+  default     = false
+  description = "Create an ARO cluster."
+}
+
+variable "create_osd" {
+  type        = bool
+  default     = false
+  description = "Create an OSD cluster on GCP."
 }
 
 variable "create_vpc" {
   type        = bool
-  description = "Would you like to make a new VPC for your ROSA cluster? true or false"
+  default     = true
+  description = "Create a new VPC for the ROSA cluster."
 }
 
 variable "subscription_id" {
   type        = string
-  description = "Azure Subscription ID for your cluster"
+  default     = ""
+  description = "Azure Subscription ID. Required when create_aro is true."
 }
 
-# ROSA Cluster info
 variable "cluster_name" {
-  default     = null
   type        = string
-  description = "The name of the ROSA cluster to create"
+  default     = null
+  description = "The name of the cluster to create."
 }
 
 variable "tags" {
-  default     = {}
-  description = "Additional AWS resource tags"
   type        = map(string)
+  default     = {}
+  description = "Additional AWS resource tags."
 }
 
 variable "multi_az" {
   type        = bool
-  description = "Multi AZ Cluster for High Availability"
   default     = true
+  description = "Multi AZ cluster for high availability."
 }
 
 variable "path" {
-  description = "(Optional) The arn path for the account/operator roles as well as their policies."
   type        = string
   default     = null
+  description = "(Optional) The ARN path for the account/operator roles and their policies."
 }
 
 variable "machine_type" {
-  description = "The AWS instance type used for your default worker pool"
   type        = string
   default     = "m5.xlarge"
+  description = "The AWS instance type for the default worker pool."
 }
 
 variable "worker_node_replicas" {
-  default     = 3
-  description = "Number of worker nodes to provision. Single zone clusters need at least 2 nodes, multizone clusters need at least 3 nodes"
   type        = number
+  default     = 3
+  description = "Number of worker nodes. Single zone clusters need at least 2, multizone need at least 3."
 }
 
 variable "autoscaling_enabled" {
-  description = "Enables autoscaling. This variable requires you to set a maximum and minimum replicas range using the `max_replicas` and `min_replicas` variables."
-  type        = string
-  default     = "false"
+  type        = bool
+  default     = false
+  description = "Enable autoscaling. Requires min_replicas and max_replicas."
 }
 
 variable "min_replicas" {
-  description = "The minimum number of replicas for autoscaling."
   type        = number
   default     = 3
+  description = "Minimum number of replicas for autoscaling."
 }
 
 variable "max_replicas" {
-  description = "The maximum number of replicas not exceeded by the autoscaling functionality."
   type        = number
   default     = 3
+  description = "Maximum number of replicas for autoscaling."
 }
 
 variable "proxy" {
-  default     = null
-  description = "cluster-wide HTTP or HTTPS proxy settings"
   type = object({
-    http_proxy              = string           # required  http proxy
-    https_proxy             = string           # required  https proxy
-    additional_trust_bundle = optional(string) # a string contains contains a PEM-encoded X.509 certificate bundle that will be added to the nodes' trusted certificate store.
-    no_proxy                = optional(string) # no proxy
+    http_proxy              = string
+    https_proxy             = string
+    additional_trust_bundle = optional(string)
+    no_proxy                = optional(string)
   })
+  default     = null
+  description = "Cluster-wide HTTP or HTTPS proxy settings."
 }
 
 variable "aws_subnet_ids" {
-  type        = list(any)
-  description = "A list of either the public or public + private subnet IDs to use for the cluster blocks to use for the cluster"
-  default     = ["subnet-01234567890abcdef", "subnet-01234567890abcdef", "subnet-01234567890abcdef"]
+  type        = list(string)
+  default     = []
+  description = "Subnet IDs to use when create_vpc is false."
 }
-
 
 variable "private_cluster" {
   type        = bool
-  description = "Do you want this cluster to be private? true or false"
+  default     = false
+  description = "Make the cluster private."
 }
 
-#VPC Info
 variable "vpc_name" {
   type        = string
-  description = "VPC Name"
   default     = "poc-andyr-vpc"
+  description = "VPC name."
 }
 
 variable "vpc_cidr_block" {
   type        = string
-  description = "value of the CIDR block to use for the VPC"
   default     = "10.0.0.0/16"
+  description = "CIDR block for the VPC."
 }
 
 variable "private_subnet_cidrs" {
-  type        = list(any)
-  description = "The CIDR blocks to use for the private subnets"
+  type        = list(string)
   default     = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
+  description = "CIDR blocks for private subnets."
 }
 
 variable "public_subnet_cidrs" {
-  type        = list(any)
-  description = "The CIDR blocks to use for the public subnets"
+  type        = list(string)
   default     = ["10.0.101.0/24", "10.0.102.0/24", "10.0.103.0/24"]
+  description = "CIDR blocks for public subnets."
 }
 
 variable "single_nat_gateway" {
   type        = bool
-  description = "Single NAT or per NAT for subnet"
   default     = false
+  description = "Use a single NAT gateway instead of one per subnet."
 }
 
-#AWS Info
 variable "aws_region" {
-  type    = string
-  default = "eu-west-2"
+  type        = string
+  default     = "eu-west-2"
+  description = "AWS region."
 }
 
 variable "default_aws_tags" {
   type        = map(string)
-  description = "Default tags for AWS"
   default     = {}
+  description = "Default tags for AWS resources."
 }
 
 variable "default_azure_tags" {
   type        = map(string)
-  description = "Default tags for Azure"
   default     = {}
+  description = "Default tags for Azure resources."
 }
-
-# Demo pool stuff
 
 variable "deploy_virt_machine_pool" {
   type        = bool
-  description = "Should this deploy a metal node to demo OpenShift virt?"
+  default     = false
+  description = "Deploy a metal node to demo OpenShift Virtualization."
 }
 
 variable "deploy_graviton_machine_pool" {
   type        = bool
-  description = "Should this deploy a graviton node to demo ARM containers on OpenShift?"
+  default     = false
+  description = "Deploy a Graviton node to demo ARM containers on OpenShift."
 }
 
 variable "deploy_lokistack_machine_pool" {
   type        = bool
-  description = "Should this deploy additional nodes to demo OpenShift Logging? Note that this will also make the required policies, roles and bucket to deploy lokistack"
+  default     = false
+  description = "Deploy additional nodes for OpenShift Logging with LokiStack."
 }
 
 variable "deploy_ai_machine_pool" {
   type        = bool
-  description = "Should this deploy additional nodes to demo OpenShift AI?"
+  default     = false
+  description = "Deploy additional nodes for OpenShift AI."
 }
 
 variable "domain" {
   type        = string
-  description = "The domain for the ARO cluster to use"
+  default     = ""
+  description = "Domain for the ARO cluster. Required when create_aro is true."
 }
 
 variable "pull_secret_path" {
   type        = string
   default     = null
-  description = <<EOF
-  Pull Secret for the ARO cluster
-  Default null
-  EOF
+  description = "Path to a pull secret file for the cluster."
 }
 
+variable "gcp_project_id" {
+  type        = string
+  default     = ""
+  description = "GCP project ID. Required when create_osd is true."
+}
+
+variable "osd_cloud_region" {
+  type        = string
+  default     = "us-central1"
+  description = "GCP region for the OSD cluster."
+}
+
+variable "osd_compute_nodes" {
+  type        = number
+  default     = 3
+  description = "Number of compute nodes for the OSD cluster."
+}
+
+variable "osd_compute_machine_type" {
+  type        = string
+  default     = "custom-4-16384"
+  description = "GCP machine type for OSD compute nodes."
+}

@@ -17,11 +17,7 @@ variable "cluster_name" {
 }
 
 variable "tags" {
-  default = {
-    Terraform   = "true"
-    Environment = "dev"
-    TFOwner     = "mobb@redhat.com"
-  }
+  default     = {}
   description = "Additional AWS resource tags"
   type        = map(string)
 }

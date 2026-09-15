@@ -45,3 +45,15 @@ variable "domain" {
   type        = string
   description = "The domain for the ARO cluster to use"
 }
+
+variable "dns_zone_name" {
+  type        = string
+  default     = "azure-emea.mobb.cloud"
+  description = "Azure DNS zone name for cluster DNS records."
+}
+
+variable "dns_zone_resource_group" {
+  type        = string
+  default     = "shared-services"
+  description = "Resource group containing the DNS zone."
+}

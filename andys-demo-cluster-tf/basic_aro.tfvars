@@ -1,4 +1,3 @@
-ack_service                   = ""
 create_vpc                    = false
 deploy_ai_machine_pool        = false
 deploy_graviton_machine_pool  = false

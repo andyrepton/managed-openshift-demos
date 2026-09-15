@@ -23,7 +23,7 @@ module "rosa-ai-machine-pool-gpu-pool" {
     value         = "present",
     schedule_type = "NoSchedule"
   }]
-  replicas = 1
+  replicas = 2
 }
 
 module "rosa-openshift-ai-machine-pool" {
@@ -85,6 +85,30 @@ data "aws_iam_policy_document" "rhoai-oidc" {
 
 resource "aws_s3_bucket" "rhoai-data" {
   bucket = "${var.cluster_name}-rhoai-storage"
+}
+
+resource "aws_s3_bucket_versioning" "rhoai-data" {
+  bucket = aws_s3_bucket.rhoai-data.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "rhoai-data" {
+  bucket = aws_s3_bucket.rhoai-data.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "aws:kms"
+    }
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "rhoai-data" {
+  bucket                  = aws_s3_bucket.rhoai-data.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
 }
 
 resource "aws_s3_bucket_policy" "rhoai-grant-access" {
@@ -177,5 +201,6 @@ output "aws_iam_access_key" {
 }
 
 output "aws_iam_secret_key" {
-  value = aws_iam_access_key.rhoai-access.secret
+  value     = aws_iam_access_key.rhoai-access.secret
+  sensitive = true
 }

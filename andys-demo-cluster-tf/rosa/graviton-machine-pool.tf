@@ -12,7 +12,7 @@ module "rosa-graviton-machine-pool" {
     tags          = var.default_aws_tags
   }
 
-  subnet_id = module.vpc[0].private_subnets[0]
+  subnet_id = local.private_subnet_id
   autoscaling = {
     enabled      = false
     min_replicas = null

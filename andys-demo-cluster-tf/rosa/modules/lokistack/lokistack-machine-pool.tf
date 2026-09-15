@@ -59,6 +59,30 @@ resource "aws_s3_bucket" "loki-data" {
   bucket = "${var.cluster_name}-lokistack-storage"
 }
 
+resource "aws_s3_bucket_versioning" "loki-data" {
+  bucket = aws_s3_bucket.loki-data.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "loki-data" {
+  bucket = aws_s3_bucket.loki-data.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "aws:kms"
+    }
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "loki-data" {
+  bucket                  = aws_s3_bucket.loki-data.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
 resource "aws_s3_bucket_policy" "grant-access" {
   bucket = aws_s3_bucket.loki-data.id
   policy = jsonencode({
@@ -153,7 +177,7 @@ oc create -f - <<EOF
   apiVersion: loki.grafana.com/v1
   kind: LokiStack
   metadata:
-    name: logging-loki 
+    name: logging-loki
     namespace: openshift-logging
   spec:
     size: 1x.demo
@@ -162,8 +186,8 @@ oc create -f - <<EOF
         - effectiveDate: '2023-10-15'
           version: v13
       secret:
-        name: logging-loki-aws 
-        type: s3 
+        name: logging-loki-aws
+        type: s3
         credentialMode: token
     storageClassName: gp3-csi
     tenants:

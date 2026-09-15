@@ -5,10 +5,8 @@ terraform {
       version = ">= 4.20.0"
     }
     rhcs = {
-      version = ">= 1.5.0"
+      version = ">= 1.6.9"
       source  = "terraform-redhat/rhcs"
     }
   }
 }
-
-data "aws_caller_identity" "current" {}

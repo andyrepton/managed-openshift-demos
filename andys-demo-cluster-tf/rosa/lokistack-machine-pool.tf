@@ -5,6 +5,6 @@ module "rosa-lokistack-machine-pool" {
   cluster_name      = local.cluster_name
   openshift_version = var.openshift_version
   tags              = var.default_aws_tags
-  subnet_id         = module.vpc[0].private_subnets[0]
+  subnet_id         = local.private_subnet_id
   aws_region        = var.aws_region
 }

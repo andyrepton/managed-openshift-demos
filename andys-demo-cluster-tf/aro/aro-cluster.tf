@@ -5,7 +5,6 @@ resource "azurerm_redhat_openshift_cluster" "aro" {
   tags                = var.tags
 
   lifecycle {
-    # Ensure cluster is replaced before dependent resources during updates
     create_before_destroy = false
   }
 
@@ -52,16 +51,16 @@ output "console_url" {
 
 resource "azurerm_dns_a_record" "api" {
   name                = "api.${var.cluster_name}"
-  zone_name           = "azure-emea.mobb.cloud"
-  resource_group_name = "shared-services"
+  zone_name           = var.dns_zone_name
+  resource_group_name = var.dns_zone_resource_group
   ttl                 = 300
   records             = [azurerm_redhat_openshift_cluster.aro.api_server_profile[0].ip_address]
 }
 
 resource "azurerm_dns_a_record" "apps" {
   name                = "*.apps.${var.cluster_name}"
-  zone_name           = "azure-emea.mobb.cloud"
-  resource_group_name = "shared-services"
+  zone_name           = var.dns_zone_name
+  resource_group_name = var.dns_zone_resource_group
   ttl                 = 300
   records             = [azurerm_redhat_openshift_cluster.aro.ingress_profile[0].ip_address]
 }
