@@ -91,6 +91,7 @@ Both models require a GPU with at least 24GB VRAM (FP8 quantisation). Running bo
 | ROSA (AWS) | `g7e.2xlarge` | RTX PRO 6000 | 96GB |
 | ARO (Azure) | `Standard_NC24ads_A100_v4` | A100 | 80GB |
 | ARO (Azure) | `Standard_NV36ads_A10_v5` | A10 | 24GB |
+| ARO HCP (Azure) | `Standard_NC40ads_H100_v5` | H100 NVL | 96GB |
 
 ## Installation
 
@@ -104,9 +105,9 @@ cd ../andys-demo-cluster-tf
 terraform apply -var-file=ai_rosa.tfvars
 ```
 
-**ARO:**
+**ARO / ARO HCP:**
 
-Ensure your ARO cluster has a GPU machine pool. Refer to the `aro/` module in `andys-demo-cluster-tf` or create one via the Azure portal.
+Ensure your ARO cluster has a GPU machine pool. For ARO HCP, use `../andys-demo-cluster-tf` with `ai_aro_hcp.tfvars`. Refer to the `aro-hcp/` module or create a GPU node pool via the Azure portal.
 
 ### Step 2: Install Prerequisite Operators
 
@@ -114,6 +115,9 @@ Ensure your ARO cluster has a GPU machine pool. Refer to the `aro/` module in `a
 # cert-manager (required by RHOAI v3)
 oc apply -f cluster-setup/operators/cert-manager.yaml
 oc wait --for=condition=Available deployment -n cert-manager-operator --all --timeout=300s
+
+# Red Hat Connectivity Link (provides Kuadrant + Authorino for MaaS)
+oc apply -f cluster-setup/operators/rhcl.yaml
 
 # Cluster Observability Operator (required for MaaS usage dashboards)
 oc apply -f cluster-setup/operators/cluster-observability-operator.yaml
@@ -281,21 +285,37 @@ oc get llminferenceservice -n claude-code-demo -w
 
 ### Step 8: Register Models and Create User Access
 
-Register the models with MaaS, create a user group, and set up token quotas:
+Register the models with MaaS, create user access, and set up token quotas:
 
 ```bash
 # Register models with MaaS
 oc apply -f maas/model-refs.yaml
 
-# Create auth policy granting access to the user group
+# Create auth policy granting access
 oc apply -f maas/auth-policy.yaml
-
-# Create user group and add yourself
-oc adm groups new claude-code-users
-oc adm groups add-users claude-code-users $(oc whoami)
 
 # Create subscription with token limits
 oc apply -f maas/subscription.yaml
+```
+
+**On ROSA / standard OCP** — create an OpenShift group and add yourself:
+
+```bash
+oc adm groups new claude-code-users
+oc adm groups add-users claude-code-users $(oc whoami)
+```
+
+**On ARO HCP** — OpenShift groups (`oc adm groups`) are not available because ARO HCP uses Entra ID auth. Use the `users` field instead:
+
+```bash
+# Create a ServiceAccount for API key creation
+oc create serviceaccount maas-client -n claude-code-demo
+
+SA_USER="system:serviceaccount:claude-code-demo:maas-client"
+oc patch maasauthpolicy claude-code-demo-auth -n models-as-a-service \
+  --type=merge -p "{\"spec\":{\"subjects\":{\"users\":[\"${SA_USER}\"]}}}"
+oc patch maassubscription claude-code-demo-subscription -n models-as-a-service \
+  --type=merge -p "{\"spec\":{\"owner\":{\"users\":[\"${SA_USER}\"]}}}"
 ```
 
 Verify:
@@ -306,21 +326,40 @@ oc get maasauthpolicies -n models-as-a-service
 oc get maassubscriptions -n models-as-a-service
 ```
 
-Create a MaaS API key (for direct Cursor access):
+Create the MaaS external route and API key:
 
 ```bash
 CLUSTER_DOMAIN=$(oc get ingresses.config.openshift.io cluster -o jsonpath='{.spec.domain}')
-MAAS_API="https://maas.${CLUSTER_DOMAIN}/maas-api"
+sed "s/REPLACE_WITH_CLUSTER_DOMAIN/${CLUSTER_DOMAIN}/" maas/maas-api-external-route.yaml | oc apply -f -
+```
+
+**On ROSA / standard OCP:**
+
+```bash
+MAAS_API="https://maas.${CLUSTER_DOMAIN}"
 
 MAAS_KEY=$(curl -sS \
   -H "Authorization: Bearer $(oc whoami -t)" \
   -H "Content-Type: application/json" \
   -X POST \
-  -d '{
-    "name": "claude-code-key",
-    "description": "API key for Claude Code demo",
-    "subscription": "claude-code-demo-subscription"
-  }' \
+  -d '{"name": "litellm-gateway"}' \
+  "${MAAS_API}/v1/api-keys" | jq -r .key)
+
+echo "Your MaaS API key: $MAAS_KEY"
+echo "Save this — it is only shown once."
+```
+
+**On ARO HCP** — `oc whoami -t` returns no token (client certificate auth). Use a ServiceAccount token instead:
+
+```bash
+MAAS_API="https://maas.${CLUSTER_DOMAIN}"
+SA_TOKEN=$(oc create token maas-client -n claude-code-demo --duration=8760h)
+
+MAAS_KEY=$(curl -sS \
+  -H "Authorization: Bearer ${SA_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -X POST \
+  -d '{"name": "litellm-gateway"}' \
   "${MAAS_API}/v1/api-keys" | jq -r .key)
 
 echo "Your MaaS API key: $MAAS_KEY"
@@ -338,8 +377,10 @@ export LITELLM_KEY="sk-$(openssl rand -hex 24)"
 echo "Your LiteLLM API key: $LITELLM_KEY"
 echo "Save this — you'll need it for Claude Code configuration."
 
+# Create the secret with both the LiteLLM master key and MaaS API key
 oc create secret generic litellm-api-key \
   --from-literal=master-key="$LITELLM_KEY" \
+  --from-literal=maas-api-key="$MAAS_KEY" \
   -n claude-code-demo
 
 oc apply -f litellm-gateway/litellm-config.yaml
@@ -611,7 +652,8 @@ vLLM natively supports the Anthropic Messages API, so Claude Code can connect di
 # Remove LiteLLM gateway
 oc delete -f litellm-gateway/
 
-# Remove MaaS access and timeout fixes
+# Remove MaaS access, external route, and timeout fixes
+oc delete route maas-api-external -n openshift-ingress 2>/dev/null
 oc delete -f maas/subscription.yaml
 oc delete -f maas/auth-policy.yaml
 oc delete -f maas/model-refs.yaml

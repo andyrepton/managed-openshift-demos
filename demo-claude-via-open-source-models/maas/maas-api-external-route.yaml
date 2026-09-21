@@ -1,15 +1,20 @@
+# This Route exposes the MaaS gateway externally so API keys can be created
+# and models can be accessed from outside the cluster.
+#
+# Before applying, set the host to your cluster's domain:
+#
+#   CLUSTER_DOMAIN=$(oc get ingresses.config.openshift.io cluster -o jsonpath='{.spec.domain}')
+#   sed "s/REPLACE_WITH_CLUSTER_DOMAIN/${CLUSTER_DOMAIN}/" maas-api-external-route.yaml | oc apply -f -
+#
 apiVersion: route.openshift.io/v1
 kind: Route
 metadata:
   name: maas-api-external
   namespace: openshift-ingress
   annotations:
-    # Without this, the router's default 30s timeout kills non-streaming requests
-    # waiting for a long model response (504 at exactly 30s). Streaming requests
-    # are unaffected because tokens keep the connection active.
     haproxy.router.openshift.io/timeout: 10m
 spec:
-  host: maas.apps.rosa.poc-andyr.cqul.p3.openshiftapps.com
+  host: maas.REPLACE_WITH_CLUSTER_DOMAIN
   port:
     targetPort: http
   tls:

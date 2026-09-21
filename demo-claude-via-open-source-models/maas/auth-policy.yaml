@@ -12,3 +12,7 @@ spec:
   subjects:
     groups:
       - name: claude-code-users
+    # On ARO HCP, OpenShift groups (oc adm groups) are not available because
+    # ARO HCP uses Entra ID auth. Add users directly instead:
+    # users:
+    #   - system:serviceaccount:claude-code-demo:maas-client

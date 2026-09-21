@@ -4,3 +4,12 @@ metadata:
   name: redhat-ods-applications
   labels:
     maas.opendatahub.io/gateway-access: "true"
+---
+# The model namespace also needs the gateway-access label, otherwise the
+# model's HTTPRoute gets NotAllowedByListeners and MaaS can't route to it.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: claude-code-demo
+  labels:
+    maas.opendatahub.io/gateway-access: "true"

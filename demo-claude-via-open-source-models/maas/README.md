@@ -21,12 +21,13 @@ Cursor ----------------------^
                 (direct, OpenAI API)
 ```
 
-**Important**: MaaS serves OpenAI-compatible endpoints (`/v1/chat/completions`). Claude Code requires the Anthropic Messages API (`/v1/messages`), so LiteLLM is still needed for API translation. Cursor and other OpenAI-compatible tools can connect to MaaS directly.
+**Important**: MaaS supports both OpenAI and Anthropic API formats. Claude Code can connect to MaaS directly, but LiteLLM provides convenient model name aliasing (mapping `claude-opus-5` → `qwen3-8-27b` etc.). Cursor and other OpenAI-compatible tools can connect to MaaS directly.
 
 ## Prerequisites
 
 - RHOAI 3.5+ installed
 - OpenShift 4.19+
+- Red Hat Connectivity Link (RHCL) operator installed (see Step 2, or copy `operator.yaml` to your operator install step)
 - cert-manager operator installed (from base demo)
 - Models downloaded to PVCs (from base demo)
 - cluster-admin access
@@ -41,6 +42,8 @@ oc apply -f monitoring.yaml
 
 ## Step 2: Install Red Hat Connectivity Link
 
+RHCL provides Kuadrant (API gateway policy engine) which MaaS uses for authentication and rate limiting. This is a prerequisite — MaaS will not function without it.
+
 ```bash
 oc apply -f operator.yaml
 
@@ -48,6 +51,8 @@ oc apply -f operator.yaml
 oc get csv -n openshift-operators | grep rhcl
 # Should show "Succeeded"
 ```
+
+> **Note**: A copy of this subscription is also available at `cluster-setup/operators/rhcl.yaml` for use in your operator installation step.
 
 ## Step 3: Create Kuadrant
 
@@ -88,9 +93,9 @@ oc wait --for=condition=Available deployment/postgres \
   -n redhat-ods-applications --timeout=120s
 ```
 
-## Step 6: Label Namespace and Create Gateway
+## Step 6: Label Namespaces and Create Gateway
 
-The MaaS gateway uses namespace selectors — the `redhat-ods-applications` namespace needs the gateway access label:
+The MaaS gateway uses namespace selectors. Both `redhat-ods-applications` **and** the model namespace (`claude-code-demo`) need the gateway access label:
 
 ```bash
 oc apply -f namespace-label.yaml
@@ -101,13 +106,25 @@ oc wait --for=condition=Programmed gateway/maas-default-gateway \
 
 ## Step 7: Enable MaaS in the DataScienceCluster
 
-This adds `modelsAsService` under the `kserve` component:
+Patch the existing DSC to enable the AI Gateway module. RHOAI 3.5 uses `spec.components.aigateway` (the older `kserve.modelsAsService` path is deprecated):
 
 ```bash
-oc apply -f datasciencecluster-maas.yaml
+oc patch datasciencecluster default-dsc --type=merge \
+  -p '{"spec":{"components":{"aigateway":{"managementState":"Managed","modelsAsAService":{"managementState":"Managed"}}}}}'
+```
 
-# Wait for maas-api to start
-oc get deployment maas-api -n redhat-ods-applications -w
+> **Important**: The top-level `aigateway.managementState` MUST be `Managed` — setting only the `modelsAsAService` sub-field is not enough.
+
+Wait for the MaaS API to start:
+
+```bash
+oc get deployment maas-api -n redhat-ai-gateway-infra -w
+```
+
+After RHCL is installed and MaaS is enabled, restart the `llmisvc-controller-manager` so it picks up the new CRDs (it caches CRD discovery at startup):
+
+```bash
+oc rollout restart deployment/llmisvc-controller-manager -n redhat-ods-applications
 ```
 
 ## Step 8: Enable Gen AI Studio in the Dashboard
@@ -124,17 +141,21 @@ MaaS uses `LLMInferenceService` (not `InferenceService`). These are similar to t
 
 ```bash
 # If using MaaS, delete the existing InferenceServices first
-oc delete inferenceservice granite-4-1-30b qwen3-6-27b -n claude-code-demo 2>/dev/null
+oc delete inferenceservice granite-4-1-30b qwen3-8-27b -n claude-code-demo 2>/dev/null
 
 # Deploy as LLMInferenceServices
 oc apply -f ../models/granite-llm-inference-service.yaml
-oc apply -f ../models/qwen-llm-inference-service.yaml
+oc apply -f ../models/qwen3-8-llm-inference-service.yaml
 
 # Wait for models to load
 oc get llminferenceservice -n claude-code-demo -w
 ```
 
+> **baseRef names**: LLMInferenceService requires `baseRefs` pointing to LLMInferenceServiceConfig presets. The available names differ between fresh installs and upgraded clusters — run `oc get llminferenceserviceconfig -A` to check. See the `CLAUDE.md` gotchas section for details.
+
 ## Step 10: Register Models and Create Access Policies
+
+### On ROSA / standard OCP (OpenShift groups available)
 
 ```bash
 # Register models with MaaS
@@ -151,6 +172,29 @@ oc adm groups add-users claude-code-users $(oc whoami)
 oc apply -f subscription.yaml
 ```
 
+### On ARO HCP (OpenShift groups not available)
+
+ARO HCP uses Entra ID authentication — `oc adm groups` is not available. Use the `users` field in both the MaaSAuthPolicy and MaaSSubscription instead:
+
+```bash
+# Register models with MaaS
+oc apply -f model-refs.yaml
+
+# Create a ServiceAccount for API key creation
+oc create serviceaccount maas-client -n claude-code-demo
+
+# Apply auth policy and subscription (edit to uncomment the users field first)
+oc apply -f auth-policy.yaml
+oc apply -f subscription.yaml
+
+# Patch both to add the ServiceAccount as a user
+SA_USER="system:serviceaccount:claude-code-demo:maas-client"
+oc patch maasauthpolicy claude-code-demo-auth -n models-as-a-service \
+  --type=merge -p "{\"spec\":{\"subjects\":{\"users\":[\"${SA_USER}\"]}}}"
+oc patch maassubscription claude-code-demo-subscription -n models-as-a-service \
+  --type=merge -p "{\"spec\":{\"owner\":{\"users\":[\"${SA_USER}\"]}}}"
+```
+
 Verify:
 
 ```bash
@@ -159,47 +203,75 @@ oc get maasauthpolicies -n models-as-a-service
 oc get maassubscriptions -n models-as-a-service
 ```
 
-## Step 11: Create API Keys and Connect
+## Step 11: Create External Route and API Keys
 
-Get the MaaS API endpoint:
+### Create the external route
+
+The MaaS gateway needs an external Route for API key creation and external access:
 
 ```bash
 CLUSTER_DOMAIN=$(oc get ingresses.config.openshift.io cluster -o jsonpath='{.spec.domain}')
-MAAS_API="https://maas.${CLUSTER_DOMAIN}/maas-api"
+sed "s/REPLACE_WITH_CLUSTER_DOMAIN/${CLUSTER_DOMAIN}/" maas-api-external-route.yaml | oc apply -f -
 ```
 
-Create an API key:
+### Create API keys
+
+#### On ROSA / standard OCP
 
 ```bash
+MAAS_API="https://maas.${CLUSTER_DOMAIN}"
+
 API_KEY=$(curl -sS \
   -H "Authorization: Bearer $(oc whoami -t)" \
   -H "Content-Type: application/json" \
   -X POST \
-  -d '{
-    "name": "claude-code-key",
-    "description": "API key for Claude Code demo",
-    "subscription": "claude-code-demo-subscription"
-  }' \
+  -d '{"name": "litellm-gateway"}' \
   "${MAAS_API}/v1/api-keys" | jq -r .key)
 
-echo "Your API key: $API_KEY"
+echo "Your MaaS API key: $API_KEY"
 echo "Save this - it is only shown once."
+```
+
+#### On ARO HCP
+
+ARO HCP uses client certificate auth — `oc whoami -t` returns no token. Create a ServiceAccount token instead:
+
+```bash
+MAAS_API="https://maas.${CLUSTER_DOMAIN}"
+SA_TOKEN=$(oc create token maas-client -n claude-code-demo --duration=8760h)
+
+API_KEY=$(curl -sS \
+  -H "Authorization: Bearer ${SA_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -X POST \
+  -d '{"name": "litellm-gateway"}' \
+  "${MAAS_API}/v1/api-keys" | jq -r .key)
+
+echo "Your MaaS API key: $API_KEY"
+echo "Save this - it is only shown once."
+```
+
+### Store the key in the LiteLLM Secret
+
+```bash
+oc patch secret litellm-api-key -n claude-code-demo \
+  --type=merge -p "{\"stringData\":{\"maas-api-key\":\"${API_KEY}\"}}"
+
+# Restart LiteLLM to pick up the new secret value
+oc rollout restart deployment/litellm-gateway -n claude-code-demo
 ```
 
 ### Connecting Cursor (direct)
 
 ```bash
-MODEL_URL=$(curl -sS "${MAAS_API}/v1/models" \
-  -H "Authorization: Bearer ${API_KEY}" | jq -r '.data[0].url')
-
-echo "Cursor Base URL: ${MODEL_URL}/v1"
+echo "Cursor Base URL: https://maas.${CLUSTER_DOMAIN}/claude-code-demo/qwen3-8-27b/v1"
 echo "Cursor API Key: ${API_KEY}"
-echo "Cursor Model: granite-4-1-30b or qwen3-6-27b"
+echo "Cursor Model: qwen3-8-27b"
 ```
 
 ### Connecting Claude Code (via LiteLLM)
 
-Claude Code requires the Anthropic Messages API. Update LiteLLM's config to route through MaaS endpoints for auth and quota tracking, then connect Claude Code to LiteLLM as normal:
+Claude Code requires the Anthropic Messages API. LiteLLM translates and routes through MaaS for auth and quota tracking:
 
 ```bash
 export ANTHROPIC_BASE_URL="https://$(oc get route litellm-gateway -n claude-code-demo -o jsonpath='{.spec.host}')"
@@ -208,6 +280,19 @@ claude
 ```
 
 ## Troubleshooting
+
+### llmisvc-controller-manager not detecting RHCL CRDs
+
+**Symptom**: LLMInferenceService stays in a degraded state with `AuthPolicy CRD not available` even though RHCL is installed and the AuthPolicy CRD exists.
+
+**Cause**: The `llmisvc-controller-manager` caches CRD discovery at startup. If RHCL was installed after the controller started, it won't see the new CRDs.
+
+**Fix**:
+```bash
+oc rollout restart deployment/llmisvc-controller-manager -n redhat-ods-applications
+```
+
+---
 
 ### Kuadrant Reconciliation Loop Bug (Fixed in v1.5.3)
 
@@ -271,12 +356,13 @@ See the data-science-gateway ConfigMap memory fix in `gateway.yaml` — increase
 | `monitoring.yaml` | Enable User Workload Monitoring |
 | `postgres.yaml` | PostgreSQL deployment, secrets, PVC, service |
 | `gateway.yaml` | MaaS gateway + memory ConfigMap |
-| `namespace-label.yaml` | Gateway access label for redhat-ods-applications |
-| `datasciencecluster-maas.yaml` | DSC with modelsAsService enabled |
+| `namespace-label.yaml` | Gateway access label for redhat-ods-applications + claude-code-demo |
+| `datasciencecluster-maas.yaml` | Instructions for patching DSC to enable MaaS |
+| `maas-api-external-route.yaml` | External Route for MaaS gateway (templated hostname) |
 | `../models/granite-llm-inference-service.yaml` | LLMInferenceService for Granite |
-| `../models/qwen-llm-inference-service.yaml` | LLMInferenceService for Qwen |
+| `../models/qwen3-8-llm-inference-service.yaml` | LLMInferenceService for Qwen |
 | `model-refs.yaml` | MaaSModelRef registrations |
-| `auth-policy.yaml` | MaaSAuthPolicy granting group access |
+| `auth-policy.yaml` | MaaSAuthPolicy granting group/user access |
 | `subscription.yaml` | MaaSSubscription with token limits |
 
 ## References

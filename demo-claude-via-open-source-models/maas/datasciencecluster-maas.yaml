@@ -1,7 +1,11 @@
 # Do NOT apply this file directly — it would overwrite your existing DSC.
-# Instead, patch the existing DataScienceCluster to add modelsAsService:
+# Instead, patch the existing DataScienceCluster to enable MaaS:
+#
+# RHOAI 3.5+ uses the aigateway component (the older kserve.modelsAsService path
+# is deprecated and emits a warning on every apply):
 #
 #   oc patch datasciencecluster default-dsc --type=merge \
-#     -p '{"spec":{"components":{"kserve":{"modelsAsService":{"managementState":"Managed"}}}}}'
+#     -p '{"spec":{"components":{"aigateway":{"managementState":"Managed","modelsAsAService":{"managementState":"Managed"}}}}}'
 #
-# This adds MaaS support under kserve without touching any other components.
+# Note: the top-level aigateway.managementState MUST be set to Managed — setting
+# only the modelsAsAService sub-field is not enough.

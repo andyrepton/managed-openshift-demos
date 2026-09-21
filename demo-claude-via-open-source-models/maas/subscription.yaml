@@ -1,10 +1,12 @@
 # MaaSSubscription grants access to models with token limits.
-# Users in the specified OpenShift groups can create API keys
-# scoped to this subscription.
 #
-# To add users to the group:
+# On ROSA/OCP, add users to an OpenShift group:
 #   oc adm groups new claude-code-users
 #   oc adm groups add-users claude-code-users alice bob charlie
+#
+# On ARO HCP, OpenShift groups are not available (Entra ID auth).
+# Use the users field instead — add individual usernames or ServiceAccount
+# identities (e.g. system:serviceaccount:claude-code-demo:maas-client).
 apiVersion: maas.opendatahub.io/v1alpha1
 kind: MaaSSubscription
 metadata:
@@ -14,6 +16,9 @@ spec:
   owner:
     groups:
       - name: claude-code-users
+    # On ARO HCP, uncomment and add your users here:
+    # users:
+    #   - system:serviceaccount:claude-code-demo:maas-client
   modelRefs:
     - name: granite-4-1-30b
       namespace: claude-code-demo

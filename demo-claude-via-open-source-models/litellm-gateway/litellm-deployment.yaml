@@ -32,6 +32,11 @@ spec:
                 secretKeyRef:
                   name: litellm-api-key
                   key: master-key
+            - name: MAAS_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: litellm-api-key
+                  key: maas-api-key
             - name: LITELLM_REQUEST_TIMEOUT
               value: "180"
             - name: LITELLM_NUM_RETRIES
