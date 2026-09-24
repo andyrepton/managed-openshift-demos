@@ -1,0 +1,36 @@
+apiVersion: policy.open-cluster-management.io/v1
+kind: Policy
+metadata:
+  name: policy-resource-quotas
+  namespace: open-cluster-management
+  annotations:
+    policy.open-cluster-management.io/categories: SC System and Communications Protection
+    policy.open-cluster-management.io/controls: SC-6 Resource Availability
+    policy.open-cluster-management.io/standards: NIST SP 800-53
+spec:
+  remediationAction: enforce
+  disabled: false
+  policy-templates:
+    - objectDefinition:
+        apiVersion: policy.open-cluster-management.io/v1
+        kind: ConfigurationPolicy
+        metadata:
+          name: default-namespace-quota
+        spec:
+          remediationAction: enforce
+          severity: low
+          object-templates:
+            - complianceType: musthave
+              objectDefinition:
+                apiVersion: v1
+                kind: ResourceQuota
+                metadata:
+                  name: default-quota
+                  namespace: default
+                spec:
+                  hard:
+                    pods: "20"
+                    requests.cpu: "4"
+                    requests.memory: 8Gi
+                    limits.cpu: "8"
+                    limits.memory: 16Gi

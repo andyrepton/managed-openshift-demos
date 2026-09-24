@@ -1,0 +1,59 @@
+apiVersion: work.open-cluster-management.io/v1
+kind: ManifestWork
+metadata:
+  name: chatty-app
+  namespace: onprem
+spec:
+  workload:
+    manifests:
+      - apiVersion: v1
+        kind: Namespace
+        metadata:
+          name: chatty-app
+      - apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: chatty-app
+          namespace: chatty-app
+          labels:
+            app: chatty-app
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              app: chatty-app
+          template:
+            metadata:
+              labels:
+                app: chatty-app
+            spec:
+              containers:
+                - name: chatty-app
+                  image: registry.access.redhat.com/ubi9/ubi-minimal:latest
+                  command:
+                    - /bin/bash
+                    - -c
+                    - |
+                      REQUEST_ID=0
+                      while true; do
+                        REQUEST_ID=$((REQUEST_ID + 1))
+                        LATENCY=$((RANDOM % 500 + 10))
+                        CODES=(200 200 200 200 200 201 204 301 400 404 500)
+                        CODE=${CODES[$((RANDOM % ${#CODES[@]}))]}
+                        PATHS=("/api/users" "/api/orders" "/api/products" "/health" "/api/search")
+                        PATH_CHOSEN=${PATHS[$((RANDOM % ${#PATHS[@]}))]}
+                        METHODS=("GET" "GET" "GET" "POST" "PUT")
+                        METHOD=${METHODS[$((RANDOM % ${#METHODS[@]}))]}
+                        echo "{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)\",\"level\":\"info\",\"request_id\":\"req-${REQUEST_ID}\",\"method\":\"${METHOD}\",\"path\":\"${PATH_CHOSEN}\",\"status\":${CODE},\"latency_ms\":${LATENCY}}"
+                        if [ "$CODE" -ge 500 ]; then
+                          echo "{\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)\",\"level\":\"error\",\"request_id\":\"req-${REQUEST_ID}\",\"message\":\"Internal server error\"}" >&2
+                        fi
+                        sleep $((RANDOM % 5 + 1))
+                      done
+                  resources:
+                    requests:
+                      cpu: 10m
+                      memory: 32Mi
+                    limits:
+                      cpu: 50m
+                      memory: 64Mi

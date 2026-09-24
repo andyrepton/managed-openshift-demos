@@ -1,0 +1,12 @@
+apiVersion: cluster.open-cluster-management.io/v1
+kind: ManagedCluster
+metadata:
+  name: onprem
+  labels:
+    name: onprem
+    vendor: OpenShift
+    environment: production
+    location: onprem
+    cloud: Other
+spec:
+  hubAcceptsClient: true
