@@ -1,3 +1,6 @@
+# Sensitive working docs (blog drafts, user feedback, RFEs) kept outside the public repo
+**/private-docs/
+
 *.terraform*
 *terraform.tfstate*
 *.key*

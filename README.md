@@ -25,6 +25,11 @@ In a managed environment, the cloud provider and Red Hat handle the cluster's li
 * **[OpenShift Logging with LokiStack](./demo-openshift-logging):** Deploy LokiStack-based logging on ROSA.
 * **[Multi-Namespace Log & Metrics Forwarding](./demo-multi-namespace-log-metrics-forwarding):** Per-team log/metrics forwarding to New Relic using COO and OpenTelemetry.
 
+### Multi-Cluster & Hybrid
+
+* **[Hybrid Centralized Logging](./demo-hybrid-logging):** Forward logs from an on-prem OpenShift cluster to a ROSA LokiStack for centralized observability.
+* **[Hybrid ACM Management](./demo-hybrid-acm):** Manage an on-prem cluster from a ROSA hub with ACM governance policies, app deployment, and observability.
+
 ### Virtualization & Migration
 
 * **[Deploy a VM with OpenShift Virt](./demo-deploying-a-vm-with-openshift-virt):** VM lifecycle management on managed OpenShift.
