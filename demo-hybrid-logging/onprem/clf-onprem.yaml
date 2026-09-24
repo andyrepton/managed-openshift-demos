@@ -1,0 +1,46 @@
+apiVersion: observability.openshift.io/v1
+kind: ClusterLogForwarder
+metadata:
+  name: collector
+  namespace: openshift-logging
+spec:
+  serviceAccount:
+    name: collector
+  outputs:
+    - name: rosa-loki-application
+      type: loki
+      loki:
+        url: "https://loki-gateway.REPLACE_WITH_ROSA_DOMAIN/api/logs/v1/application"
+        authentication:
+          token:
+            from: secret
+            secret:
+              name: loki-rosa-bearer-token
+              key: token
+      tls:
+        securityProfile:
+          type: Intermediate
+    - name: rosa-loki-infrastructure
+      type: loki
+      loki:
+        url: "https://loki-gateway.REPLACE_WITH_ROSA_DOMAIN/api/logs/v1/infrastructure"
+        authentication:
+          token:
+            from: secret
+            secret:
+              name: loki-rosa-bearer-token
+              key: token
+      tls:
+        securityProfile:
+          type: Intermediate
+  pipelines:
+    - name: application-logs-to-rosa
+      inputRefs:
+        - application
+      outputRefs:
+        - rosa-loki-application
+    - name: infrastructure-logs-to-rosa
+      inputRefs:
+        - infrastructure
+      outputRefs:
+        - rosa-loki-infrastructure
