@@ -12,7 +12,7 @@ variable "aro_openshift_version" {
 
 variable "osd_openshift_version" {
   type        = string
-  default     = "4.18.1"
+  default     = "4.22.13"
   description = "Desired version of OpenShift for the OSD cluster."
 }
 
@@ -26,6 +26,12 @@ variable "create_aro" {
   type        = bool
   default     = false
   description = "Create an ARO cluster."
+}
+
+variable "create_aro_hcp" {
+  type        = bool
+  default     = false
+  description = "Create an ARO HCP cluster with MIWI auth."
 }
 
 variable "create_osd" {
@@ -49,7 +55,25 @@ variable "subscription_id" {
 variable "cluster_name" {
   type        = string
   default     = null
-  description = "The name of the cluster to create."
+  description = "The name of the cluster to create. Used as default for product-specific name variables."
+}
+
+variable "rosa_cluster_name" {
+  type        = string
+  default     = null
+  description = "ROSA cluster name. Defaults to cluster_name if not set."
+}
+
+variable "aro_cluster_name" {
+  type        = string
+  default     = null
+  description = "ARO Classic cluster name. Defaults to cluster_name if not set."
+}
+
+variable "aro_hcp_cluster_name" {
+  type        = string
+  default     = null
+  description = "ARO HCP cluster name. Defaults to cluster_name if not set."
 }
 
 variable "tags" {
@@ -201,6 +225,77 @@ variable "domain" {
   description = "Domain for the ARO cluster. Required when create_aro is true."
 }
 
+variable "aro_hcp_location" {
+  type        = string
+  default     = "uksouth"
+  description = "Azure region for the ARO HCP cluster."
+}
+
+variable "aro_hcp_cluster_version" {
+  type        = string
+  default     = "4.22"
+  description = "OpenShift version stream (MAJOR.MINOR) for the ARO HCP cluster. Patch is managed by the platform."
+}
+
+variable "aro_hcp_node_pool_version" {
+  type        = string
+  default     = "4.22.9"
+  description = "OpenShift version (X.Y.Z) for the ARO HCP node pools."
+}
+
+variable "aro_hcp_node_pools" {
+  description = "ARO HCP node pools keyed by ARM name."
+  type = map(object({
+    vm_size                   = string
+    replicas                  = optional(number, 2)
+    min_replicas              = optional(number)
+    max_replicas              = optional(number)
+    version                   = optional(string)
+    channel                   = optional(string)
+    disk_size_gib             = optional(number)
+    disk_storage_account_type = optional(string)
+    disk_type                 = optional(string)
+    disk_encryption_set       = optional(string)
+    availability_zone         = optional(string)
+    encryption_at_host        = optional(bool)
+    subnet_id                 = optional(string)
+    auto_repair               = optional(bool)
+    node_drain_timeout        = optional(number)
+    labels                    = optional(map(string), {})
+    taints = optional(list(object({
+      key    = string
+      value  = string
+      effect = string
+    })), [])
+    tags = optional(map(string), {})
+  }))
+  default = {
+    np-1 = {
+      vm_size           = "Standard_D4s_v6"
+      replicas          = 2
+      availability_zone = "1"
+    }
+  }
+}
+
+variable "aro_hcp_api_visibility" {
+  type        = string
+  default     = "Public"
+  description = "ARO HCP API visibility: Public or Private."
+}
+
+variable "aro_hcp_ingress_visibility" {
+  type        = string
+  default     = "Public"
+  description = "ARO HCP ingress visibility: Public, Private, or Disabled."
+}
+
+variable "aro_hcp_enable_external_auth" {
+  type        = bool
+  default     = true
+  description = "Configure Entra ID external authentication for ARO HCP console and CLI."
+}
+
 variable "pull_secret_path" {
   type        = string
   default     = null
@@ -213,6 +308,18 @@ variable "gcp_project_id" {
   description = "GCP project ID. Required when create_osd is true."
 }
 
+variable "gcp_project_number" {
+  type        = string
+  default     = ""
+  description = "GCP project number. Required when create_osd is true."
+}
+
+variable "osd_cluster_name" {
+  type        = string
+  default     = null
+  description = "OSD cluster name. Defaults to cluster_name if not set."
+}
+
 variable "osd_cloud_region" {
   type        = string
   default     = "us-central1"
@@ -221,8 +328,8 @@ variable "osd_cloud_region" {
 
 variable "osd_compute_nodes" {
   type        = number
-  default     = 3
-  description = "Number of compute nodes for the OSD cluster."
+  default     = 4
+  description = "Number of compute nodes for the OSD cluster. Minimum 4."
 }
 
 variable "osd_compute_machine_type" {

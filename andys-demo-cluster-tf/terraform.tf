@@ -10,15 +10,33 @@ terraform {
     }
     azuread = {
       source  = "hashicorp/azuread"
-      version = "~>2.43"
+      version = "~> 3.1"
     }
 
     azurerm = {
       source  = "hashicorp/azurerm"
-      version = "~>4.9.0"
+      version = "~> 4.0"
+    }
+    osdgoogle = {
+      source  = "rh-mobb/osd-google"
+      version = ">= 0.0.1"
+    }
+    google = {
+      source  = "hashicorp/google"
+      version = ">= 5.0"
+    }
+    azapi = {
+      source  = "Azure/azapi"
+      version = "~> 2.0"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.6"
     }
   }
 }
+
+provider "osdgoogle" {}
 
 # Export token using the RHCS_TOKEN environment variable
 provider "rhcs" {}
@@ -38,6 +56,17 @@ provider "azurerm" {
     resource_group {
       prevent_deletion_if_contains_resources = false
     }
+    key_vault {
+      purge_soft_delete_on_destroy = true
+    }
   }
   subscription_id = var.subscription_id
 }
+
+provider "azapi" {}
+
+provider "google" {
+  project = var.gcp_project_id
+}
+
+provider "random" {}

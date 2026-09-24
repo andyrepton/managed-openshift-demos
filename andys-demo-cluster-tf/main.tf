@@ -6,7 +6,7 @@ module "rosa" {
   count  = var.create_rosa ? 1 : 0
   source = "./rosa"
 
-  cluster_name                  = var.cluster_name
+  cluster_name                  = coalesce(var.rosa_cluster_name, var.cluster_name)
   openshift_version             = var.rosa_openshift_version
   create_vpc                    = var.create_vpc
   private_cluster               = var.private_cluster
@@ -33,16 +33,32 @@ module "aro" {
   source            = "./aro"
   subscription_id   = var.subscription_id
   domain            = var.domain
-  cluster_name      = var.cluster_name
+  cluster_name      = coalesce(var.aro_cluster_name, var.cluster_name)
   openshift_version = var.aro_openshift_version
   tags              = var.default_azure_tags
   pull_secret       = local.pull_secret
 }
 
+module "aro_hcp" {
+  count  = var.create_aro_hcp ? 1 : 0
+  source = "./aro-hcp"
+
+  cluster_name         = coalesce(var.aro_hcp_cluster_name, var.cluster_name)
+  location             = var.aro_hcp_location
+  cluster_version      = var.aro_hcp_cluster_version
+  node_pool_version    = var.aro_hcp_node_pool_version
+  node_pools           = var.aro_hcp_node_pools
+  api_visibility       = var.aro_hcp_api_visibility
+  ingress_visibility   = var.aro_hcp_ingress_visibility
+  enable_external_auth = var.aro_hcp_enable_external_auth
+  pull_secret_path     = var.pull_secret_path != null ? var.pull_secret_path : ""
+  tags                 = var.default_azure_tags
+}
+
 module "osd" {
   count                = var.create_osd ? 1 : 0
   source               = "./osd"
-  cluster_name         = var.cluster_name
+  cluster_name         = coalesce(var.osd_cluster_name, var.cluster_name)
   openshift_version    = var.osd_openshift_version
   gcp_project_id       = var.gcp_project_id
   cloud_region         = var.osd_cloud_region

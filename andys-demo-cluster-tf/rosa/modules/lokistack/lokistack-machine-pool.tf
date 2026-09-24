@@ -37,13 +37,13 @@ data "aws_iam_policy_document" "lokistack-oidc" {
     condition {
       test     = "StringEquals"
       variable = "${local.oidc_id}:sub"
-      values   = ["system:serviceaccount:openshift-logging:loki"]
+      values   = ["system:serviceaccount:openshift-logging:logging-loki"]
     }
 
     condition {
       test     = "StringEquals"
       variable = "${local.oidc_id}:aud"
-      values   = ["sts.amazonaws.com"]
+      values   = ["openshift"]
     }
 
     principals {
@@ -70,7 +70,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "loki-data" {
   bucket = aws_s3_bucket.loki-data.id
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm = "aws:kms"
+      sse_algorithm = "AES256"
     }
   }
 }
@@ -150,12 +150,32 @@ output "lokistack-output" {
   value = <<LOKIOUT
 
   # Run the following:
+
+  # Create the openshift-operators-redhat namespace and OperatorGroup (required for Loki Operator)
+oc create -f - <<EOF
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: openshift-operators-redhat
+EOF
+
+oc create -f - <<EOF
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: openshift-operators-redhat
+  namespace: openshift-operators-redhat
+spec: {}
+EOF
+
+  # Create the S3 credentials secret
   oc -n openshift-logging create secret generic "logging-loki-aws" \
     --from-literal=bucketnames="${aws_s3_bucket.loki-data.bucket}" \
     --from-literal=region="${var.aws_region}" \
     --from-literal=audience="openshift" \
     --from-literal=role_arn="${aws_iam_role.loki.arn}"
 
+  # Install the Loki Operator
 oc create -f - <<EOF
 apiVersion: operators.coreos.com/v1alpha1
 kind: Subscription
@@ -163,7 +183,7 @@ metadata:
   name: loki-operator
   namespace: openshift-operators-redhat
 spec:
-  channel: "stable-6.0"
+  channel: "stable-6.6"
   name: loki-operator
   source: redhat-operators
   sourceNamespace: openshift-marketplace
@@ -173,63 +193,114 @@ spec:
       value: "${aws_iam_role.loki.arn}"
 EOF
 
+  # Create the LokiStack
 oc create -f - <<EOF
-  apiVersion: loki.grafana.com/v1
-  kind: LokiStack
-  metadata:
-    name: logging-loki
-    namespace: openshift-logging
-  spec:
-    size: 1x.demo
-    storage:
-      schemas:
-        - effectiveDate: '2023-10-15'
-          version: v13
-      secret:
-        name: logging-loki-aws
-        type: s3
-        credentialMode: token
-    storageClassName: gp3-csi
-    tenants:
-      mode: openshift-logging
+apiVersion: loki.grafana.com/v1
+kind: LokiStack
+metadata:
+  name: logging-loki
+  namespace: openshift-logging
+spec:
+  size: 1x.demo
+  storage:
+    schemas:
+      - effectiveDate: '2023-10-15'
+        version: v13
+    secret:
+      name: logging-loki-aws
+      type: s3
+      credentialMode: token
+  storageClassName: gp3-csi
+  tenants:
+    mode: openshift-logging
 EOF
 
+  # Create the openshift-logging OperatorGroup
 oc create -f - <<EOF
-  apiVersion: operators.coreos.com/v1
-  kind: OperatorGroup
-  metadata:
-    name: cluster-logging
-    namespace: openshift-logging
-  spec:
-    targetNamespaces:
-    - openshift-logging
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: cluster-logging
+  namespace: openshift-logging
+spec:
+  targetNamespaces:
+  - openshift-logging
 EOF
 
+  # Install the Cluster Logging Operator
 oc create -f - <<EOF
-  apiVersion: operators.coreos.com/v1alpha1
-  kind: Subscription
-  metadata:
-    name: cluster-logging
-    namespace: openshift-logging
-  spec:
-    channel: "stable"
-    name: cluster-logging
-    source: redhat-operators
-    sourceNamespace: openshift-marketplace
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: cluster-logging
+  namespace: openshift-logging
+spec:
+  channel: "stable-6.6"
+  name: cluster-logging
+  source: redhat-operators
+  sourceNamespace: openshift-marketplace
 EOF
 
+  # Create the collector ServiceAccount and RBAC
+oc -n openshift-logging create serviceaccount collector
+
+  # collect-* roles: allow Vector to read logs from nodes
+oc create clusterrolebinding collect-application-logs \
+  --clusterrole=collect-application-logs \
+  --serviceaccount=openshift-logging:collector
+oc create clusterrolebinding collect-infrastructure-logs \
+  --clusterrole=collect-infrastructure-logs \
+  --serviceaccount=openshift-logging:collector
+oc create clusterrolebinding collect-audit-logs \
+  --clusterrole=collect-audit-logs \
+  --serviceaccount=openshift-logging:collector
+
+  # cluster-logging-write-* roles: allow pushing to Loki gateway (OPA sidecar checks these)
+oc create clusterrolebinding collector-write-application-logs \
+  --clusterrole=cluster-logging-write-application-logs \
+  --serviceaccount=openshift-logging:collector
+oc create clusterrolebinding collector-write-infrastructure-logs \
+  --clusterrole=cluster-logging-write-infrastructure-logs \
+  --serviceaccount=openshift-logging:collector
+oc create clusterrolebinding collector-logs-writer \
+  --clusterrole=logging-collector-logs-writer \
+  --serviceaccount=openshift-logging:collector
+
+  # Create the ClusterLogForwarder
 oc create -f - <<EOF
-  apiVersion: "logging.openshift.io/v1"
-  kind: "ClusterLogging"
-  metadata:
-    name: "instance"
-    namespace: "openshift-logging"
-  spec:
-    managementState: "Managed"
-    logStore:
-      type: "lokistack"
-      lokistack:
-        name: logging-loki
+apiVersion: observability.openshift.io/v1
+kind: ClusterLogForwarder
+metadata:
+  name: collector
+  namespace: openshift-logging
+spec:
+  serviceAccount:
+    name: collector
+  outputs:
+    - name: loki-output
+      type: lokiStack
+      lokiStack:
+        target:
+          name: logging-loki
+          namespace: openshift-logging
+        authentication:
+          token:
+            from: serviceAccount
+      tls:
+        ca:
+          configMapName: openshift-service-ca.crt
+          key: service-ca.crt
+  pipelines:
+    - name: application-logs
+      inputRefs:
+        - application
+      outputRefs:
+        - loki-output
+    - name: infrastructure-logs
+      inputRefs:
+        - infrastructure
+      outputRefs:
+        - loki-output
 EOF
 
   LOKIOUT

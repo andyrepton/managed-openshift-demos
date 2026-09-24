@@ -14,16 +14,17 @@ variable "gcp_project_id" {
   description = "GCP project ID."
 }
 
+
 variable "openshift_version" {
   type        = string
-  default     = "4.18.1"
+  default     = "4.22.13"
   description = "OpenShift version for the OSD cluster."
 }
 
 variable "compute_nodes" {
   type        = number
-  default     = 3
-  description = "Number of compute nodes."
+  default     = 4
+  description = "Number of compute nodes. Minimum 4."
 }
 
 variable "compute_machine_type" {

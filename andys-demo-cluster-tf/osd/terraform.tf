@@ -1,10 +1,12 @@
 terraform {
   required_providers {
     osdgoogle = {
-      source = "terraform-redhat/osdgoogle"
+      source  = "rh-mobb/osd-google"
+      version = ">= 0.0.1"
+    }
+    google = {
+      source  = "hashicorp/google"
+      version = ">= 5.0"
     }
   }
 }
-
-# Set the OCM_TOKEN environment variable for authentication
-provider "osdgoogle" {}

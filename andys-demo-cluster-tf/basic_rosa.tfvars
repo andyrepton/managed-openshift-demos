@@ -5,5 +5,7 @@ deploy_lokistack_machine_pool = false
 deploy_virt_machine_pool      = false
 private_cluster               = false
 
+rosa_cluster_name = "poc-andyr1"
+
 create_aro  = false
 create_rosa = true
