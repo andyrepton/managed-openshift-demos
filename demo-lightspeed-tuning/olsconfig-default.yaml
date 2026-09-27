@@ -1,0 +1,30 @@
+apiVersion: ols.openshift.io/v1alpha1
+kind: OLSConfig
+metadata:
+  name: cluster
+spec:
+  llm:
+    providers:
+      - name: rhoai-maas
+        type: openai
+        # MaaS gateway endpoint on the RHOAI cluster (OpenAI-compatible API)
+        url: REPLACE_ME
+        credentialsSecretRef:
+          name: llm-credentials
+        models:
+          - name: REPLACE_ME
+            contextWindowSize: 32768
+            parameters:
+              maxTokensForResponse: 2048
+  ols:
+    defaultModel: REPLACE_ME
+    defaultProvider: rhoai-maas
+    logLevel: INFO
+    introspectionEnabled: true
+    conversationCache:
+      type: postgres
+      postgres:
+        sharedBuffers: 256MB
+        maxConnections: 2000
+  featureGates:
+    - name: MCPServer

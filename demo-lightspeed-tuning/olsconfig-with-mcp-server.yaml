@@ -1,0 +1,93 @@
+apiVersion: ols.openshift.io/v1alpha1
+kind: OLSConfig
+metadata:
+  name: cluster
+  namespace: openshift-lightspeed
+spec:
+  llm:
+    providers:
+      - name: rhoai-maas
+        type: openai
+        url: REPLACE_ME
+        credentialsSecretRef:
+          name: llm-credentials
+        models:
+          - name: REPLACE_ME
+            contextWindowSize: 32768
+            parameters:
+              maxTokensForResponse: 4096
+              toolBudgetRatio: 0.3
+  ols:
+    defaultModel: REPLACE_ME
+    defaultProvider: rhoai-maas
+    logLevel: INFO
+    querySystemPrompt: |
+      You are an expert OpenShift administrator assistant running inside an OpenShift cluster.
+      You have access to tools that can query the cluster's Kubernetes API and external services.
+
+      When the user asks about cluster state (pods, nodes, deployments, routes, etc.),
+      ALWAYS use the available tools to get live data rather than answering from memory.
+
+      When making tool calls:
+      - Use the correct API group and version for each resource kind.
+      - Prefer 'get' for specific resources and 'list' for collections.
+      - For namespaced resources, always specify the namespace.
+      - Chain multiple tool calls when needed (e.g. list pods, then describe a failing one).
+      - If a tool call fails, explain the error and try an alternative approach.
+      - Use external MCP tools when the question involves data outside the cluster.
+
+      Keep answers concise and actionable. Include relevant `oc` commands the user
+      can run themselves when appropriate.
+    maxIterations: 10
+    introspectionEnabled: true
+    mcpKubeServerConfig:
+      timeout: 120
+    toolFilteringConfig:
+      alpha: 0.6
+      topK: 15
+      threshold: 0.005
+    toolsApprovalConfig:
+      approvalType: tool_annotations
+      approvalTimeout: 300
+    conversationCache:
+      type: postgres
+      postgres:
+        sharedBuffers: 256MB
+        maxConnections: 2000
+  # External MCP servers give Lightspeed tools beyond the built-in Kubernetes API.
+  # Each server exposes tools via the Model Context Protocol (MCP) over HTTP+SSE.
+  # Lightspeed discovers available tools at startup and offers them to the LLM.
+  mcpServers:
+    # Example: external monitoring MCP server (e.g. Prometheus, Datadog, PagerDuty)
+    - name: monitoring
+      url: https://mcp-monitoring.apps.example.com/sse
+      timeout: 30
+      headers:
+        # Auth via a secret containing an API token
+        - name: Authorization
+          valueFrom:
+            type: secret
+            secretRef:
+              name: external-mcp-credentials
+    # Example: internal MCP server using a Kubernetes service account token
+    # Useful for MCP servers running inside the cluster
+    - name: internal-tools
+      url: https://my-mcp-server.my-namespace.svc:8443/sse
+      timeout: 10
+      headers:
+        - name: Authorization
+          valueFrom:
+            type: kubernetes
+    # Example: client token passthrough
+    # Forwards the end user's OpenShift token to the MCP server
+    # The MCP server can then make API calls as that user
+    - name: user-context
+      url: https://mcp-user-tools.apps.example.com/sse
+      timeout: 10
+      headers:
+        - name: Authorization
+          valueFrom:
+            type: client
+  featureGates:
+    - name: MCPServer
+    - name: ToolFiltering
