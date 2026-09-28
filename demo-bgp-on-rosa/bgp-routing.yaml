@@ -1,0 +1,9 @@
+apiVersion: networking.openshift.io/v1beta1
+kind: BGPRouting
+metadata:
+  name: bgp-demo-network
+spec:
+  network:
+    name: bgp-demo-network
+    subnets:
+      - 10.100.0.0/16

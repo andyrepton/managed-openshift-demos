@@ -1,0 +1,51 @@
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: bgp-test-vm
+  namespace: bgp-demo
+  labels:
+    app: bgp-test-vm
+spec:
+  runStrategy: Always
+  template:
+    metadata:
+      labels:
+        app: bgp-test-vm
+    spec:
+      nodeSelector:
+        bgp_router: "true"
+      domain:
+        resources:
+          requests:
+            memory: 1Gi
+        devices:
+          disks:
+            - name: containerdisk
+              disk:
+                bus: virtio
+            - name: cloudinitdisk
+              disk:
+                bus: virtio
+          interfaces:
+            - name: default
+              masquerade: {}
+      networks:
+        - name: default
+          pod: {}
+      volumes:
+        - name: containerdisk
+          containerDisk:
+            image: quay.io/containerdisks/fedora:latest
+        - name: cloudinitdisk
+          cloudInitNoCloud:
+            userData: |
+              #cloud-config
+              password: fedora
+              chpasswd:
+                expire: false
+              packages:
+                - httpd
+              runcmd:
+                - systemctl enable httpd
+                - systemctl start httpd
+                - echo 'BGP Direct Routing Demo - Fedora VM on OpenShift (CUDN 10.100.0.0/16)' > /var/www/html/index.html
