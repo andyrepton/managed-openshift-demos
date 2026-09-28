@@ -88,4 +88,4 @@ This is an ever-growing repository. If you find a bug or have a suggestion for a
 -----
 
 *Maintained by [Andy Repton](https://github.com/andyrepton)*
-*Some README files in this repository have been generated and/or edited by AI assistants. All code has been created by the author.*
+*Some files in this repository have been co-authored with [Claude](https://claude.ai), Anthropic's AI assistant.*
