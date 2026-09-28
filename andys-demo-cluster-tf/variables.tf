@@ -219,6 +219,12 @@ variable "deploy_ai_machine_pool" {
   description = "Deploy additional nodes for OpenShift AI."
 }
 
+variable "deploy_bgp" {
+  type        = bool
+  default     = false
+  description = "Deploy AWS VPC Route Server and IAM resources for BGP routing."
+}
+
 variable "domain" {
   type        = string
   default     = ""

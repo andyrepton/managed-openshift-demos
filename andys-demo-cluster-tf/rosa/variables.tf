@@ -152,3 +152,27 @@ variable "properties" {
   default     = {}
   description = "Extra properties for ROSA."
 }
+
+variable "deploy_bgp" {
+  type        = bool
+  default     = false
+  description = "Deploy AWS VPC Route Server and IAM resources for BGP routing."
+}
+
+variable "bgp_route_server_asn" {
+  type        = string
+  default     = "65000"
+  description = "ASN for the AWS VPC Route Server."
+}
+
+variable "bgp_operator_namespace" {
+  type        = string
+  default     = "openshift-bgp-cloud-connector"
+  description = "Namespace for the bgp-cloud-connector operator."
+}
+
+variable "bgp_operator_service_account" {
+  type        = string
+  default     = "openshift-bgp-cloud-connector-controller-manager"
+  description = "Service account for the bgp-cloud-connector operator."
+}

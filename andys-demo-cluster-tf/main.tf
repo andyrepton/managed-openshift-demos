@@ -26,6 +26,7 @@ module "rosa" {
   deploy_graviton_machine_pool  = var.deploy_graviton_machine_pool
   deploy_lokistack_machine_pool = var.deploy_lokistack_machine_pool
   deploy_virt_machine_pool      = var.deploy_virt_machine_pool
+  deploy_bgp                    = var.deploy_bgp
 }
 
 module "aro" {

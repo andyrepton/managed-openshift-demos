@@ -27,3 +27,19 @@ output "osd_console_url" {
   value = var.create_osd ? module.osd[0].console_url : ""
 }
 
+output "bgp_iam_role_arn" {
+  value = var.create_rosa && var.deploy_bgp ? module.rosa[0].bgp_iam_role_arn : ""
+}
+
+output "bgp_route_server_id" {
+  value = var.create_rosa && var.deploy_bgp ? module.rosa[0].bgp_route_server_id : ""
+}
+
+output "bgp_route_server_asn" {
+  value = var.create_rosa && var.deploy_bgp ? module.rosa[0].bgp_route_server_asn : ""
+}
+
+output "bgp_endpoint_ips" {
+  value = var.create_rosa && var.deploy_bgp ? module.rosa[0].bgp_endpoint_ips : []
+}
+

@@ -3,7 +3,7 @@ data "aws_availability_zones" "available" {}
 locals {
   region_azs           = var.multi_az ? slice([for zone in data.aws_availability_zones.available.names : format("%s", zone)], 0, 3) : slice([for zone in data.aws_availability_zones.available.names : format("%s", zone)], 0, 1)
   path                 = coalesce(var.path, "/")
-  worker_node_replicas = var.multi_az ? 3 : 2
+  worker_node_replicas = var.worker_node_replicas
   cluster_name         = coalesce(var.cluster_name, "rosa-${random_string.random_name.result}")
   private_subnet_id    = var.create_vpc ? module.vpc[0].private_subnets[0] : var.aws_subnet_ids[0]
 }
@@ -16,7 +16,7 @@ resource "random_string" "random_name" {
 
 module "rosa-hcp" {
   source                 = "terraform-redhat/rosa-hcp/rhcs"
-  version                = "1.6.3"
+  version                = "1.7.5"
   cluster_name           = local.cluster_name
   openshift_version      = var.openshift_version
   account_role_prefix    = local.cluster_name
