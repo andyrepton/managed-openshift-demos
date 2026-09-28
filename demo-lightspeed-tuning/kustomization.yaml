@@ -5,3 +5,4 @@ resources:
   - operator.yaml
   - credentials-secret.yaml
   - olsconfig-tuned.yaml
+  - rbac.yaml

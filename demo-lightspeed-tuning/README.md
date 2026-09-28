@@ -51,6 +51,9 @@ oc apply -f credentials-secret.yaml
 #   - Set model name to match the deployed model
 #   - Adjust contextWindowSize to match your model's context length
 oc apply -f olsconfig-tuned.yaml
+
+# Grant users access — edit rbac.yaml first to set your AD group names
+oc apply -f rbac.yaml
 ```
 
 A minimal default config is also provided in `olsconfig-default.yaml` for comparison.
@@ -59,11 +62,33 @@ A minimal default config is also provided in `olsconfig-default.yaml` for compar
 
 - `operator.yaml` — Namespace, operator group, and subscription
 - `credentials-secret.yaml` — MaaS / RHOAI inference endpoint token (replace REPLACE_ME)
+- `rbac.yaml` — ClusterRoleBinding to grant users/groups access to Lightspeed
 - `olsconfig-default.yaml` — Minimal baseline config with defaults
 - `olsconfig-tuned.yaml` — Tuned config with improved tool calling
 - `olsconfig-with-mcp-server.yaml` — Tuned config with external MCP server examples
 - `mcp-server-secret.yaml` — Credentials for external MCP servers (replace REPLACE_ME)
 - `kustomization.yaml` — Kustomize overlay using tuned config
+
+## RBAC — Granting User Access
+
+The Lightspeed operator creates a `lightspeed-operator-ols-user` ClusterRole but does **not** bind it to any users or groups by default. Without a binding, users get:
+
+> You do not have sufficient permissions to access OpenShift Lightspeed.
+
+Edit `rbac.yaml` to add your AD group names, then apply:
+
+```bash
+# Set the AD group name(s) in rbac.yaml, then:
+oc apply -f rbac.yaml
+
+# Verify the binding exists
+oc get clusterrolebindings | grep lightspeed
+
+# Check available ClusterRoles from the operator
+oc get clusterroles | grep lightspeed
+```
+
+To grant access to multiple AD groups, duplicate the `ClusterRoleBinding` block in `rbac.yaml` for each group. To grant access to all authenticated users instead, uncomment the `system:authenticated` binding in the same file.
 
 ## Switching Between Configs
 
