@@ -372,11 +372,17 @@ pods/VMs are allowed to use the NetworkAttachmentDefinition.
 - The OpenVPN `server-bridge` directive assigns IPs from the 192.168.100.10-20
   range to connecting clients, so Cluster B's hub gets 192.168.100.10
   automatically
-- Both hubs run FDB discovery loops to find their local spoke nodes
+- Both hubs run FDB discovery loops every 30s to find their local spoke
+  nodes and remove stale entries for nodes that no longer run spokes
 - The hub scripts automatically clean up stale interfaces (tap0, br-hub,
   vxlan-hub) from previous hostNetwork runs and strip the IP that OpenVPN
   assigns to tap0 (since tap0 is a bridge slave, its IP conflicts with
   br-hub routing)
+- Hub deployments use `strategy: type: Recreate` because hostNetwork pods
+  bind port 1194 directly — a RollingUpdate would fail with "Address already
+  in use" when the new pod starts before the old one terminates
+- OpenVPN runs in the foreground (not with `--daemon`) because daemonized
+  OpenVPN silently exits in containers
 - For production use, consider adding tls-crypt to the OpenVPN config for
   additional security
 - MTU should be set to 1350 on the VM secondary NICs to account for
