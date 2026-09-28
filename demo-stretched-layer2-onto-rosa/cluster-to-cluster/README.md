@@ -283,15 +283,100 @@ virtctl console workstation-cluster-a -n industrial-spoke
 # Inside VM: ping 192.168.100.52
 ```
 
+## Connecting a pod to the L2 bridge
+
+You don't need a VM to use the stretched L2 network. Any pod on a spoke
+node can join the bridge using a Multus NetworkAttachmentDefinition.
+
+### 1. Create the NAD (if not already done)
+
+```bash
+oc apply -f vm-test/network-attachment-definition.yaml
+```
+
+This creates a bridge CNI attachment called `industrial-bridge-network` that
+connects to `br-spoke`.
+
+### 2. Add the annotation to your pod
+
+Add a Multus annotation and a static IP in the 192.168.100.0/24 range:
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: l2-test
+  namespace: industrial-spoke
+  annotations:
+    k8s.v1.cni.cncf.io/networks: |
+      [{"name": "industrial-bridge-network",
+        "ips": ["192.168.100.61/24"]}]
+spec:
+  nodeSelector:
+    industrial-role: spoke
+  containers:
+  - name: tools
+    image: registry.access.redhat.com/ubi9/ubi-minimal:latest
+    command: ["sleep", "infinity"]
+```
+
+The pod gets a secondary interface (`net1`) on `br-spoke` with the specified
+IP. It can reach any other device on the 192.168.100.0/24 network across
+both clusters.
+
+### 3. Test connectivity
+
+```bash
+oc exec -n industrial-spoke l2-test -- curl -s http://192.168.100.52
+```
+
+**Important:** The pod must run on a node labeled `industrial-role: spoke`
+where the spoke DaemonSet has created `br-spoke`. If the bridge doesn't
+exist, the pod will fail to start.
+
+## Security considerations
+
+### hostNetwork and privileged pods
+
+The hub and spoke pods use `hostNetwork: true` and `privileged: true`:
+
+- **Full host network access** — the pod shares the node's network
+  namespace. It can see all host interfaces, bind any port, and observe
+  traffic on the node. Network Policies do not apply.
+- **Privileged escalation** — the pod can modify kernel parameters
+  (rp_filter, ip_forward), create/delete network interfaces, and
+  manipulate iptables rules on the node.
+- **Blast radius** — a compromised hub or spoke pod has root-level network
+  access to the node and can intercept or inject traffic on the L2 bridge.
+
+### Mitigations
+
+- Run hub and spoke pods in a dedicated namespace with strict RBAC.
+- Use a dedicated service account (`industrial-admin`) with only the
+  permissions it needs (pod list for FDB discovery).
+- Restrict which nodes can run these pods using `nodeSelector` labels —
+  only label nodes that need L2 connectivity.
+- Use OpenVPN `tls-crypt` for additional tunnel security.
+- On the VPN server, restrict inbound source IPs to the client cluster's
+  NAT gateway addresses.
+
+### L2 bridge exposure
+
+Any pod or VM attached to `br-spoke` via Multus has direct L2 access to the
+entire stretched network, including devices on the remote cluster. There is
+no network policy enforcement on bridge traffic — isolation relies on which
+pods/VMs are allowed to use the NetworkAttachmentDefinition.
+
 ## Notes
 
 - The OpenVPN `server-bridge` directive assigns IPs from the 192.168.100.10-20
   range to connecting clients, so Cluster B's hub gets 192.168.100.10
   automatically
 - Both hubs run FDB discovery loops to find their local spoke nodes
-- The hub scripts automatically clean up stale bridge interfaces from previous
-  hostNetwork runs and strip the IP that OpenVPN assigns to tap0 (since tap0 is
-  a bridge slave, its IP conflicts with br-hub routing)
+- The hub scripts automatically clean up stale interfaces (tap0, br-hub,
+  vxlan-hub) from previous hostNetwork runs and strip the IP that OpenVPN
+  assigns to tap0 (since tap0 is a bridge slave, its IP conflicts with
+  br-hub routing)
 - For production use, consider adding tls-crypt to the OpenVPN config for
   additional security
 - MTU should be set to 1350 on the VM secondary NICs to account for

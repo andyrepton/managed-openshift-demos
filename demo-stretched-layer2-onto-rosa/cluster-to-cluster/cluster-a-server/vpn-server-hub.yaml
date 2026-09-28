@@ -5,6 +5,8 @@ metadata:
   namespace: industrial-network
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: industrial-hub
@@ -27,6 +29,7 @@ spec:
         args:
           - |
             # 1. Clean up stale interfaces from previous hostNetwork runs
+            ip link delete tap0 2>/dev/null
             ip link delete br-hub 2>/dev/null
             ip link delete vxlan-hub 2>/dev/null
 
@@ -83,14 +86,26 @@ spec:
                     echo "FDB entry ensured for spoke at $IP"
                   fi
                 done
+
+                # Remove FDB entries for nodes that no longer run spokes
+                CURRENT_FDB=$(bridge fdb show dev vxlan-hub | grep "00:00:00:00:00:00" | grep -oP 'dst \K\S+')
+                for FDB_IP in $CURRENT_FDB; do
+                  FOUND=false
+                  for IP in $SPOKE_IPS; do
+                    [ "$IP" = "$FDB_IP" ] && FOUND=true && break
+                  done
+                  if [ "$FOUND" = "false" ]; then
+                    bridge fdb del 00:00:00:00:00:00 dev vxlan-hub dst $FDB_IP 2>/dev/null
+                    echo "Removed stale FDB entry for $FDB_IP"
+                  fi
+                done
                 sleep 30
               done
             ) &
 
-            # 7. Start OpenVPN SERVER
-            openvpn --config /etc/openvpn/config/server.conf --daemon
+            # 7. Start OpenVPN SERVER (foreground — --daemon silently dies in containers)
             echo "HUB READY (VPN SERVER) - IP 192.168.100.1"
-            tail -f /dev/null
+            openvpn --config /etc/openvpn/config/server.conf
         volumeMounts:
         - name: vpn-config
           mountPath: /etc/openvpn/config
