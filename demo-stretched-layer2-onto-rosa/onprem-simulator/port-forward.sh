@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-# Run this on the Hetzner HOST to forward UDP 1194 from the public IP
+# Run this on the on-prem HOST to forward UDP 1194 from the public IP
 # to the factory simulator VM. Only needed if the VM is on a NAT bridge.
 #
 # If the VM is directly on a routable bridge (e.g., a public subnet bridge),

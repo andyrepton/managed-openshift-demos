@@ -1,8 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
-# Factory Simulator VM — runs as a KVM guest on Hetzner so we don't
-# touch the host networking. Creates a lightweight Fedora cloud VM
+# Factory Simulator VM — runs as a KVM guest on the on-prem server so we
+# don't touch the host networking. Creates a lightweight Fedora cloud VM
 # with OpenVPN TAP server + bridge + simulated factory device.
 
 # --- Configuration ---

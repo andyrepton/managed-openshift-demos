@@ -196,15 +196,15 @@ bash reset_lab.sh
    ping 192.168.100.1
    ```
 
-## Hetzner real-world test
+## On-prem real-world test
 
-Runs the factory simulator as a KVM VM on the Hetzner box, keeping the host
+Runs the factory simulator as a KVM VM on the on-prem server, keeping the host
 networking untouched.
 
-### On the Hetzner server
+### On the on-prem server
 
 ```bash
-cd hetzner-simulator
+cd onprem-simulator
 
 # Set HOST_BRIDGE to the bridge with external connectivity (default: virbr0)
 export HOST_BRIDGE=virbr0
@@ -222,15 +222,15 @@ sudo bash port-forward.sh <VM_IP>
 ### On the ROSA cluster
 
 ```bash
-# Create the cert secret using the PKI generated on Hetzner
-# (copy pki/ dir from Hetzner, or scp the individual files)
+# Create the cert secret using the PKI generated on the on-prem server
+# (copy pki/ dir from on-prem, or scp the individual files)
 oc create secret generic factory-vpn-auth \
   --from-file=ca.crt=ca.crt \
   --from-file=client.crt=client.crt \
   --from-file=client.key=client.key \
   -n industrial-network
 
-# Edit vpn-auth-secret.yaml: set 'remote' to the Hetzner public IP
+# Edit vpn-auth-secret.yaml: set 'remote' to the on-prem server's public IP
 # Then deploy everything as in the deployment section above
 ```
 
@@ -255,7 +255,7 @@ virtctl console fedora-test-station -n industrial-spoke
 
 See [cluster-to-cluster/](cluster-to-cluster/) for a variant that connects
 two OpenShift clusters at Layer 2 using the same architecture. Tested with
-Hetzner bare-metal OpenShift (VPN server) and ROSA HCP (VPN client) at ~18ms
+on-prem bare-metal OpenShift (VPN server) and ROSA HCP (VPN client) at ~18ms
 cross-cluster latency.
 
 ## Known issues and workarounds

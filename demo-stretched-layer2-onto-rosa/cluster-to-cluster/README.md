@@ -101,7 +101,7 @@ this port externally depending on your platform (see next section).
 The hub pod listens on UDP 1194 on the host network. How you expose this to
 the internet depends on where Cluster A runs:
 
-**On-prem / Hetzner (with a public IP on the host or a gateway)**
+**On-prem (with a public IP on the host or a gateway)**
 
 If your hub node is behind a gateway or hypervisor, use iptables DNAT to
 forward traffic from the public IP to the hub node's internal IP:
@@ -114,8 +114,8 @@ iptables -t nat -A POSTROUTING -d <HUB_NODE_IP> -p udp --dport 1194 \
   -j MASQUERADE
 ```
 
-See the [Hetzner Firewall Setup](#hetzner-firewall-setup) section below for
-the full set of firewall rules needed on a Hetzner bare-metal host.
+See the [On-Prem Firewall Setup](#on-prem-firewall-setup) section below for
+the full set of firewall rules needed on a bare-metal host.
 
 **Self-managed OpenShift on AWS (non-HCP)**
 
@@ -183,11 +183,11 @@ oc apply -f vm-test/linux-vm-cluster-b.yaml
 If either cluster runs on AWS, disable the source/dest check on all worker
 nodes in the EC2 console.
 
-## Hetzner Firewall Setup
+## On-Prem Firewall Setup
 
-When running Cluster A on a Hetzner bare-metal server with OpenShift inside
-KVM VMs, the following firewall configuration is needed on the **Hetzner host**
-to allow inbound VPN traffic to reach the OpenShift hub node.
+When running Cluster A on a bare-metal server with OpenShift inside KVM VMs,
+the following firewall configuration is needed on the **host** to allow
+inbound VPN traffic to reach the OpenShift hub node.
 
 ### 1. Open UDP 1194 in firewalld
 
@@ -214,11 +214,11 @@ firewall-cmd --reload
 
 ### 3. Add iptables DNAT rules
 
-Forward traffic from the Hetzner public IP to the OpenShift node running the
+Forward traffic from the server's public IP to the OpenShift node running the
 hub pod:
 
 ```bash
-iptables -t nat -A PREROUTING -d <HETZNER_PUBLIC_IP> -p udp --dport 1194 \
+iptables -t nat -A PREROUTING -d <SERVER_PUBLIC_IP> -p udp --dport 1194 \
   -j DNAT --to-destination <HUB_NODE_IP>:1194
 iptables -t nat -A POSTROUTING -d <HUB_NODE_IP> -p udp --dport 1194 \
   -j MASQUERADE
@@ -252,7 +252,7 @@ cluster's NAT gateway IPs:
 ```bash
 # Find the NAT gateway IPs (for ROSA, check the VPC NAT gateways in the AWS console)
 iptables -t nat -R PREROUTING <rule-num> -s <NAT_GW_IP_1>,<NAT_GW_IP_2>,<NAT_GW_IP_3> \
-  -d <HETZNER_PUBLIC_IP> -p udp --dport 1194 -j DNAT --to-destination <HUB_NODE_IP>:1194
+  -d <SERVER_PUBLIC_IP> -p udp --dport 1194 -j DNAT --to-destination <HUB_NODE_IP>:1194
 ```
 
 ### Making iptables rules persistent
