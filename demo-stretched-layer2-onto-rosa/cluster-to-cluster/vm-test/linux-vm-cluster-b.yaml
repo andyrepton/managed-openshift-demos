@@ -1,7 +1,7 @@
 apiVersion: kubevirt.io/v1
 kind: VirtualMachine
 metadata:
-  name: fedora-test-station
+  name: workstation-cluster-b
   namespace: industrial-spoke
 spec:
   running: true
@@ -15,7 +15,7 @@ spec:
             - name: default
               masquerade: {}
             - name: industrial-net
-              bridge: {} # Plugs into br-spoke via Multus
+              bridge: {}
         resources:
           requests:
             memory: 2Gi
@@ -36,7 +36,19 @@ spec:
               #cloud-config
               password: fedora
               chpasswd: { expire: False }
+              write_files:
+                - path: /etc/NetworkManager/system-connections/industrial.nmconnection
+                  permissions: '0600'
+                  content: |
+                    [connection]
+                    id=industrial
+                    type=ethernet
+                    interface-name=enp2s0
+                    [ipv4]
+                    method=manual
+                    addresses=192.168.100.52/24
+                    [ipv6]
+                    method=disabled
               runcmd:
-                # eth1 is usually the second interface (Multus)
-                - ip addr add 192.168.100.51/24 dev eth1
-                - ip link set eth1 up
+                - nmcli con reload
+                - nmcli con up industrial

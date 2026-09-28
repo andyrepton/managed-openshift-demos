@@ -1,0 +1,298 @@
+# Stretched Layer 2 — Cluster to Cluster
+
+Connect two OpenShift clusters at Layer 2 so VMs on both clusters share the
+same broadcast domain. Uses OpenVPN TAP + VXLAN architecture — both endpoints
+are OpenShift clusters.
+
+## Architecture
+
+```
+CLUSTER A (VPN Server, on-prem)              CLUSTER B (VPN Client, cloud)
+================================             ================================
+
+[ hub node ]                                 [ hub node ]
+  [ Hub Pod — hostNetwork ]                    [ Hub Pod — hostNetwork ]
+    br-hub (192.168.100.1)                       br-hub (192.168.100.10)
+      |                                            |
+    tap0 <============= OpenVPN TAP =============> tap0
+      |                  (UDP 1194)                |
+    vxlan-hub                                    vxlan-hub
+      |                                            |
+[ spoke nodes ]                              [ spoke nodes ]
+  vxlan-spoke --> br-spoke                     vxlan-spoke --> br-spoke
+                    |                                            |
+               [ Multus ]                                   [ Multus ]
+                    |                                            |
+             [ VM: .51 ]                                  [ VM: .52 ]
+```
+
+Data path: `VM (.52 on Cluster B) → br-spoke → VXLAN → br-hub → OpenVPN TAP → br-hub → VXLAN → br-spoke → VM (.51 on Cluster A)`
+
+## ROSA HCP / OVN-Kubernetes Limitation
+
+**hostNetwork pods behind LoadBalancer or NodePort services do not work
+reliably on ROSA HCP (OVN-Kubernetes).** Cross-node DNAT fails because
+hostNetwork traffic bypasses the Geneve overlay tunnels that OVN-K uses for
+pod-to-pod communication. This means you **cannot run the VPN server on ROSA
+HCP** — the inbound connection will never reach the pod.
+
+The workaround is to make ROSA HCP the **VPN client** (outbound-only, no
+Service needed). The on-prem or self-managed cluster runs the VPN server.
+
+## IP Assignments
+
+| Device | IP |
+|---|---|
+| Cluster A hub bridge | 192.168.100.1 |
+| Cluster B hub bridge | 192.168.100.10 |
+| VM on Cluster A | 192.168.100.51 |
+| VM on Cluster B | 192.168.100.52 |
+
+## Setup
+
+### 1. Generate PKI (run once, from anywhere)
+
+```bash
+bash generate-pki.sh
+```
+
+### 2. Label nodes on BOTH clusters
+
+```bash
+# On each cluster:
+oc label node <hub-node> industrial-role=hub
+oc label node <spoke-node-1> industrial-role=spoke
+oc label node <spoke-node-2> industrial-role=spoke
+```
+
+### 3. Deploy common resources (on BOTH clusters)
+
+```bash
+oc apply -f common/namespace.yaml
+oc apply -f common/serviceaccount.yaml
+oc apply -f common/rolebinding.yaml
+oc apply -f common/image-build.yaml
+# Wait for the build to complete:
+oc logs -f bc/industrial-networking-build -n industrial-network
+```
+
+### 4. Deploy Cluster A (VPN server)
+
+```bash
+# Switch to Cluster A context
+oc create secret generic vpn-server-auth \
+  --from-file=ca.crt=pki/ca.crt \
+  --from-file=server.crt=pki/server.crt \
+  --from-file=server.key=pki/server.key \
+  --from-file=dh.pem=pki/dh.pem \
+  -n industrial-network
+
+oc apply -f cluster-a-server/vpn-server-secret.yaml
+oc apply -f cluster-a-server/vpn-server-hub.yaml
+oc apply -f common/spoke-daemonset.yaml
+```
+
+The hub pod uses `hostNetwork: true`, so OpenVPN listens directly on the
+node's IP at port 1194/UDP. No Kubernetes Service is needed — you expose
+this port externally depending on your platform (see next section).
+
+### 5. Expose the VPN server externally
+
+The hub pod listens on UDP 1194 on the host network. How you expose this to
+the internet depends on where Cluster A runs:
+
+**On-prem / Hetzner (with a public IP on the host or a gateway)**
+
+If your hub node is behind a gateway or hypervisor, use iptables DNAT to
+forward traffic from the public IP to the hub node's internal IP:
+
+```bash
+# On the gateway / hypervisor host:
+iptables -t nat -A PREROUTING -d <PUBLIC_IP> -p udp --dport 1194 \
+  -j DNAT --to-destination <HUB_NODE_IP>:1194
+iptables -t nat -A POSTROUTING -d <HUB_NODE_IP> -p udp --dport 1194 \
+  -j MASQUERADE
+```
+
+See the [Hetzner Firewall Setup](#hetzner-firewall-setup) section below for
+the full set of firewall rules needed on a Hetzner bare-metal host.
+
+**Self-managed OpenShift on AWS (non-HCP)**
+
+You can create an NLB targeting the hub node:
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: industrial-hub-vpn
+  namespace: industrial-network
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
+spec:
+  selector:
+    app: industrial-hub
+  ports:
+    - name: openvpn
+      protocol: UDP
+      port: 1194
+      targetPort: 1194
+  type: LoadBalancer
+```
+
+**ROSA HCP — do NOT run the VPN server here.** See the limitation above.
+Use ROSA HCP as Cluster B (client) instead.
+
+### 6. Deploy Cluster B (VPN client)
+
+```bash
+# Switch to Cluster B context
+
+# Edit vpn-client-secret.yaml: set 'remote' to Cluster A's public IP / LB address
+oc create secret generic vpn-client-auth \
+  --from-file=ca.crt=pki/ca.crt \
+  --from-file=client.crt=pki/client.crt \
+  --from-file=client.key=pki/client.key \
+  -n industrial-network
+
+oc apply -f cluster-b-client/vpn-client-secret.yaml
+oc apply -f cluster-b-client/vpn-client-hub.yaml
+oc apply -f common/spoke-daemonset.yaml
+```
+
+No Service or external exposure is needed on the client side — OpenVPN
+connects outbound to the server.
+
+### 7. Deploy test VMs (on both clusters)
+
+```bash
+# On BOTH clusters:
+oc apply -f vm-test/namespace.yaml
+oc apply -f vm-test/network-attachment-definition.yaml
+
+# On Cluster A:
+oc apply -f vm-test/linux-vm-cluster-a.yaml
+
+# On Cluster B:
+oc apply -f vm-test/linux-vm-cluster-b.yaml
+```
+
+### 8. Disable Source/Dest Check (AWS only)
+
+If either cluster runs on AWS, disable the source/dest check on all worker
+nodes in the EC2 console.
+
+## Hetzner Firewall Setup
+
+When running Cluster A on a Hetzner bare-metal server with OpenShift inside
+KVM VMs, the following firewall configuration is needed on the **Hetzner host**
+to allow inbound VPN traffic to reach the OpenShift hub node.
+
+### 1. Open UDP 1194 in firewalld
+
+```bash
+firewall-cmd --add-port=1194/udp --permanent
+firewall-cmd --reload
+```
+
+**Important:** Check `firewall-cmd --list-protocols`. If it shows `tcp`, that
+means firewalld is filtering by protocol and will block **all UDP** regardless
+of port rules. Remove it:
+
+```bash
+firewall-cmd --remove-protocol=tcp --permanent
+firewall-cmd --reload
+```
+
+### 2. Enable masquerade
+
+```bash
+firewall-cmd --add-masquerade --permanent
+firewall-cmd --reload
+```
+
+### 3. Add iptables DNAT rules
+
+Forward traffic from the Hetzner public IP to the OpenShift node running the
+hub pod:
+
+```bash
+iptables -t nat -A PREROUTING -d <HETZNER_PUBLIC_IP> -p udp --dport 1194 \
+  -j DNAT --to-destination <HUB_NODE_IP>:1194
+iptables -t nat -A POSTROUTING -d <HUB_NODE_IP> -p udp --dport 1194 \
+  -j MASQUERADE
+```
+
+### 4. Allow traffic through libvirt's forward chain
+
+If the OpenShift nodes run as libvirt/KVM VMs, the `LIBVIRT_FWI` (forward-in)
+chain rejects new connections by default. Add an accept rule **before** the
+reject:
+
+```bash
+# Find the REJECT rule position:
+iptables -L LIBVIRT_FWI --line-numbers -n
+
+# Insert an ACCEPT rule before it (adjust position as needed):
+iptables -I LIBVIRT_FWI 2 -o <VM_BRIDGE> -d <HUB_NODE_IP> -p udp --dport 1194 -j ACCEPT
+```
+
+Example for a node at 192.168.50.13 on bridge virbr1:
+
+```bash
+iptables -I LIBVIRT_FWI 2 -o virbr1 -d 192.168.50.13 -p udp --dport 1194 -j ACCEPT
+```
+
+### 5. Lock down source IPs (optional)
+
+Once working, restrict the DNAT rules to only allow traffic from the remote
+cluster's NAT gateway IPs:
+
+```bash
+# Find the NAT gateway IPs (for ROSA, check the VPC NAT gateways in the AWS console)
+iptables -t nat -R PREROUTING <rule-num> -s <NAT_GW_IP_1>,<NAT_GW_IP_2>,<NAT_GW_IP_3> \
+  -d <HETZNER_PUBLIC_IP> -p udp --dport 1194 -j DNAT --to-destination <HUB_NODE_IP>:1194
+```
+
+### Making iptables rules persistent
+
+The iptables rules above are lost on reboot. To persist them:
+
+```bash
+dnf install iptables-services
+iptables-save > /etc/sysconfig/iptables
+systemctl enable iptables
+```
+
+## Validation
+
+```bash
+# 1. VPN tunnel (on Cluster B — client)
+oc logs deployment/industrial-hub -n industrial-network | grep "Initialization Sequence Completed"
+
+# 2. Hub-to-hub ping (Cluster B hub → Cluster A hub)
+oc exec -n industrial-network deployment/industrial-hub -- ping -c3 192.168.100.1
+
+# 3. Cross-cluster VM ping (from Cluster B VM → Cluster A VM)
+virtctl console workstation-cluster-b -n industrial-spoke
+# Inside VM: ping 192.168.100.51
+
+# 4. Reverse direction (from Cluster A VM → Cluster B VM)
+virtctl console workstation-cluster-a -n industrial-spoke
+# Inside VM: ping 192.168.100.52
+```
+
+## Notes
+
+- The OpenVPN `server-bridge` directive assigns IPs from the 192.168.100.10-20
+  range to connecting clients, so Cluster B's hub gets 192.168.100.10
+  automatically
+- Both hubs run FDB discovery loops to find their local spoke nodes
+- The hub scripts automatically clean up stale bridge interfaces from previous
+  hostNetwork runs and strip the IP that OpenVPN assigns to tap0 (since tap0 is
+  a bridge slave, its IP conflicts with br-hub routing)
+- For production use, consider adding tls-crypt to the OpenVPN config for
+  additional security
+- MTU should be set to 1350 on the VM secondary NICs to account for
+  double encapsulation (VXLAN + OpenVPN)

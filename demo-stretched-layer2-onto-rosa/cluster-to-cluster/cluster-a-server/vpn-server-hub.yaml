@@ -15,10 +15,9 @@ spec:
     spec:
       hostNetwork: true
       nodeSelector:
-        industrial-role: hub # Target our nominated Hub node
-      dnsPolicy: ClusterFirstWithHostNet # needed to lookup internal dns
-      # Link to the privileged ServiceAccount created earlier
-      serviceAccountName: industrial-admin 
+        industrial-role: hub
+      dnsPolicy: ClusterFirstWithHostNet
+      serviceAccountName: industrial-admin
       containers:
       - name: gateway
         image: image-registry.openshift-image-registry.svc:5000/industrial-network/industrial-networking-tools:latest
@@ -27,33 +26,46 @@ spec:
         command: ["/bin/sh", "-c"]
         args:
           - |
-            # 1. Initialize the Hub Bridge
+            # 1. Clean up stale interfaces from previous hostNetwork runs
+            ip link delete br-hub 2>/dev/null
+            ip link delete vxlan-hub 2>/dev/null
+
+            # 2. Initialize the Hub Bridge
             ip link add br-hub type bridge
             ip link set br-hub up
-            ip addr add 192.168.100.10/24 dev br-hub 2>/dev/null
+            ip addr add 192.168.100.1/24 dev br-hub 2>/dev/null
 
-            # 2. Setup VXLAN Hub (VNI 100) - Listening on primary interface
+            # 3. Setup VXLAN (VNI 100)
             PRIMARY_IF=$(ip route | grep default | awk '{print $5}' | head -n1)
-            ip link delete vxlan-hub 2>/dev/null
             ip link add vxlan-hub type vxlan id 100 dev $PRIMARY_IF dstport 4789 nolearning
             ip link set vxlan-hub master br-hub
             ip link set vxlan-hub up
 
-            # 3. Security: Allow foreign MACs to cross the bridge
+            # 4. Security: Allow foreign MACs + disable reverse path filtering
             ip link set $PRIMARY_IF promisc on
             ip link set br-hub promisc on
             echo 0 > /proc/sys/net/ipv4/conf/all/rp_filter
+            echo 0 > /proc/sys/net/ipv4/conf/br-hub/rp_filter
 
-            # 4. Background task: Plug OpenVPN tap0 into the bridge once it's alive
+            # 5. Plug OpenVPN tap0 into bridge once alive
             (
-              until ip link show tap0; do sleep 2; done
+              until ip link show tap0 2>/dev/null; do sleep 2; done
               ip link set tap0 master br-hub
               ip link set tap0 up
               ip link set tap0 promisc on
+              echo 0 > /proc/sys/net/ipv4/conf/tap0/rp_filter
+              # server-bridge assigns the gateway IP to tap0 — remove it since
+              # tap0 is a bridge slave and the IP belongs on br-hub
+              sleep 5
+              TAP_IP=$(ip -4 addr show tap0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
+              if [ -n "$TAP_IP" ]; then
+                ip addr del $TAP_IP/24 dev tap0 2>/dev/null
+                echo "Removed $TAP_IP from tap0 (bridge slave)"
+              fi
               echo "--- L2 BRIDGE LINKED (tap0 <-> br-hub <-> vxlan-hub) ---"
             ) &
 
-            # 5. Background task: Discover spoke node IPs and add VXLAN FDB entries
+            # 6. Discover spoke node IPs and add VXLAN FDB entries
             (
               KUBE_TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
               KUBE_CA=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
@@ -67,7 +79,7 @@ spec:
 
                 for IP in $SPOKE_IPS; do
                   if [ "$IP" != "$MY_NODE_IP" ]; then
-                    bridge fdb replace 00:00:00:00:00:00 dev vxlan-hub dst $IP 2>/dev/null
+                    bridge fdb append 00:00:00:00:00:00 dev vxlan-hub dst $IP 2>/dev/null
                     echo "FDB entry ensured for spoke at $IP"
                   fi
                 done
@@ -75,10 +87,9 @@ spec:
               done
             ) &
 
-            # Start OpenVPN
-            openvpn --config /etc/openvpn/config/client.conf --status /dev/stdout 1
-
-            echo "HUB READY - IP 192.168.100.10"
+            # 7. Start OpenVPN SERVER
+            openvpn --config /etc/openvpn/config/server.conf --daemon
+            echo "HUB READY (VPN SERVER) - IP 192.168.100.1"
             tail -f /dev/null
         volumeMounts:
         - name: vpn-config
@@ -88,26 +99,7 @@ spec:
       volumes:
       - name: vpn-config
         secret:
-          secretName: factory-vpn-config
+          secretName: vpn-server-config
       - name: vpn-certs
         secret:
-          secretName: factory-vpn-auth
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: industrial-hub-service
-  namespace: industrial-network
-spec:
-  selector:
-    app: industrial-hub
-  ports:
-    - name: vxlan
-      protocol: UDP
-      port: 4789
-      targetPort: 4789
-    - name: vpn-mgmt
-      protocol: TCP
-      port: 1194
-      targetPort: 1194
-  type: ClusterIP
+          secretName: vpn-server-auth

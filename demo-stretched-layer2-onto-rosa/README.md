@@ -108,4 +108,181 @@ Why Discounted: Managing a VPN client per-pod was inefficient. It led to massive
 Why Discounted: ROSA does not support adding additional NICs to nodes, and we did not want to use custom AMIs or init scripts to set this up
 
 
+# Deployment
+
+## Prerequisites
+
+- A ROSA cluster with OpenShift Virtualization installed
+- Multus CNI available (included by default on ROSA)
+- `oc` CLI logged in with cluster-admin
+
+## 1. Label the nodes
+
+Pick one worker node as the hub and the rest as spokes:
+
+```bash
+oc label node <hub-node> industrial-role=hub
+oc label node <spoke-node-1> industrial-role=spoke
+oc label node <spoke-node-2> industrial-role=spoke
+```
+
+## 2. Disable Source/Destination Check (AWS only)
+
+In EC2 Console: select all ROSA worker nodes -> **Actions > Networking > Change Source/Dest. Check** -> **Disabled**.
+
+## 3. Deploy the infrastructure
+
+```bash
+# Create namespace, service account, and RBAC
+oc apply -f namespace.yaml
+oc apply -f serviceaccount.yaml
+oc apply -f rolebinding.yaml
+
+# Build the networking tools image
+oc apply -f image-build.yaml
+
+# Create VPN config (edit vpn-auth-secret.yaml first to set the remote endpoint)
+oc apply -f vpn-auth-secret.yaml
+
+# Create the cert secret (see vpn-auth-secret.yaml for the command)
+
+# Deploy hub and spoke
+oc apply -f vpn-hub-deployment.yaml
+oc apply -f vxlan-termination-daemon-set.yaml
+```
+
+## 4. Deploy test VMs
+
+```bash
+oc apply -f vm-test/namespace.yaml
+oc apply -f vm-test/network-attachment-definition.yaml
+oc apply -f vm-test/linux-vm.yaml
+```
+
 # Testing the solution
+
+## Simulator test (single cluster, no external VPN)
+
+Use the in-cluster factory simulator to validate the full data path without needing an external server.
+
+```bash
+# Generate certs and deploy everything
+cd simulator-test
+bash reset_lab.sh
+```
+
+### Validation steps
+
+1. **VPN tunnel**: Check the hub pod logs for a successful OpenVPN connection:
+   ```bash
+   oc logs deployment/industrial-hub -n industrial-network | grep "Initialization Sequence Completed"
+   ```
+
+2. **Bridge and VXLAN**: Exec into the hub pod and verify the bridge has all interfaces:
+   ```bash
+   oc exec -n industrial-network deployment/industrial-hub -- bridge link show
+   # Should list: tap0, vxlan-hub
+   ```
+
+3. **L2 connectivity (hub to simulator)**: Ping the simulator from the hub:
+   ```bash
+   oc exec -n industrial-network deployment/industrial-hub -- ping -c3 192.168.100.1
+   ```
+
+4. **End-to-end (VM to simulator)**: From the Fedora test VM console, ping the simulator:
+   ```bash
+   virtctl console fedora-test-station -n industrial-spoke
+   # Inside the VM:
+   ping 192.168.100.1
+   ```
+
+## Hetzner real-world test
+
+Runs the factory simulator as a KVM VM on the Hetzner box, keeping the host
+networking untouched.
+
+### On the Hetzner server
+
+```bash
+cd hetzner-simulator
+
+# Set HOST_BRIDGE to the bridge with external connectivity (default: virbr0)
+export HOST_BRIDGE=virbr0
+
+# Creates the VM, generates PKI, boots with cloud-init
+sudo bash setup-factory-vm.sh
+
+# Wait ~30s, then get the VM IP
+virsh domifaddr factory-simulator
+
+# If the VM is on a NAT bridge, forward UDP 1194 from the host
+sudo bash port-forward.sh <VM_IP>
+```
+
+### On the ROSA cluster
+
+```bash
+# Create the cert secret using the PKI generated on Hetzner
+# (copy pki/ dir from Hetzner, or scp the individual files)
+oc create secret generic factory-vpn-auth \
+  --from-file=ca.crt=ca.crt \
+  --from-file=client.crt=client.crt \
+  --from-file=client.key=client.key \
+  -n industrial-network
+
+# Edit vpn-auth-secret.yaml: set 'remote' to the Hetzner public IP
+# Then deploy everything as in the deployment section above
+```
+
+### Validation
+
+```bash
+# 1. Hub VPN connected?
+oc logs deployment/industrial-hub -n industrial-network | grep "Initialization Sequence Completed"
+
+# 2. Ping the factory bridge from the hub
+oc exec -n industrial-network deployment/industrial-hub -- ping -c3 192.168.100.1
+
+# 3. Ping the simulated PLC from the hub
+oc exec -n industrial-network deployment/industrial-hub -- ping -c3 192.168.100.50
+
+# 4. End-to-end: ping from the VM
+virtctl console fedora-test-station -n industrial-spoke
+# Inside VM: ping 192.168.100.50
+```
+
+## Cluster-to-Cluster variant
+
+See [cluster-to-cluster/](cluster-to-cluster/) for a variant that connects
+two OpenShift clusters at Layer 2 using the same architecture. Tested with
+Hetzner bare-metal OpenShift (VPN server) and ROSA HCP (VPN client) at ~18ms
+cross-cluster latency.
+
+## Known issues and workarounds
+
+### ROSA HCP / OVN-Kubernetes: no inbound to hostNetwork pods
+
+hostNetwork pods behind LoadBalancer or NodePort services do not work on
+ROSA HCP (OVN-Kubernetes). Cross-node DNAT fails because hostNetwork traffic
+bypasses OVN's Geneve overlay. Workaround: run the VPN server on the on-prem
+cluster and make ROSA the outbound VPN client.
+
+### `bridge fdb replace` unsupported on some kernels
+
+On ROSA HCP worker nodes, `bridge fdb replace` returns "Operation not
+supported" for VXLAN FDB entries. Use `bridge fdb append` instead — it is
+idempotent for new entries and silently ignores duplicates.
+
+### Fedora VM interface naming and NetworkManager
+
+Fedora container disk images name the second NIC `enp2s0` (PCI bus naming),
+not `eth1`. Additionally, NetworkManager removes IPs set via `ip addr add`.
+Use a persistent NetworkManager connection file via cloud-init `write_files`
+instead of `runcmd` with `ip addr add`.
+
+### OpenVPN `server-bridge` assigns IP to tap0
+
+When using `server-bridge`, OpenVPN assigns an IP to the `tap0` interface.
+Since tap0 is a bridge slave, this creates a conflicting route that prevents
+traffic from using `br-hub`. The hub scripts strip this IP automatically
+after the tunnel comes up.

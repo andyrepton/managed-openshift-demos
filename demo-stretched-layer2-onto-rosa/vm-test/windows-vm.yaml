@@ -7,6 +7,8 @@ spec:
   running: true
   template:
     spec:
+      nodeSelector:
+        industrial-role: spoke
       domain:
         devices:
           interfaces:
@@ -15,7 +17,7 @@ spec:
               masquerade: {}
             # 2. The Industrial Bridge (L2 Pass-through)
             - name: industrial-net
-              bridge: {} 
+              bridge: {}
         resources:
           requests:
             memory: 8Gi

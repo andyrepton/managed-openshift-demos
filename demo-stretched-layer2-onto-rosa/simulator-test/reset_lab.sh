@@ -3,7 +3,7 @@
 # 1. Configuration
 HUB_NS="industrial-network"
 SIM_NS="factory-simulator"
-IMAGE="image-registry.openshift-image-registry.svc:5000/${HUB_NS}/industrial-network-tools:latest"
+IMAGE="image-registry.openshift-image-registry.svc:5000/${HUB_NS}/industrial-networking-tools:latest"
 
 echo "--- 1. Generating Fresh PKI (Certs) ---"
 # Create CA
@@ -36,7 +36,7 @@ openssl x509 -req -in client.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out c
 openssl dhparam -out dh.pem 2048
 
 echo "--- 2. Cleaning Namespaces ---"
-oc delete secret factory-vpn-auth -n $HUB_NS --ignore-not-found
+oc delete secret factory-vpn-auth factory-vpn-config -n $HUB_NS --ignore-not-found
 oc delete secret simulator-vpn-server-auth simulator-vpn-config -n $SIM_NS --ignore-not-found
 oc delete deployment industrial-hub -n $HUB_NS --ignore-not-found
 oc delete deployment vpn-server-simulator -n $SIM_NS --ignore-not-found
@@ -103,7 +103,9 @@ EOF
 echo "--- 4. Creating Hub Secrets & Deployment ---"
 oc create secret generic factory-vpn-auth -n $HUB_NS \
   --from-file=ca.crt=ca.crt --from-file=client.crt=client.crt \
-  --from-file=client.key=client.key \
+  --from-file=client.key=client.key
+
+oc create secret generic factory-vpn-config -n $HUB_NS \
   --from-literal=client.conf="client
 dev tap
 proto udp
@@ -166,7 +168,7 @@ spec:
           secretName: factory-vpn-auth
       - name: vpn-config
         secret:
-          secretName: factory-vpn-auth
+          secretName: factory-vpn-config
 EOF
 
 echo "--- DONE. Watch logs with: oc logs -f deployment/industrial-hub -n $HUB_NS ---"

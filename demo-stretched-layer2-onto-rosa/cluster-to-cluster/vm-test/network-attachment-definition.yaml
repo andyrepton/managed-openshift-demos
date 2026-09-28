@@ -1,0 +1,12 @@
+apiVersion: "k8s.cni.cncf.io/v1"
+kind: NetworkAttachmentDefinition
+metadata:
+  name: industrial-bridge-network
+  namespace: industrial-spoke
+spec:
+  config: '{
+      "cniVersion": "0.3.1",
+      "name": "industrial-bridge-network",
+      "type": "bridge",
+      "bridge": "br-spoke"
+  }'
