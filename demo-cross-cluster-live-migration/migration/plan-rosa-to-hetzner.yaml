@@ -1,0 +1,25 @@
+apiVersion: forklift.konveyor.io/v1beta1
+kind: Plan
+metadata:
+  name: cclm-rosa-to-hetzner
+  namespace: openshift-mtv
+spec:
+  provider:
+    source:
+      name: rosa-cluster
+      namespace: openshift-mtv
+    destination:
+      name: host
+      namespace: openshift-mtv
+  map:
+    network:
+      name: cclm-netmap-rosa-to-hetzner
+      namespace: openshift-mtv
+    storage:
+      name: cclm-storagemap-rosa-to-hetzner
+      namespace: openshift-mtv
+  targetNamespace: industrial-spoke
+  liveMigrate: true
+  vms:
+    - name: cclm-test-vm
+      namespace: industrial-spoke

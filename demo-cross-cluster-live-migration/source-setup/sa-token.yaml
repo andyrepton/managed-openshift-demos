@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mtv-cclm-token
+  namespace: openshift-mtv
+  annotations:
+    kubernetes.io/service-account.name: "mtv-cclm"
+type: kubernetes.io/service-account-token

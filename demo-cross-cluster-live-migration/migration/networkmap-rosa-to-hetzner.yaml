@@ -1,0 +1,27 @@
+apiVersion: forklift.konveyor.io/v1beta1
+kind: NetworkMap
+metadata:
+  name: cclm-netmap-rosa-to-hetzner
+  namespace: openshift-mtv
+spec:
+  map:
+    - source:
+        id: "REPLACE_ME_SOURCE_NAD_UID"
+        name: industrial-bridge-network
+        namespace: industrial-spoke
+        type: multus
+      destination:
+        type: multus
+        namespace: industrial-spoke
+        name: industrial-bridge-network
+    - source:
+        type: pod
+      destination:
+        type: pod
+  provider:
+    source:
+      name: rosa-cluster
+      namespace: openshift-mtv
+    destination:
+      name: host
+      namespace: openshift-mtv

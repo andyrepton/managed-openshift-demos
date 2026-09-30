@@ -35,6 +35,7 @@ In a managed environment, the cloud provider and Red Hat handle the cluster's li
 * **[Deploy a VM with OpenShift Virt](./demo-deploying-a-vm-with-openshift-virt):** VM lifecycle management on managed OpenShift.
 * **[OpenShift Virt on OSD (GCP)](./demo-openshift-virt-on-osd):** OpenShift Virtualization on bare-metal GCP instances.
 * **[Multi-Cloud VM Migration (MTV)](./demo-mtv-migration-multi-cloud):** Cross-cluster VM migration with the Migration Toolkit for Virtualization.
+* **[Cross-Cluster Live VM Migration](./demo-cross-cluster-live-migration):** Bidirectional live VM migration between on-prem and ROSA using MTV and a stretched L2 network.
 
 ### AI & Machine Learning
 

@@ -1,0 +1,11 @@
+apiVersion: forklift.konveyor.io/v1beta1
+kind: Provider
+metadata:
+  name: hetzner-cluster
+  namespace: openshift-mtv
+spec:
+  type: openshift
+  url: REPLACE_ME_HETZNER_API_URL
+  secret:
+    name: hetzner-provider-secret
+    namespace: openshift-mtv

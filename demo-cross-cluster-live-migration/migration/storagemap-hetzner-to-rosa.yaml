@@ -1,0 +1,19 @@
+apiVersion: forklift.konveyor.io/v1beta1
+kind: StorageMap
+metadata:
+  name: cclm-storagemap-hetzner-to-rosa
+  namespace: openshift-mtv
+spec:
+  map:
+    - source:
+        name: managed-nfs-storage
+      destination:
+        storageClass: gp3-csi
+        accessMode: ReadWriteOnce
+  provider:
+    source:
+      name: hetzner-cluster
+      namespace: openshift-mtv
+    destination:
+      name: host
+      namespace: openshift-mtv

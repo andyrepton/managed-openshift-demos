@@ -1,0 +1,11 @@
+apiVersion: forklift.konveyor.io/v1beta1
+kind: Provider
+metadata:
+  name: rosa-cluster
+  namespace: openshift-mtv
+spec:
+  type: openshift
+  url: REPLACE_ME_ROSA_API_URL
+  secret:
+    name: rosa-provider-secret
+    namespace: openshift-mtv

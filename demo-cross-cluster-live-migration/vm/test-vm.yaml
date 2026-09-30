@@ -1,0 +1,80 @@
+apiVersion: cdi.kubevirt.io/v1beta1
+kind: DataVolume
+metadata:
+  name: cclm-test-vm-rootdisk
+  namespace: industrial-spoke
+spec:
+  source:
+    registry:
+      url: docker://quay.io/containerdisks/fedora:latest
+  storage:
+    accessModes:
+      - ReadWriteOnce
+    resources:
+      requests:
+        storage: 10Gi
+---
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: cclm-test-vm
+  namespace: industrial-spoke
+  labels:
+    app: cclm-test-vm
+spec:
+  runStrategy: Always
+  template:
+    spec:
+      nodeSelector:
+        industrial-role: spoke
+      domain:
+        devices:
+          disks:
+            - disk:
+                bus: virtio
+              name: rootdisk
+            - disk:
+                bus: virtio
+              name: cloudinit
+          interfaces:
+            - name: default
+              masquerade: {}
+            - name: industrial-net
+              bridge: {}
+        resources:
+          requests:
+            memory: 2Gi
+            cpu: 1
+      networks:
+        - name: default
+          pod: {}
+        - name: industrial-net
+          multus:
+            networkName: industrial-bridge-network
+      volumes:
+        - dataVolume:
+            name: cclm-test-vm-rootdisk
+          name: rootdisk
+        - cloudInitNoCloud:
+            userData: |
+              #cloud-config
+              password: fedora
+              chpasswd: { expire: False }
+              write_files:
+                - path: /etc/NetworkManager/system-connections/industrial.nmconnection
+                  permissions: '0600'
+                  content: |
+                    [connection]
+                    id=industrial
+                    type=ethernet
+                    interface-name=enp2s0
+                    [ipv4]
+                    method=manual
+                    addresses=192.168.100.60/24
+                    mtu=1350
+                    [ipv6]
+                    method=disabled
+              runcmd:
+                - nmcli con reload
+                - nmcli con up industrial
+          name: cloudinit

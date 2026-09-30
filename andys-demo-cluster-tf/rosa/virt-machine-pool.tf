@@ -7,7 +7,7 @@ module "rosa-virt-machine-pool" {
   name              = "${local.cluster_name}-virt"
   openshift_version = var.openshift_version
 
-  labels = var.deploy_bgp ? { bgp_router = "true" } : {}
+  labels = merge({ node_type = "metal" }, var.deploy_bgp ? { bgp_router = "true" } : {})
 
   aws_node_pool = {
     instance_type = "m5.metal"

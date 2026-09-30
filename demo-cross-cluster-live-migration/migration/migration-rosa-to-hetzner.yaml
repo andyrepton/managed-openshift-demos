@@ -1,0 +1,9 @@
+apiVersion: forklift.konveyor.io/v1beta1
+kind: Migration
+metadata:
+  name: cclm-reverse
+  namespace: openshift-mtv
+spec:
+  plan:
+    name: cclm-rosa-to-hetzner
+    namespace: openshift-mtv

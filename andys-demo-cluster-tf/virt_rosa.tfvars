@@ -1,0 +1,11 @@
+create_vpc                    = true
+deploy_ai_machine_pool        = false
+deploy_graviton_machine_pool  = false
+deploy_lokistack_machine_pool = false
+deploy_virt_machine_pool      = true
+private_cluster               = false
+
+rosa_cluster_name = "poc-andyr1"
+
+create_aro  = false
+create_rosa = true
