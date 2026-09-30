@@ -27,6 +27,7 @@ module "rosa" {
   deploy_lokistack_machine_pool = var.deploy_lokistack_machine_pool
   deploy_virt_machine_pool      = var.deploy_virt_machine_pool
   deploy_bgp                    = var.deploy_bgp
+  deploy_cloudwatch_logging     = var.deploy_cloudwatch_logging
 }
 
 module "aro" {

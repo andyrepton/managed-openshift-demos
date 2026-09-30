@@ -1,22 +1,29 @@
-apiVersion: "logging.openshift.io/v1"
+apiVersion: observability.openshift.io/v1
 kind: ClusterLogForwarder
 metadata:
-  name: instance 
-  namespace: openshift-logging 
+  name: instance
+  namespace: openshift-logging
 spec:
+  serviceAccount:
+    name: logcollector
   outputs:
-   - name: cw 
-     type: cloudwatch 
-     cloudwatch:
-       groupBy: logType 
-       groupPrefix: poc-andyr
-       region: eu-west-1
-     secret:
-        name: cw-sts-secret
+    - name: cw
+      type: cloudwatch
+      cloudwatch:
+        groupName: 'poc-andyr.{.log_type||"unknown"}'
+        region: eu-west-2
+        authentication:
+          type: iamRole
+          iamRole:
+            roleARN:
+              secretName: cloudwatch-role
+              key: role_arn
+            token:
+              from: serviceAccount
   pipelines:
-    - name: to-cloudwatch 
-      inputRefs: 
+    - name: to-cloudwatch
+      inputRefs:
         - infrastructure
         - audit
       outputRefs:
-        - cw 
+        - cw

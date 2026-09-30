@@ -225,6 +225,12 @@ variable "deploy_bgp" {
   description = "Deploy AWS VPC Route Server and IAM resources for BGP routing."
 }
 
+variable "deploy_cloudwatch_logging" {
+  type        = bool
+  default     = false
+  description = "Create IAM role for forwarding logs to CloudWatch via IRSA."
+}
+
 variable "domain" {
   type        = string
   default     = ""

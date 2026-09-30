@@ -43,3 +43,7 @@ output "bgp_endpoint_ips" {
   value = var.create_rosa && var.deploy_bgp ? module.rosa[0].bgp_endpoint_ips : []
 }
 
+output "cloudwatch_iam_role_arn" {
+  value = var.create_rosa && var.deploy_cloudwatch_logging ? module.rosa[0].cloudwatch_iam_role_arn : ""
+}
+

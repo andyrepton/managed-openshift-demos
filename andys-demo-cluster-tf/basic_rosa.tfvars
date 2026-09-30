@@ -3,6 +3,7 @@ deploy_ai_machine_pool        = false
 deploy_graviton_machine_pool  = false
 deploy_lokistack_machine_pool = false
 deploy_virt_machine_pool      = false
+deploy_cloudwatch_logging     = false
 private_cluster               = false
 
 rosa_cluster_name = "poc-andyr1"

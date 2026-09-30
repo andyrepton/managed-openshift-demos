@@ -176,3 +176,21 @@ variable "bgp_operator_service_account" {
   default     = "openshift-bgp-cloud-connector-controller-manager"
   description = "Service account for the bgp-cloud-connector operator."
 }
+
+variable "deploy_cloudwatch_logging" {
+  type        = bool
+  default     = false
+  description = "Create IAM role for forwarding logs to CloudWatch via IRSA."
+}
+
+variable "cloudwatch_namespace" {
+  type        = string
+  default     = "openshift-logging"
+  description = "Namespace for the log collector service account."
+}
+
+variable "cloudwatch_service_account" {
+  type        = string
+  default     = "logcollector"
+  description = "Service account name for the log collector."
+}
