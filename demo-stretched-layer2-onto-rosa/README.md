@@ -6,59 +6,72 @@ A customer approached the Black Belt team looking for a way for legacy systems, 
 
 ## Overview
 
-```
-FACTORY FLOOR (L2)           AWS VPC / ROSA CLUSTER (L3)
-==================           ===============================================
+Since AWS VPCs are strictly Layer 3 and do not support native broadcast/multicast, we use a **double-encapsulation tunnel** (VXLAN inside OpenVPN) to "hide" the Layer 2 frames from the AWS routing fabric.
 
-[ PLC / Sensor ]             [ WORKER NODE A ]           [ WORKER NODE B ]
-      |                      |---------------|           |---------------|
-      |                      | [ HUB POD ]   |           | [ SPOKE POD ] |
-      |                      |    (UBI 9)    |           |    (UBI 9)    |
-      |                      |       |       |           |       |       |
-(Raw Ethernet)               |   [br-hub]    |<==VXLAN==>| [br-industrial]
-      |                      |       |       |  (L2 over |       |       |
-      |                      |    [tap0]     |   VPC L3) |   [Multus]    |
-      |                      |       |       |           |       |       |
-[ Factory Gateway ]          |   [OpenVPN]   |           | [ Windows VM ]|
-[ (VPN + VXLAN)   ] <==VPN==>| [ (eth0)  ]   |           | [ (VirtIO)   ]|
-==================           =================           =================
-      ^                              ^                           ^
-      |                              |                           |
-  Physical Wire                The "Patch Panel"           The Workload
- (Profinet RT)                (Central Router)            (PCS 7 / App)
-```
+1. **The Hub (Deployment):** A central UBI 9 Pod that terminates the **OpenVPN (TAP mode)** connection from the factory and fans traffic out to Spoke pods via VXLAN. It acts as the "virtual patch panel."
+2. **The Spoke (DaemonSet):** A Pod on every worker node that creates a local Linux bridge (`br-spoke`) and connects it back to the Hub via **VXLAN**.
+3. **The Workload (OpenShift Virtualization):** A VM that uses **Multus CNI** to plug a secondary VirtIO NIC directly into the Spoke's local bridge.
+
+### Hub & Spoke Model
 
 ```
-FACTORY SITE (Simulator)          OPENSHIFT CLOUD (Hub)              APP NAMESPACE (Spoke)
-[ 192.168.100.1 ]               [ 192.168.100.10 ]                 [ No IP Required ]
-       |                                |                                  |
-   ( br-hub )                      ( br-hub )                         ( br-spoke )
-       |                                |                                  |
-    [tap0] <==== OpenVPN Tunnel ====> [tap0]                               |
-    (L2)           (UDP 1194)         (L2)                                 |
-                                        |                                  |
-                                   [vxlan-hub] <===== VXLAN Tunnel ===== [vxlan-spoke]
-                                      (L2)            (UDP 4789)            (L2)
-                                                                             |
-                                                                      ( Multus CNI )
-                                                                             |
-                                                                     [ Windows VM Pod ]
-                                                                     [ 192.168.100.50 ]
+                       ┌─────────────────┐
+                       │  FACTORY FLOOR  │
+                       │  PLC / Sensors  │
+                       │       │         │
+                       │  Factory GW     │
+                       └───────┬─────────┘
+                               │
+                     OpenVPN TAP (UDP 1194)
+                               │
+                       ┌───────┴─────────┐
+                       │    HUB POD      │    ← Deployment (1 replica)
+                       │ OpenVPN─tap0─   │      on a labelled hub node
+                       │        br-hub   │
+                       └───────┬─────────┘
+                               │
+                       VXLAN (UDP 4789)
+                          ┌────┴────┐
+                          │         │
+                    ┌─────┴───┐ ┌───┴─────┐
+                    │SPOKE POD│ │SPOKE POD│   ← DaemonSet on every
+                    │br-spoke │ │br-spoke │     labelled worker node
+                    └────┬────┘ └────┬────┘
+                      Multus      Multus
+                    ┌────┴────┐ ┌────┴────┐
+                    │  VM A   │ │  VM B   │   ← OpenShift Virt
+                    │ VirtIO  │ │ VirtIO  │     (Multus CNI)
+                    └─────────┘ └─────────┘
 ```
 
-Mermaid diagram:
+### Traffic Flow
 
-![Mermaid diagram of solution](./stretched-l2-example.png)
+Each packet crosses two tunnels. The Hub bridges between them, preserving the original L2 frame end-to-end.
 
-## The Architecture: "Hub & Spoke" Tunneling
-Since AWS VPCs are strictly Layer 3 and do not support native broadcast/multicast, we utilize a **Double-Encapsulation Tunnel** (VXLAN inside OpenVPN) to "hide" the Layer 2 frames from the AWS routing fabric.
-
-1.  **The Hub (Deployment):** A central Red Hat UBI-based Pod that maintains an **OpenVPN (TAP mode)** connection to the factory. It acts as the "Grand Central Station" or "Virtual Patch Panel."
-2.  **The Spoke (DaemonSet):** A Pod on every worker node that creates a local Linux bridge (`br-industrial`) on the host and "pipes" it back to the Hub via **VXLAN**.
-3.  **The Workload (OpenShift Virtualization):** A Windows VM that uses **Multus CNI** to plug a secondary VirtIO NIC directly into the Spoke's local bridge.
-
-### Logical Data Flow
-`Windows VM (VirtIO)` -> `Multus Bridge` -> `VXLAN Tunnel` -> `Hub Pod Bridge` -> `OpenVPN TAP` -> `Factory PLC`
+```
+         ┌──────────────┐
+         │  PLC/Sensor  │  Raw L2 frame (Profinet, BACnet)
+         └──────┬───────┘
+                │
+         ┌──────┴───────┐
+         │  Factory GW  │  Wraps L2 in OpenVPN TAP
+         └──────┬───────┘
+                ║  UDP 1194 — VPN tunnel over internet
+         ┌──────┴───────┐
+         │   Hub Pod    │  Unwraps VPN → bridges to VXLAN
+         │   (br-hub)   │
+         └──────┬───────┘
+                ║  UDP 4789 — VXLAN tunnel over VPC
+         ┌──────┴───────┐
+         │  Spoke Pod   │  Unwraps VXLAN → local bridge
+         │  (br-spoke)  │
+         └──────┬───────┘
+                │  Multus bridge CNI
+         ┌──────┴───────┐
+         │  VM          │  Receives original L2 frame
+         │  (VirtIO)    │
+         └──────────────┘
+```
 
 ## Protocol Compatibility Matrix
 

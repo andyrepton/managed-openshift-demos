@@ -6,27 +6,32 @@ are OpenShift clusters.
 
 ## Architecture
 
-```
-CLUSTER A (VPN Server, on-prem)              CLUSTER B (VPN Client, cloud)
-================================             ================================
+Both clusters run the same Hub & Spoke topology. The Hubs connect to each other via OpenVPN TAP, creating a single shared L2 broadcast domain across clusters.
 
-[ hub node ]                                 [ hub node ]
-  [ Hub Pod — hostNetwork ]                    [ Hub Pod — hostNetwork ]
-    br-hub (192.168.100.1)                       br-hub (192.168.100.10)
-      |                                            |
-    tap0 <============= OpenVPN TAP =============> tap0
-      |                  (UDP 1194)                |
-    vxlan-hub                                    vxlan-hub
-      |                                            |
-[ spoke nodes ]                              [ spoke nodes ]
-  vxlan-spoke --> br-spoke                     vxlan-spoke --> br-spoke
-                    |                                            |
-               [ Multus ]                                   [ Multus ]
-                    |                                            |
-             [ VM: .51 ]                                  [ VM: .52 ]
 ```
+  CLUSTER A (VPN Server)              CLUSTER B (VPN Client)
+  On-prem / Self-managed              ROSA HCP
 
-Data path: `VM (.52 on Cluster B) → br-spoke → VXLAN → br-hub → OpenVPN TAP → br-hub → VXLAN → br-spoke → VM (.51 on Cluster A)`
+  ┌─────────────────────┐             ┌─────────────────────┐
+  │      HUB POD        │   OpenVPN   │      HUB POD        │
+  │  br-hub (.1)        ◄═════════════►  br-hub (.10)       │
+  │  tap0 + vxlan-hub   │  UDP 1194   │  tap0 + vxlan-hub   │
+  └──────────┬──────────┘             └──────────┬──────────┘
+             │ VXLAN                              │ VXLAN
+        ┌────┴────┐                          ┌────┴────┐
+        │         │                          │         │
+  ┌─────┴───┐ ┌───┴─────┐             ┌─────┴───┐ ┌───┴─────┐
+  │Spoke Pod│ │Spoke Pod│             │Spoke Pod│ │Spoke Pod│
+  │br-spoke │ │br-spoke │             │br-spoke │ │br-spoke │
+  └────┬────┘ └─────────┘             └────┬────┘ └─────────┘
+       │                                    │
+  ┌────┴─────┐                        ┌────┴─────┐
+  │  VM .51  │                        │  VM .52  │
+  └──────────┘                        └──────────┘
+
+  Data path:
+  VM .52 → br-spoke → VXLAN → br-hub → VPN → br-hub → VXLAN → br-spoke → VM .51
+```
 
 ## ROSA HCP / OVN-Kubernetes Limitation
 
