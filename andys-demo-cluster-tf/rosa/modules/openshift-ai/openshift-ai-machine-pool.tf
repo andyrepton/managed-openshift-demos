@@ -7,11 +7,11 @@ module "rosa-ai-machine-pool-gpu-pool" {
   openshift_version = var.openshift_version
 
   aws_node_pool = {
-    instance_type = "g7e.2xlarge"
+    instance_type = var.gpu_instance_type
     tags          = var.tags
   }
 
-  subnet_id = var.subnet_id
+  subnet_id = var.gpu_subnet_id
   autoscaling = {
     enabled      = false
     min_replicas = null
@@ -23,7 +23,7 @@ module "rosa-ai-machine-pool-gpu-pool" {
     value         = "present",
     schedule_type = "NoSchedule"
   }]
-  replicas = 2
+  replicas = 1
 }
 
 module "rosa-openshift-ai-machine-pool" {

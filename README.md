@@ -39,12 +39,16 @@ In a managed environment, the cloud provider and Red Hat handle the cluster's li
 
 ### AI & Machine Learning
 
-* **[OpenShift AI on ROSA](./demo-openshift-ai-on-rosa):** GPU-accelerated object detection model serving with RHOAI.
+* **[OpenShift AI Base](./openshift-ai):** GPU infrastructure for all AI demos (NFD, NVIDIA drivers, RHOAI). Prerequisite for demos below.
+* **[Object Detection on ROSA](./demo-object-detection-on-rosa):** GPU-accelerated object detection model serving with RHOAI.
+* **[vLLM Model Serving](./demo-vllm-model-serving):** Serve Devstral coding model via vLLM on OpenShift AI with RawDeployment.
+* **[Claude Code via Open Source Models](./demo-claude-via-open-source-models):** Run Claude Code against self-hosted LLMs with LiteLLM and MaaS.
 * **[Model as a Service (MaaS)](./demo-maas-on-rosa):** LLM inference via OpenAI-compatible MaaS API.
 * **[GitLab Duo on ROSA](./demo-gitlab-duo-on-rosa):** GitLab + Duo AI code assistant with in-cluster LLM serving.
 
 ### Developer Experience & GitOps
 
+* **[OpenCode in Dev Spaces](./demo-opencode-devspaces):** AI coding assistant (OpenCode) in Dev Spaces backed by self-hosted vLLM.
 * **[Segregated GitOps](./demo-deploying-segregated-gitops):** Per-team ArgoCD instances managed by a central platform team.
 * **[Source-to-Image & Dev Spaces](./demo-source2image):** Build and deploy from source with S2I and browser-based IDEs.
 * **[Service Mesh App Deployment](./demo-deploying-an-app-with-service-mesh):** Enroll applications in OpenShift Service Mesh.
@@ -56,7 +60,6 @@ In a managed environment, the cloud provider and Red Hat handle the cluster's li
 
 ### Work in Progress
 
-* **[Continue on ROSA](./demo-continue-on-rosa):** AI code assistant integration (WIP).
 * **[GitLab on OpenShift](./demo-gitlab-on-openshift):** Basic GitLab operator deployment (WIP -- see [GitLab Duo on ROSA](./demo-gitlab-duo-on-rosa) for a complete setup).
 * **[OpenShift Virt on ROSA](./demo-openshift-virt-on-rosa):** OpenShift Virtualization on ROSA (WIP).
 

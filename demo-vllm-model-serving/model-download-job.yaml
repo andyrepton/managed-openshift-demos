@@ -1,0 +1,51 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: download-devstral
+  namespace: vllm-model-serving
+spec:
+  ttlSecondsAfterFinished: 600
+  backoffLimit: 1
+  template:
+    spec:
+      restartPolicy: OnFailure
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
+      nodeSelector:
+        nvidia.com/gpu.present: "true"
+      containers:
+        - name: download
+          image: python:3.11-slim
+          command:
+            - /bin/bash
+            - -c
+            - |
+              pip install -q huggingface_hub &&
+              /tmp/.local/bin/hf download \
+                cyankiwi/Devstral-Small-2-24B-Instruct-2512-AWQ-4bit \
+                --local-dir /models/devstral-awq \
+                --token "$HF_TOKEN"
+          env:
+            - name: HOME
+              value: /tmp
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hf-token
+                  key: token
+          volumeMounts:
+            - name: model-weights
+              mountPath: /models
+          resources:
+            requests:
+              cpu: "2"
+              memory: 4Gi
+            limits:
+              cpu: "4"
+              memory: 8Gi
+      volumes:
+        - name: model-weights
+          persistentVolumeClaim:
+            claimName: model-weights

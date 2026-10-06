@@ -23,6 +23,8 @@ module "rosa" {
   single_nat_gateway            = var.single_nat_gateway
   default_aws_tags              = var.default_aws_tags
   deploy_ai_machine_pool        = var.deploy_ai_machine_pool
+  ai_gpu_instance_type          = var.ai_gpu_instance_type
+  ai_gpu_subnet_index           = var.ai_gpu_subnet_index
   deploy_graviton_machine_pool  = var.deploy_graviton_machine_pool
   deploy_lokistack_machine_pool = var.deploy_lokistack_machine_pool
   deploy_virt_machine_pool      = var.deploy_virt_machine_pool

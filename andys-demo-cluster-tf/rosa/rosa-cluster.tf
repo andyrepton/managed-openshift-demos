@@ -5,7 +5,9 @@ locals {
   path                 = coalesce(var.path, "/")
   worker_node_replicas = var.worker_node_replicas
   cluster_name         = coalesce(var.cluster_name, "rosa-${random_string.random_name.result}")
-  private_subnet_id    = var.create_vpc ? module.vpc[0].private_subnets[0] : var.aws_subnet_ids[0]
+  private_subnet_id       = var.create_vpc ? module.vpc[0].private_subnets[0] : var.aws_subnet_ids[0]
+  private_subnet_ids      = var.create_vpc ? module.vpc[0].private_subnets : var.aws_subnet_ids
+  gpu_private_subnet_id   = var.create_vpc ? module.vpc[0].private_subnets[var.ai_gpu_subnet_index] : var.aws_subnet_ids[var.ai_gpu_subnet_index]
 }
 
 resource "random_string" "random_name" {

@@ -24,10 +24,21 @@ variable "tags" {
 
 variable "subnet_id" {
   type        = string
-  description = "Subnet for the machine pool"
+  description = "Subnet for the AI machine pool (m5.4xlarge)"
+}
+
+variable "gpu_subnet_id" {
+  type        = string
+  description = "Subnet for the GPU machine pool. May differ from subnet_id when GPU instances are only available in certain AZs."
 }
 
 variable "cluster_id" {
   type        = string
   description = "ID of the cluster"
+}
+
+variable "gpu_instance_type" {
+  type        = string
+  default     = "g7e.2xlarge"
+  description = "AWS instance type for the GPU machine pool."
 }

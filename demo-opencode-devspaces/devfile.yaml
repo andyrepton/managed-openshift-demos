@@ -1,0 +1,43 @@
+schemaVersion: 2.2.2
+metadata:
+  name: opencode-devspaces
+  displayName: OpenCode AI Coding Assistant
+  description: Dev Spaces workspace with OpenCode connected to self-hosted Devstral via vLLM
+  tags:
+    - ai
+    - coding-assistant
+    - opencode
+components:
+  - name: dev
+    container:
+      image: registry.redhat.io/devspaces/udi-rhel8:latest
+      memoryRequest: 2Gi
+      memoryLimit: 4Gi
+      cpuRequest: "1"
+      cpuLimit: "2"
+      mountSources: true
+      env:
+        - name: OPENCODE_MODEL_URL
+          value: http://devstral-predictor.vllm-model-serving.svc.cluster.local/v1
+        - name: OPENCODE_MODEL_NAME
+          value: devstral
+      endpoints:
+        - name: opencode
+          targetPort: 3000
+          exposure: internal
+commands:
+  - id: install-opencode
+    exec:
+      component: dev
+      commandLine: |
+        curl -fsSL https://opencode.ai/install.sh | bash &&
+        echo 'export PATH="$HOME/.opencode/bin:$PATH"' >> ~/.bashrc
+      workingDir: /projects
+  - id: start-opencode
+    exec:
+      component: dev
+      commandLine: opencode
+      workingDir: /projects
+events:
+  postStart:
+    - install-opencode

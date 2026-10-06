@@ -219,6 +219,18 @@ variable "deploy_ai_machine_pool" {
   description = "Deploy additional nodes for OpenShift AI."
 }
 
+variable "ai_gpu_instance_type" {
+  type        = string
+  default     = "g7e.2xlarge"
+  description = "AWS instance type for the GPU machine pool."
+}
+
+variable "ai_gpu_subnet_index" {
+  type        = number
+  default     = 0
+  description = "Index into the private subnets list for the GPU machine pool. Use this when the GPU instance type is only available in certain AZs."
+}
+
 variable "deploy_bgp" {
   type        = bool
   default     = false

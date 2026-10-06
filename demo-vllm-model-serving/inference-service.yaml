@@ -1,0 +1,27 @@
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: devstral
+  namespace: vllm-model-serving
+  annotations:
+    serving.kserve.io/deploymentMode: RawDeployment
+spec:
+  predictor:
+    model:
+      modelFormat:
+        name: vLLM
+      runtime: vllm-runtime
+      storageUri: pvc://model-weights/devstral-awq
+      args:
+        - --model=/mnt/models
+        - --max-model-len=16384
+        - --quantization=compressed-tensors
+        - --dtype=float16
+        - --gpu-memory-utilization=0.92
+        - --enable-auto-tool-choice
+        - --tool-call-parser=mistral
+        - --served-model-name=devstral
+    tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule

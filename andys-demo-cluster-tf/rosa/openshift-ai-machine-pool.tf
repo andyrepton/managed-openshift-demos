@@ -6,7 +6,9 @@ module "rosa-rhoai-machine-pool" {
   openshift_version = var.openshift_version
   tags              = var.default_aws_tags
   subnet_id         = local.private_subnet_id
+  gpu_subnet_id     = local.gpu_private_subnet_id
   aws_region        = var.aws_region
+  gpu_instance_type = var.ai_gpu_instance_type
 }
 
 output "aws_iam_access_key" {

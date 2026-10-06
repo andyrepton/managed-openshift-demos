@@ -14,11 +14,7 @@ spec:
       managementState: Managed
     kserve:
       serving:
-        ingressGateway:
-          certificate:
-            type: OpenshiftDefaultIngress
-        managementState: Managed
-        name: knative-serving
+        managementState: Unmanaged
       managementState: Managed
     trustyai:
       managementState: Removed

@@ -63,7 +63,7 @@ Both routes pass through the MaaS gateway for authentication and usage tracking 
 
 ```
 cluster-setup/          Cluster prerequisites (operators, RHOAI configuration)
-  operators/            Operator subscriptions (NFD, NVIDIA GPU, cert-manager, COO, OTel, RHOAI)
+  operators/            Additional operator subscriptions (cert-manager, COO, OTel, RHCL)
   ai-project/           Namespace, DataScienceCluster, and vLLM ServingRuntime
 models/                 Model PVCs, download jobs, chat templates, LLMInferenceServices
 maas/                   MaaS infrastructure (RHCL, Kuadrant, Authorino, PostgreSQL, gateway, auth)
@@ -74,6 +74,7 @@ docs/                   Documentation and blog posts
 
 ## Prerequisites
 
+- [`openshift-ai/`](../openshift-ai/) demo deployed (NFD, NVIDIA GPU Operator, RHOAI)
 - A ROSA (AWS) or ARO (Azure) cluster with GPU machine pool(s)
   - ROSA: Use `../andys-demo-cluster-tf` with `ai_rosa.tfvars` (set GPU pool replicas to 2)
   - ARO: Ensure GPU quota is available (e.g. `Standard_NC24ads_A100_v4` or `Standard_NV36ads_A10_v5`)
@@ -126,44 +127,16 @@ oc apply -f cluster-setup/operators/cluster-observability-operator.yaml
 oc apply -f cluster-setup/operators/opentelemetry.yaml
 ```
 
-### Step 3: Install GPU Operators
+### Step 3: Verify GPU and RHOAI Prerequisites
 
-```bash
-# Node Feature Discovery
-oc apply -f cluster-setup/operators/nfd.yaml
-oc wait --for=condition=Available deployment -n openshift-nfd --all --timeout=300s
-
-# NFD Instance (discovers GPU hardware)
-oc apply -f cluster-setup/operators/nfd-instance.yaml
-
-# NVIDIA GPU Operator
-oc apply -f cluster-setup/operators/nvidia-gpu-operator.yaml
-oc wait --for=condition=Available deployment -n nvidia-gpu-operator --all --timeout=300s
-
-# NVIDIA ClusterPolicy (installs GPU drivers on nodes)
-oc apply -f cluster-setup/operators/nvidia-cluster-policy.yaml
-```
-
-Wait for GPU driver pods to be ready on the GPU nodes:
-
-```bash
-oc get pods -n nvidia-gpu-operator -l app=nvidia-driver-daemonset -w
-```
-
-Verify GPUs are discovered:
+Ensure the [`openshift-ai/`](../openshift-ai/) demo is deployed. Verify GPUs are discovered and RHOAI is running:
 
 ```bash
 oc get nodes -l nvidia.com/gpu.present=true
+oc get csv -n redhat-ods-operator
 ```
 
-### Step 4: Install Red Hat OpenShift AI
-
-```bash
-oc apply -f cluster-setup/operators/rhoai.yaml
-oc wait --for=condition=Available deployment -n redhat-ods-operator --all --timeout=600s
-```
-
-### Step 5: Configure OpenShift AI
+### Step 4: Configure OpenShift AI
 
 ```bash
 # Create the project namespace
@@ -186,7 +159,7 @@ Then deploy the vLLM ServingRuntime:
 oc apply -f cluster-setup/ai-project/serving-runtime.yaml
 ```
 
-### Step 6: Set Up MaaS Infrastructure
+### Step 5: Set Up MaaS Infrastructure
 
 MaaS provides Red Hat-native API key authentication, per-user token quotas, and usage tracking. All commands in this step use files from the `maas/` directory.
 
@@ -240,7 +213,7 @@ oc patch odhdashboardconfig odh-dashboard-config \
   -p '{"spec":{"dashboardConfig":{"genAiStudio":true,"observabilityDashboard":true}}}'
 ```
 
-### Step 7: Download and Deploy Models
+### Step 6: Download and Deploy Models
 
 Create a HuggingFace token secret (this file is gitignored to prevent accidental credential leaks):
 
@@ -283,7 +256,7 @@ oc get llminferenceservice -n claude-code-demo -w
 # Both should show READY=True after ~5 minutes
 ```
 
-### Step 8: Register Models and Create User Access
+### Step 7: Register Models and Create User Access
 
 Register the models with MaaS, create user access, and set up token quotas:
 
@@ -366,7 +339,7 @@ echo "Your MaaS API key: $MAAS_KEY"
 echo "Save this — it is only shown once."
 ```
 
-### Step 9: Deploy the LiteLLM Gateway
+### Step 8: Deploy the LiteLLM Gateway
 
 Claude Code uses the Anthropic Messages API, which requires a translation layer to reach vLLM's OpenAI-compatible backend. LiteLLM handles this and provides model name aliasing.
 
@@ -391,7 +364,7 @@ oc apply -f litellm-gateway/litellm-route.yaml
 oc wait --for=condition=Available deployment/litellm-gateway -n claude-code-demo --timeout=120s
 ```
 
-### Step 10: Apply Streaming Timeout Fixes
+### Step 9: Apply Streaming Timeout Fixes
 
 The MaaS gateway has default timeouts that kill long-running streaming responses. Apply these fixes:
 
@@ -403,7 +376,7 @@ oc apply -f maas/stream-timeout-envoyfilter.yaml
 oc apply -f maas/payload-processing-timeout-override.yaml
 ```
 
-### Step 11: Test the Setup
+### Step 10: Test the Setup
 
 The first request to each model may be slow (30-60s) while vLLM compiles CUDA graphs. Send a warm-up request first.
 
