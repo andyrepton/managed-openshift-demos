@@ -7,6 +7,13 @@ metadata:
     - ai
     - coding-assistant
     - opencode
+attributes:
+  .vscode/extensions.json: |
+    {
+      "recommendations": [
+        "sst-dev.opencode"
+      ]
+    }
 components:
   - name: dev
     container:
