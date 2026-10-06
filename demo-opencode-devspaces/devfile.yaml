@@ -24,8 +24,6 @@ components:
       cpuLimit: "2"
       mountSources: true
       env:
-        - name: VLLM_API_KEY
-          value: not-needed
         - name: DEFAULT_EXTENSIONS
           value: /tmp/opencode.vsix;/tmp/continue.vsix
       endpoints:
@@ -45,6 +43,7 @@ commands:
         echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc &&
         mkdir -p "$HOME/.config/opencode" &&
         cp /projects/managed-openshift-demos/demo-opencode-devspaces/opencode.json "$HOME/.config/opencode/opencode.jsonc" &&
+        cp /projects/managed-openshift-demos/demo-opencode-devspaces/opencode.json /projects/managed-openshift-demos/opencode.json &&
         mkdir -p "$HOME/.continue" &&
         cp /projects/managed-openshift-demos/demo-opencode-devspaces/continue-config.json "$HOME/.continue/config.json"
       workingDir: /projects
@@ -52,7 +51,7 @@ commands:
     exec:
       component: dev
       commandLine: opencode
-      workingDir: /projects
+      workingDir: /projects/managed-openshift-demos
 events:
   postStart:
     - install-tools
