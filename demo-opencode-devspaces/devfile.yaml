@@ -7,13 +7,6 @@ metadata:
     - ai
     - coding-assistant
     - opencode
-attributes:
-  .vscode/extensions.json: |
-    {
-      "recommendations": [
-        "sst-dev.opencode"
-      ]
-    }
 components:
   - name: dev
     container:
@@ -28,6 +21,8 @@ components:
           value: http://devstral-predictor.vllm-model-serving.svc.cluster.local/v1
         - name: OPENCODE_MODEL_NAME
           value: devstral
+        - name: DEFAULT_EXTENSIONS
+          value: /tmp/opencode.vsix
       endpoints:
         - name: opencode
           targetPort: 3000
@@ -37,6 +32,7 @@ commands:
     exec:
       component: dev
       commandLine: |
+        curl -fsSL -L https://open-vsx.org/api/sst-dev/opencode/0.0.13/file/sst-dev.opencode-0.0.13.vsix -o /tmp/opencode.vsix &&
         curl -fsSL -L https://github.com/anomalyco/opencode/releases/latest/download/opencode-linux-x64.tar.gz | tar xz -C /tmp &&
         mkdir -p "$HOME/.local/bin" &&
         mv /tmp/opencode "$HOME/.local/bin/opencode" &&
