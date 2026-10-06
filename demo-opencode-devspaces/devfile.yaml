@@ -9,9 +9,6 @@ metadata:
     - opencode
 components:
   - name: dev
-    attributes:
-      che-theia.eclipse.org/vscode-extensions:
-        - sst-dev.opencode
     container:
       image: registry.redhat.io/devspaces/udi-rhel8:latest
       memoryRequest: 2Gi
@@ -33,8 +30,10 @@ commands:
     exec:
       component: dev
       commandLine: |
-        curl -fsSL https://opencode.ai/install.sh | bash &&
-        echo 'export PATH="$HOME/.opencode/bin:$PATH"' >> ~/.bashrc
+        curl -fsSL -L https://github.com/anomalyco/opencode/releases/latest/download/opencode-linux-x64.tar.gz | tar xz -C /tmp &&
+        mkdir -p "$HOME/.local/bin" &&
+        mv /tmp/opencode "$HOME/.local/bin/opencode" &&
+        echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
       workingDir: /projects
   - id: start-opencode
     exec:
