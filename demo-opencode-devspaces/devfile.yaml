@@ -38,7 +38,7 @@ commands:
       component: dev
       commandLine: |
         curl -fsSL -L https://open-vsx.org/api/sst-dev/opencode/0.0.13/file/sst-dev.opencode-0.0.13.vsix -o /tmp/opencode.vsix &&
-        curl -fsSL -L https://open-vsx.org/api/Continue/continue/latest/file/Continue.continue-latest.vsix -o /tmp/continue.vsix &&
+        curl -fsSL -L https://open-vsx.org/api/Continue/continue/linux-x64/2.1.0/file/Continue.continue-2.1.0@linux-x64.vsix -o /tmp/continue.vsix &&
         curl -fsSL -L https://github.com/anomalyco/opencode/releases/latest/download/opencode-linux-x64.tar.gz | tar xz -C /tmp &&
         mkdir -p "$HOME/.local/bin" &&
         mv /tmp/opencode "$HOME/.local/bin/opencode" &&
