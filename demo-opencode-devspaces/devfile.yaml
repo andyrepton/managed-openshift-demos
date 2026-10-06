@@ -7,6 +7,13 @@ metadata:
     - ai
     - coding-assistant
     - opencode
+attributes:
+  .vscode/settings.json: |
+    {
+      "github.copilot.enable": {
+        "*": false
+      }
+    }
 components:
   - name: dev
     container:
@@ -17,26 +24,29 @@ components:
       cpuLimit: "2"
       mountSources: true
       env:
-        - name: OPENCODE_MODEL_URL
-          value: http://devstral-predictor.vllm-model-serving.svc.cluster.local/v1
-        - name: OPENCODE_MODEL_NAME
-          value: devstral
+        - name: VLLM_API_KEY
+          value: not-needed
         - name: DEFAULT_EXTENSIONS
-          value: /tmp/opencode.vsix
+          value: /tmp/opencode.vsix;/tmp/continue.vsix
       endpoints:
         - name: opencode
           targetPort: 3000
           exposure: internal
 commands:
-  - id: install-opencode
+  - id: install-tools
     exec:
       component: dev
       commandLine: |
         curl -fsSL -L https://open-vsx.org/api/sst-dev/opencode/0.0.13/file/sst-dev.opencode-0.0.13.vsix -o /tmp/opencode.vsix &&
+        curl -fsSL -L https://open-vsx.org/api/Continue/continue/latest/file/Continue.continue-latest.vsix -o /tmp/continue.vsix &&
         curl -fsSL -L https://github.com/anomalyco/opencode/releases/latest/download/opencode-linux-x64.tar.gz | tar xz -C /tmp &&
         mkdir -p "$HOME/.local/bin" &&
         mv /tmp/opencode "$HOME/.local/bin/opencode" &&
-        echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+        echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc &&
+        mkdir -p "$HOME/.config/opencode" &&
+        cp /projects/managed-openshift-demos/demo-opencode-devspaces/opencode.json "$HOME/.config/opencode/opencode.jsonc" &&
+        mkdir -p "$HOME/.continue" &&
+        cp /projects/managed-openshift-demos/demo-opencode-devspaces/continue-config.json "$HOME/.continue/config.json"
       workingDir: /projects
   - id: start-opencode
     exec:
@@ -45,4 +55,4 @@ commands:
       workingDir: /projects
 events:
   postStart:
-    - install-opencode
+    - install-tools

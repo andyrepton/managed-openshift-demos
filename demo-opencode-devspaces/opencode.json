@@ -1,13 +1,19 @@
 {
-  "$schema": "https://opencode.ai/config.schema.json",
-  "provider": {
-    "openai": {
-      "api_key": "not-needed",
-      "api_url": "http://devstral-predictor.vllm-model-serving.svc.cluster.local/v1"
+  "$schema": "https://opencode.ai/config.json",
+  "model": "vllm/devstral",
+  "providers": {
+    "vllm": {
+      "name": "vLLM on OpenShift",
+      "env": ["VLLM_API_KEY"],
+      "package": "@opencode/ai/providers/openai-compatible",
+      "settings": {
+        "baseURL": "http://devstral-predictor.vllm-model-serving.svc.cluster.local/v1"
+      },
+      "models": {
+        "devstral": {
+          "name": "Devstral Small 2 24B AWQ"
+        }
+      }
     }
-  },
-  "model": {
-    "chat": "openai/devstral",
-    "apply": "openai/devstral"
   }
 }
