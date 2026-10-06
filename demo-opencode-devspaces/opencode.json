@@ -7,7 +7,7 @@
       "env": ["VLLM_API_KEY"],
       "package": "@opencode/ai/providers/openai-compatible",
       "settings": {
-        "baseURL": "http://devstral-predictor.vllm-model-serving.svc.cluster.local/v1"
+        "baseURL": "http://devstral-predictor.vllm-model-serving.svc.cluster.local:8000/v1"
       },
       "models": {
         "devstral": {
