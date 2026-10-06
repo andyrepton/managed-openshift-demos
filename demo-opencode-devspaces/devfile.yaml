@@ -9,6 +9,9 @@ metadata:
     - opencode
 components:
   - name: dev
+    attributes:
+      che-theia.eclipse.org/vscode-extensions:
+        - sst-dev.opencode
     container:
       image: registry.redhat.io/devspaces/udi-rhel8:latest
       memoryRequest: 2Gi
