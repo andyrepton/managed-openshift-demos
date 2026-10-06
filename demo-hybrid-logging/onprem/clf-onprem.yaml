@@ -4,8 +4,19 @@ metadata:
   name: collector
   namespace: openshift-logging
 spec:
+  collector:
+    resources:
+      limits:
+        memory: 4Gi
+      requests:
+        memory: 256Mi
   serviceAccount:
     name: collector
+  filters:
+    - name: add-cluster-label
+      type: openshiftLabels
+      openshiftLabels:
+        cluster: onprem
   outputs:
     - name: rosa-loki-application
       type: loki
@@ -39,8 +50,12 @@ spec:
         - application
       outputRefs:
         - rosa-loki-application
+      filterRefs:
+        - add-cluster-label
     - name: infrastructure-logs-to-rosa
       inputRefs:
         - infrastructure
       outputRefs:
         - rosa-loki-infrastructure
+      filterRefs:
+        - add-cluster-label

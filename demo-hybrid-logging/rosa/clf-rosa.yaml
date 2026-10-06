@@ -6,6 +6,11 @@ metadata:
 spec:
   serviceAccount:
     name: collector
+  filters:
+    - name: add-cluster-label
+      type: openshiftLabels
+      openshiftLabels:
+        cluster: rosa
   outputs:
     - name: loki-output
       type: lokiStack
@@ -26,8 +31,12 @@ spec:
         - application
       outputRefs:
         - loki-output
+      filterRefs:
+        - add-cluster-label
     - name: infrastructure-logs
       inputRefs:
         - infrastructure
       outputRefs:
         - loki-output
+      filterRefs:
+        - add-cluster-label
