@@ -8,6 +8,12 @@ spec:
   template:
     spec:
       restartPolicy: OnFailure
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
+      nodeSelector:
+        nvidia.com/gpu.present: "true"
       containers:
         - name: download
           image: python:3.11-slim

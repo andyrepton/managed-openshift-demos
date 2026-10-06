@@ -84,7 +84,7 @@ docs/                   Documentation and blog posts
 
 ### GPU Requirements
 
-Both models require a GPU with at least 24GB VRAM (FP8 quantisation). Running both simultaneously needs 2 GPU nodes. The g7e.2xlarge (96GB) provides significant headroom for large context windows.
+Both models require a GPU with at least 24GB VRAM (FP8 quantisation). Running both simultaneously needs 2 GPU nodes. If you only have 1 GPU node, deploy Qwen only — see the single-model instructions in Steps 6-8. The g7e.2xlarge (96GB) provides significant headroom for large context windows.
 
 | Platform | Instance Type | GPU | VRAM |
 |----------|--------------|-----|------|
@@ -102,7 +102,7 @@ Both models require a GPU with at least 24GB VRAM (FP8 quantisation). Running bo
 
 ```bash
 cd ../andys-demo-cluster-tf
-# Edit ai_rosa.tfvars to set GPU pool replicas to 2
+# Edit ai_rosa.tfvars — set GPU pool replicas to 2 for both models, or 1 for Qwen only
 terraform apply -var-file=ai_rosa.tfvars
 ```
 
@@ -173,6 +173,9 @@ oc get csv -n openshift-operators -w
 # Wait for rhcl-operator to show "Succeeded"
 
 # Create Kuadrant instance
+# Note: Kuadrant requires the Gateway API provider (Istio) that KServe installs.
+# If Kuadrant reports "MissingDependency", restart the Kuadrant operator pod:
+#   oc delete pod -n openshift-operators -l app.kubernetes.io/name=kuadrant-operator
 oc apply -f maas/kuadrant.yaml
 oc wait --for=condition=Ready kuadrant/kuadrant -n kuadrant-system --timeout=300s
 
@@ -186,9 +189,8 @@ Deploy PostgreSQL (MaaS stores API keys and subscriptions here):
 # Generate a password and update postgres.yaml
 PG_PASSWORD=$(openssl rand -base64 16 | tr -d '=+/')
 echo "PostgreSQL password: $PG_PASSWORD"
-# Replace BOTH instances of REPLACE_WITH_GENERATED_PASSWORD in maas/postgres.yaml
-
-oc apply -f maas/postgres.yaml
+# Replace BOTH instances of REPLACE_ME in maas/postgres.yaml with the password
+sed "s/REPLACE_ME/$PG_PASSWORD/g" maas/postgres.yaml | oc apply -f -
 oc wait --for=condition=Available deployment/postgres \
   -n redhat-ods-applications --timeout=120s
 ```
@@ -221,10 +223,18 @@ Create a HuggingFace token secret (this file is gitignored to prevent accidental
 # Edit models/hf-token-secret.yaml and replace REPLACE_WITH_YOUR_HF_TOKEN
 oc apply -f models/hf-token-secret.yaml
 
-# Create PVCs and start downloads
+# Create PVCs and start downloads (both models)
 oc apply -f models/granite-pvc.yaml
 oc apply -f models/qwen3-8-pvc.yaml
 oc apply -f models/granite-download-job.yaml
+oc apply -f models/qwen3-8-download-job.yaml
+```
+
+**Single GPU node?** If you only have 1 GPU, deploy Qwen only:
+
+```bash
+oc apply -f models/hf-token-secret.yaml
+oc apply -f models/qwen3-8-pvc.yaml
 oc apply -f models/qwen3-8-download-job.yaml
 ```
 
@@ -234,7 +244,7 @@ Monitor download progress:
 # Granite (~30-45 minutes, BF16 weights are ~60GB)
 oc logs -f job/download-granite-4-1-30b -n claude-code-demo
 
-# Qwen (~20-30 minutes)
+# Qwen (~5-10 minutes, INT4 weights are ~15GB)
 oc logs -f job/download-qwen3-8-27b -n claude-code-demo
 ```
 
@@ -249,11 +259,18 @@ oc apply -f models/granite-llm-inference-service.yaml
 oc apply -f models/qwen3-8-llm-inference-service.yaml
 ```
 
+**Single GPU node?** Skip Granite:
+
+```bash
+oc apply -f models/qwen-chat-template.yaml
+oc apply -f models/qwen3-8-llm-inference-service.yaml
+```
+
 Wait for models to load:
 
 ```bash
 oc get llminferenceservice -n claude-code-demo -w
-# Both should show READY=True after ~5 minutes
+# Should show READY=True after ~5 minutes
 ```
 
 ### Step 7: Register Models and Create User Access
@@ -435,9 +452,11 @@ Both should return responses from their respective local models.
 export ANTHROPIC_BASE_URL="https://$(oc get route litellm-gateway -n claude-code-demo -o jsonpath='{.spec.host}')"
 export ANTHROPIC_API_KEY="$LITELLM_KEY"
 
-# Launch Claude Code
-claude
+# Launch Claude Code — set the model to one that's mapped in LiteLLM
+claude --model claude-opus-4-20250514
 ```
+
+The `--model` flag tells Claude Code which model ID to send. This must match a `model_name` in `litellm-gateway/litellm-config.yaml`. If you get a `400 Invalid model name` error, either the model ID isn't mapped in the LiteLLM config or Claude Code has been updated with a newer default model ID — see [Adding New Claude Model IDs](#adding-new-claude-model-ids) below.
 
 Check that Claude Code is connected to your gateway:
 
@@ -477,6 +496,21 @@ vLLM serves the models with their **real names** as primary identifiers, with Cl
 **Recommendation:** Use the real model names (`granite-4-1-30b`, `qwen3-8-27b`) for clarity. The Claude aliases are provided for convenience when switching between local and Anthropic models.
 
 You can modify `litellm-gateway/litellm-config.yaml` to change these mappings or add more models. The config uses the `hosted_vllm/` LiteLLM provider prefix for optimal vLLM compatibility, with `drop_params: true` to silently handle Anthropic-specific parameters that vLLM doesn't support.
+
+### Adding New Claude Model IDs
+
+Anthropic releases new model versions regularly (e.g. `claude-opus-5-5`, `claude-sonnet-5-5`). Claude Code sends the exact model ID string to the API, so each new version needs a mapping in the LiteLLM config. To add a new model ID:
+
+1. Check which model ID Claude Code is sending (it appears in the LiteLLM error log)
+2. Add a new entry in `litellm-gateway/litellm-config.yaml` mapping it to the appropriate vLLM backend
+3. Apply and restart:
+
+```bash
+oc apply -f litellm-gateway/litellm-config.yaml
+oc rollout restart deployment/litellm-gateway -n claude-code-demo
+```
+
+You can also check the current model IDs by running `/status` in Claude Code — the model name shown is what gets sent to the API.
 
 ### Using with Cursor
 
@@ -680,6 +714,16 @@ Check that the machine pool has been created and nodes are ready:
 oc get machinesets -A
 oc get nodes --show-labels | grep gpu
 ```
+
+### LLMInferenceService shows ConfigNotFound
+
+The `baseRefs` in the LLMInferenceService yaml files reference specific versioned config names (e.g. `v3-5-1-kserve-config-llm-single-node-template-nvidia-cuda`). These names change between RHOAI versions. Check what's available on your cluster:
+
+```bash
+oc get llminferenceserviceconfig -A
+```
+
+Update the `baseRefs` in the model yaml files to match the names on your cluster.
 
 ### Model download fails
 
