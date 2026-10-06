@@ -17,7 +17,7 @@ attributes:
 components:
   - name: dev
     container:
-      image: registry.redhat.io/devspaces/udi-rhel8:latest
+      image: registry.redhat.io/devspaces/udi-rhel9:latest
       memoryRequest: 2Gi
       memoryLimit: 4Gi
       cpuRequest: "1"
