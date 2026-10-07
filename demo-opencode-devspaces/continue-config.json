@@ -1,18 +1,20 @@
 {
   "models": [
     {
-      "title": "Devstral (vLLM on OpenShift)",
+      "title": "Qwen 3.8 27B (vLLM on OpenShift)",
       "provider": "openai",
-      "apiBase": "http://devstral.vllm-model-serving.svc.cluster.local/v1",
-      "model": "devstral",
-      "apiKey": "not-needed"
+      "apiBase": "https://qwen3-8-27b-kserve-workload-svc.claude-code-demo.svc.cluster.local:8000/v1",
+      "model": "qwen3-8-27b",
+      "apiKey": "not-needed",
+      "requestOptions": { "verifySsl": false }
     }
   ],
   "tabAutocompleteModel": {
-    "title": "Devstral Autocomplete",
+    "title": "Qwen Autocomplete",
     "provider": "openai",
-    "apiBase": "http://devstral.vllm-model-serving.svc.cluster.local/v1",
-    "model": "devstral",
-    "apiKey": "not-needed"
+    "apiBase": "https://qwen3-8-27b-kserve-workload-svc.claude-code-demo.svc.cluster.local:8000/v1",
+    "model": "qwen3-8-27b",
+    "apiKey": "not-needed",
+    "requestOptions": { "verifySsl": false }
   }
 }

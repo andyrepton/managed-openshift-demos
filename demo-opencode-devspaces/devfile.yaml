@@ -24,8 +24,8 @@ components:
       cpuLimit: "2"
       mountSources: true
       env:
-        - name: DEFAULT_EXTENSIONS
-          value: /tmp/opencode.vsix;/tmp/continue.vsix
+        - name: NODE_TLS_REJECT_UNAUTHORIZED
+          value: "0"
       endpoints:
         - name: opencode
           targetPort: 3000
@@ -37,6 +37,7 @@ commands:
       commandLine: |
         curl -fsSL -L https://open-vsx.org/api/sst-dev/opencode/0.0.13/file/sst-dev.opencode-0.0.13.vsix -o /tmp/opencode.vsix &&
         curl -fsSL -L https://open-vsx.org/api/Continue/continue/linux-x64/2.1.0/file/Continue.continue-2.1.0@linux-x64.vsix -o /tmp/continue.vsix &&
+        /checode/checode-linux-libc/ubi9/bin/remote-cli/code-oss --install-extension /tmp/continue.vsix --force 2>/dev/null || true &&
         curl -fsSL -L https://github.com/anomalyco/opencode/releases/latest/download/opencode-linux-x64.tar.gz | tar xz -C /tmp &&
         mkdir -p "$HOME/.local/bin" &&
         mv /tmp/opencode "$HOME/.local/bin/opencode" &&
