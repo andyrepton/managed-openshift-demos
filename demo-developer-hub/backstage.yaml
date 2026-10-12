@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: rhdh
+---
+apiVersion: rhdh.redhat.com/v1alpha5
+kind: Backstage
+metadata:
+  name: developer-hub
+  namespace: rhdh
+spec:
+  # The operator enables the `lightspeed` flavour by default (its metadata sets
+  # enabledByDefault: true), which adds an init-rag-data init container and a
+  # lightspeed-core sidecar to every pod. This demo is plain RHDH, so turn it off -
+  # ../demo-rhdh-lightspeed-with-custom-mcp is the demo that enables it and gives it
+  # a model to talk to.
+  flavours:
+    - name: lightspeed
+      enabled: false
+
+  database:
+    # Operator-managed PostgreSQL. Fine for a demo; use an external database for
+    # anything you care about keeping.
+    enableLocalDb: true
+
+  application:
+    appConfig:
+      configMaps:
+        - name: app-config-rhdh
+
+    dynamicPluginsConfigMapName: dynamic-plugins-rhdh
+
+    extraEnvs:
+      secrets:
+        - name: rhdh-secrets
+
+    route:
+      enabled: true

@@ -1,0 +1,13 @@
+# Entry point referenced by catalog.locations in app-config-rhdh.yaml.
+# Everything else in catalog/ is pulled in from here.
+apiVersion: backstage.io/v1alpha1
+kind: Location
+metadata:
+  name: demo-developer-hub-catalog
+  description: Sample entities and templates for the demo-developer-hub demo
+spec:
+  type: url
+  targets:
+    - ./org.yaml
+    - ./sample-component.yaml
+    - ./template-namespace-request.yaml

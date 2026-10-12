@@ -1,0 +1,34 @@
+# RHDH 1.10 ships in the standard `redhat-operators` catalog, so no CatalogSource is
+# needed - OpenShift already has it.
+#
+# See the README for why this is 1.10 and not 2.x: the 2.x images are published only
+# to quay.io and were never promoted to registry.redhat.io, and ROSA HCP blocks the
+# ImageDigestMirrorSet that would be needed to redirect them.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: rhdh-operator
+---
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: rhdh-operator-group
+  namespace: rhdh-operator
+spec:
+  # Empty targetNamespaces = all namespaces, so one operator can manage Backstage CRs
+  # in whichever namespace you put them.
+  targetNamespaces: []
+---
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: rhdh
+  namespace: rhdh-operator
+spec:
+  # `fast-1.10` rather than `fast`: it pins to the 1.10 stream, so the cluster will
+  # not jump to 2.x the moment that reaches the catalog.
+  channel: fast-1.10
+  name: rhdh
+  source: redhat-operators
+  sourceNamespace: openshift-marketplace
+  installPlanApproval: Automatic

@@ -1,0 +1,41 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dynamic-plugins-rhdh
+  namespace: rhdh
+data:
+  dynamic-plugins.yaml: |
+    # Start from the set RHDH ships enabled by default, then add to it.
+    includes:
+      - dynamic-plugins.default.yaml
+    plugins:
+      # GitHub catalog discovery. Optional for this demo - the catalog/ locations in
+      # app-config are enough on their own - but it is the usual next step, so it is
+      # here and disabled rather than absent.
+      - package: 'oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-plugin-catalog-backend-module-github:bs_1.45.3__0.11.2'
+        disabled: true
+        pluginConfig:
+          catalog:
+            providers:
+              github:
+                myorg:
+                  organization: '${GITHUB_ORG}'
+                  schedule:
+                    frequency: { minutes: 30 }
+                    timeout: { minutes: 3 }
+                    initialDelay: { seconds: 15 }
+
+      # This is where developer-tooling-dashboard's aro-planner frontend plugin gets
+      # wired in later. Left here as a marker so the wiring point is obvious.
+      #
+      # IMPORTANT: the key under dynamicPlugins.frontend must match `scalprum.name`
+      # in the plugin's package.json, or the plugin is discovered but never loaded.
+      #
+      # - package: 'oci://<registry>/aro-planner:<tag>'
+      #   disabled: false
+      #   pluginConfig:
+      #     dynamicPlugins:
+      #       frontend:
+      #         red-hat-developer-hub.backstage-plugin-aro-planner:
+      #           scaffolderFieldExtensions:
+      #             - importName: AroClusterPlannerFieldExtension
