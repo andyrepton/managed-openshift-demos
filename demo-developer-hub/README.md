@@ -133,6 +133,33 @@ If that PR appears, the GitHub integration, the Scaffolder and the catalog are a
 | `catalog/` | Sample entities and the `namespace-request` template |
 | `catalog/skeleton/` | Files the template renders into the PR |
 
+## Gotchas worth knowing
+
+Both of these cost real debugging time on first setup.
+
+**The GitHub Scaffolder actions ship disabled.** RHDH preinstalls
+`backstage-plugin-scaffolder-backend-module-github` in the image but leaves it off. Without the explicit `disabled: false` entry in `dynamic-plugins.yaml`, the template renders its files perfectly and then fails the publish step with:
+
+```
+Template action with ID 'publish:github:pull-request' is not registered
+```
+
+which reads like a missing plugin rather than a disabled one. Enabling it takes the registered action count from 17 to 30. Check with:
+
+```bash
+curl -s -H "Authorization: Bearer <token>" \
+  http://localhost:7007/api/scaffolder/v2/actions | jq -r '.[].id' | grep github
+```
+
+**Do not put a `/` in a branch you point `CATALOG_BRANCH` at.** Backstage's GitHub URL reader parses the ref in `/blob/<ref>/<path>` as a *single* path segment. A branch called `feat/developer-hub-demo` is read as ref `feat` with the remainder as a directory, and you get:
+
+```
+Unable to read url, no matching files found for
+https://github.com/.../tree/feat/developer-hub-demo/demo-developer-hub/catalog/all.yaml
+```
+
+Note the `/tree/` — that is the tell. Use `feat-developer-hub-demo` instead. `main` is unaffected.
+
 ## Notes
 
 * The CR uses `rhdh.redhat.com/v1alpha5`. The 1.10.5 CRD serves `v1alpha4` and `v1alpha5`, with `v1alpha5` as the storage version -- it is the one that carries `spec.flavours`.

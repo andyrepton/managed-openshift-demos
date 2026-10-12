@@ -9,10 +9,22 @@ data:
     includes:
       - dynamic-plugins.default.yaml
     plugins:
-      # GitHub catalog discovery. Optional for this demo - the catalog/ locations in
-      # app-config are enough on their own - but it is the usual next step, so it is
-      # here and disabled rather than absent.
-      - package: 'oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-plugin-catalog-backend-module-github:bs_1.45.3__0.11.2'
+      # Provides the `publish:github:*` Scaffolder actions, including
+      # `publish:github:pull-request` which the namespace-request template uses.
+      #
+      # RHDH ships this preinstalled in the image but DISABLED. Without this entry the
+      # template renders its files happily and then fails the publish step with
+      # "Template action with ID 'publish:github:pull-request' is not registered",
+      # which reads like a missing plugin rather than a disabled one.
+      #
+      # `./dynamic-plugins/dist/...` means the copy already in the image - no pull.
+      - package: ./dynamic-plugins/dist/backstage-plugin-scaffolder-backend-module-github-dynamic
+        disabled: false
+
+      # GitHub catalog discovery. Not needed here - the catalog/ locations in
+      # app-config cover it - but this is the usual next step, so it is present and
+      # disabled rather than absent.
+      - package: ./dynamic-plugins/dist/backstage-plugin-catalog-backend-module-github-dynamic
         disabled: true
         pluginConfig:
           catalog:
