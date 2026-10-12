@@ -1,0 +1,53 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dynamic-plugins-rhdh
+  namespace: rhdh
+data:
+  dynamic-plugins.yaml: |
+    # Start from the set RHDH ships enabled by default, then add to it.
+    includes:
+      - dynamic-plugins.default.yaml
+    plugins:
+      # Provides the `publish:github:*` Scaffolder actions, including
+      # `publish:github:pull-request` which the namespace-request template uses.
+      #
+      # RHDH ships this preinstalled in the image but DISABLED. Without this entry the
+      # template renders its files happily and then fails the publish step with
+      # "Template action with ID 'publish:github:pull-request' is not registered",
+      # which reads like a missing plugin rather than a disabled one.
+      #
+      # `./dynamic-plugins/dist/...` means the copy already in the image - no pull.
+      - package: ./dynamic-plugins/dist/backstage-plugin-scaffolder-backend-module-github-dynamic
+        disabled: false
+
+      # GitHub catalog discovery. Not needed here - the catalog/ locations in
+      # app-config cover it - but this is the usual next step, so it is present and
+      # disabled rather than absent.
+      - package: ./dynamic-plugins/dist/backstage-plugin-catalog-backend-module-github-dynamic
+        disabled: true
+        pluginConfig:
+          catalog:
+            providers:
+              github:
+                myorg:
+                  organization: '${GITHUB_ORG}'
+                  schedule:
+                    frequency: { minutes: 30 }
+                    timeout: { minutes: 3 }
+                    initialDelay: { seconds: 15 }
+
+      # This is where developer-tooling-dashboard's aro-planner frontend plugin gets
+      # wired in later. Left here as a marker so the wiring point is obvious.
+      #
+      # IMPORTANT: the key under dynamicPlugins.frontend must match `scalprum.name`
+      # in the plugin's package.json, or the plugin is discovered but never loaded.
+      #
+      # - package: 'oci://<registry>/aro-planner:<tag>'
+      #   disabled: false
+      #   pluginConfig:
+      #     dynamicPlugins:
+      #       frontend:
+      #         red-hat-developer-hub.backstage-plugin-aro-planner:
+      #           scaffolderFieldExtensions:
+      #             - importName: AroClusterPlannerFieldExtension

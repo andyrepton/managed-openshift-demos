@@ -1,0 +1,49 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config-rhdh
+  namespace: rhdh
+data:
+  app-config-rhdh.yaml: |
+    # On OpenShift the operator injects app.baseUrl / backend.baseUrl from the Route,
+    # so they are deliberately not set here.
+
+    auth:
+      environment: development
+      providers:
+        # Guest sign-in keeps the demo frictionless. For anything resembling
+        # production, swap this for the GitHub or OIDC provider and remove
+        # dangerouslyAllowOutsideDevelopment.
+        guest:
+          dangerouslyAllowOutsideDevelopment: true
+
+    backend:
+      auth:
+        externalAccess:
+          - type: legacy
+            options:
+              subject: legacy-default-config
+              secret: "${BACKEND_SECRET}"
+
+    integrations:
+      github:
+        - host: github.com
+          token: "${GITHUB_TOKEN}"
+
+    catalog:
+      # Allow the Scaffolder to register the components it creates.
+      rules:
+        - allow: [Component, System, Group, Resource, Location, Template, API]
+      locations:
+        # CATALOG_BRANCH is normally `main`. Pointing it at a feature branch lets you
+        # verify catalog changes before they are merged, without editing this file.
+        - type: url
+          target: https://github.com/${GITHUB_ORG}/${GITHUB_REPO}/blob/${CATALOG_BRANCH}/demo-developer-hub/catalog/all.yaml
+          rules:
+            - allow: [Component, System, Group, Resource, Location, Template, API]
+
+    scaffolder:
+      defaultAuthor:
+        name: Red Hat Developer Hub
+        email: rhdh@example.com
+      defaultCommitMessage: "Scaffolded by Red Hat Developer Hub"

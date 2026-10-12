@@ -1,0 +1,20 @@
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: payments
+  description: Example system, so the catalog is not empty on first load
+spec:
+  owner: payments-team
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: payments-api
+  description: Example component owned by payments-team
+  annotations:
+    github.com/project-slug: andyrepton/managed-openshift-demos
+spec:
+  type: service
+  lifecycle: production
+  owner: payments-team
+  system: payments

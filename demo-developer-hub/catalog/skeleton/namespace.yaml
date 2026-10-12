@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ${{ values.namespaceName }}
+  labels:
+    # Lets NetworkPolicies in other namespaces select this one by name.
+    kubernetes.io/metadata.name: ${{ values.namespaceName }}
+  annotations:
+    openshift.io/display-name: ${{ values.namespaceName }}
+    openshift.io/description: "${{ values.description }}"
+    backstage.io/owner: ${{ values.owner }}

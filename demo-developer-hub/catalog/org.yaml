@@ -1,0 +1,17 @@
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: platform-team
+  description: Owns the managed OpenShift platform and reviews cluster requests
+spec:
+  type: team
+  children: []
+---
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: payments-team
+  description: Example application team - the sort of team that would request a cluster
+spec:
+  type: team
+  children: []
