@@ -1,18 +1,29 @@
+import React from 'react';
+
+import Alert from '@mui/material/Alert';
+import Box from '@mui/material/Box';
+import Chip from '@mui/material/Chip';
+import CircularProgress from '@mui/material/CircularProgress';
+import Divider from '@mui/material/Divider';
+import Paper from '@mui/material/Paper';
+import Stack from '@mui/material/Stack';
+import Typography from '@mui/material/Typography';
+
 import type { CostEstimate, CostLine } from '@aro-planner/common';
 
 const money = (n: number, dp = 2) =>
   n.toLocaleString('en-US', { minimumFractionDigits: dp, maximumFractionDigits: dp });
 
 /**
- * Every figure is labelled with where it came from. A price Azure published and a
- * number we assumed must never look the same - that distinction is the whole point
- * of the panel being trustworthy.
+ * Every figure carries where it came from. A price Azure published and a number we
+ * assumed must never look alike - that distinction is what makes the panel worth
+ * trusting.
  */
-function SourceTag({ line }: { line: CostLine }) {
-  if (!line.included) return <span className="tag tag-excluded">excluded</span>;
-  if (line.source === 'azure-api') return <span className="tag tag-live">live</span>;
-  if (line.source === 'override') return <span className="tag tag-override">configured</span>;
-  return <span className="tag tag-assumption">assumed</span>;
+function SourceChip({ line }: { line: CostLine }) {
+  if (!line.included) return <Chip size="small" variant="outlined" label="excluded" />;
+  if (line.source === 'azure-api') return <Chip size="small" color="success" label="live" />;
+  if (line.source === 'override') return <Chip size="small" color="primary" label="configured" />;
+  return <Chip size="small" color="warning" label="assumed" />;
 }
 
 export interface CostPanelProps {
@@ -24,83 +35,122 @@ export interface CostPanelProps {
   retrievedAt?: string | undefined;
 }
 
-export function CostPanel({ estimate, loading, error, warning, stale, retrievedAt }: CostPanelProps) {
+export function CostPanel({
+  estimate,
+  loading,
+  error,
+  warning,
+  stale,
+  retrievedAt,
+}: CostPanelProps) {
   return (
-    <aside className="cost-panel" aria-live="polite" aria-busy={loading}>
-      <div className="cost-panel-head">
-        <h2>Estimated cost</h2>
-        {loading && <span className="spinner" aria-label="Updating estimate" />}
-      </div>
+    <Paper
+      variant="outlined"
+      sx={{ p: 2, position: 'sticky', top: 16 }}
+      aria-live="polite"
+      aria-busy={loading}
+    >
+      <Stack direction="row" alignItems="center" justifyContent="space-between" mb={1}>
+        <Typography variant="h6">Estimated cost</Typography>
+        {loading && <CircularProgress size={16} aria-label="Updating estimate" />}
+      </Stack>
 
       {error && (
-        <div className="banner banner-error" role="alert">
-          <strong>Could not price this.</strong>
-          <div>{error}</div>
-        </div>
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
       )}
-
       {warning && !error && (
-        <div className="banner banner-warn" role="status">
+        <Alert severity="warning" sx={{ mb: 2 }}>
           {warning}
-        </div>
+        </Alert>
       )}
-
       {stale && (
-        <div className="banner banner-warn" role="status">
+        <Alert severity="warning" sx={{ mb: 2 }}>
           Azure was unreachable, so these are cached prices
           {retrievedAt ? ` from ${new Date(retrievedAt).toLocaleString()}` : ''}.
-        </div>
+        </Alert>
       )}
 
-      {!estimate && !error && !warning && <p className="muted">Fill in the form to see a price.</p>}
+      {!estimate && !error && !warning && (
+        <Typography variant="body2" color="text.secondary">
+          Fill in the form to see a price.
+        </Typography>
+      )}
 
       {estimate && (
         <>
-          <div className="headline">
-            <div className="headline-figure">${money(estimate.monthly)}</div>
-            <div className="headline-unit">per month</div>
-            <div className="headline-sub">
+          <Box textAlign="center" py={2}>
+            <Typography variant="h3" component="div" fontWeight={700}>
+              ${money(estimate.monthly)}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              per month
+            </Typography>
+            <Typography variant="caption" color="text.secondary" display="block" mt={0.5}>
               ${money(estimate.hourly, 4)}/hour &middot; ${money(estimate.yearly)}/year
-            </div>
-          </div>
+            </Typography>
+          </Box>
 
-          <table className="lines">
-            <tbody>
-              {estimate.lines.map(line => (
-                <tr key={line.label} className={line.included ? '' : 'row-excluded'}>
-                  <td>
-                    <div className="line-label">{line.label}</div>
-                    {line.detail && <div className="line-detail">{line.detail}</div>}
-                    {line.sourceNote && <div className="line-note">{line.sourceNote}</div>}
-                  </td>
-                  <td className="line-amount">
+          <Divider />
+
+          <Stack divider={<Divider flexItem />} spacing={0}>
+            {estimate.lines.map(line => (
+              <Stack
+                key={line.label}
+                direction="row"
+                justifyContent="space-between"
+                alignItems="flex-start"
+                spacing={1}
+                py={1}
+                sx={{ opacity: line.included ? 1 : 0.6 }}
+              >
+                <Box flex={1} minWidth={0}>
+                  <Typography variant="body2" fontWeight={600}>
+                    {line.label}
+                  </Typography>
+                  {line.detail && (
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      {line.detail}
+                    </Typography>
+                  )}
+                  {line.sourceNote && (
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      {line.sourceNote}
+                    </Typography>
+                  )}
+                </Box>
+                <Box textAlign="right" flexShrink={0}>
+                  <Typography variant="body2" sx={{ fontVariantNumeric: 'tabular-nums' }}>
                     {line.included ? `$${money(line.hourly, 4)}/hr` : '--'}
-                    <div>
-                      <SourceTag line={line} />
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </Typography>
+                  <SourceChip line={line} />
+                </Box>
+              </Stack>
+            ))}
+          </Stack>
 
           {estimate.assumptions.length > 0 && (
-            <div className="assumptions">
-              <h3>Before you quote this</h3>
-              <ul>
+            <Alert severity="info" sx={{ mt: 2 }}>
+              <Typography variant="subtitle2" gutterBottom>
+                Before you quote this
+              </Typography>
+              <Box component="ul" sx={{ m: 0, pl: 2 }}>
                 {estimate.assumptions.map(a => (
-                  <li key={a}>{a}</li>
+                  <Typography component="li" variant="caption" key={a}>
+                    {a}
+                  </Typography>
                 ))}
-              </ul>
-            </div>
+              </Box>
+            </Alert>
           )}
 
-          <p className="muted small">
-            {estimate.currency} list price, {estimate.hoursPerMonth} hours/month. No reserved-instance
-            or enterprise agreement discounts applied.
-          </p>
+          <Typography variant="caption" color="text.secondary" display="block" mt={2}>
+            {estimate.currency} list price, {estimate.hoursPerMonth} hours/month. No
+            reserved-instance or enterprise agreement discounts applied.
+          </Typography>
         </>
       )}
-    </aside>
+    </Paper>
   );
 }

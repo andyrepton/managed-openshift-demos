@@ -88,7 +88,7 @@ Sign in as **Guest**.
 
 ## Notes
 
-* **Version is pinned to 1.10, not 2.x.** RHDH 2.x images were never promoted to `registry.redhat.io` -- that repository returns no tags and the operator pod fails with `manifest unknown`. The images exist only on `quay.io/rhdh`, and redirecting them requires an `ImageDigestMirrorSet`, which ROSA HCP denies because the `HostedCluster` object is owned by Red Hat SRE. Nothing needed here is missing from 1.10: its `lightspeed` flavour already ships the MCP tool runtime and an `mcp_servers` block identical to the 2.1 examples.
+* **Pinned to 1.10, not 2.x.** RHDH 2.x images are published only to `quay.io/rhdh` and not to `registry.redhat.io`, so the operator pod fails with `manifest unknown`. Redirecting them needs an `ImageDigestMirrorSet`, which ROSA HCP does not permit. 1.10 is not missing anything required here -- its `lightspeed` flavour already provides the MCP tool runtime and `mcp_servers` block.
 * **The GitHub Scaffolder module ships disabled.** RHDH preinstalls `backstage-plugin-scaffolder-backend-module-github` but leaves it off. Without the `disabled: false` entry in `dynamic-plugins.yaml`, templates render their files and then fail with `Template action with ID 'publish:github:pull-request' is not registered`. Enabling it takes the registered action count from 17 to 30.
 * **Do not use a `/` in a branch name set as `CATALOG_BRANCH`.** Backstage parses the ref in `/blob/<ref>/<path>` as a single path segment, so `feat/my-branch` resolves as ref `feat` with the remainder read as a directory. Use `feat-my-branch`. `main` is unaffected.
 * `CATALOG_BRANCH` lets you verify catalog changes on a branch before merging without editing `app-config-rhdh.yaml`:

@@ -1,18 +1,14 @@
 {
+  "extends": "@backstage/cli/config/tsconfig.json",
+  "include": ["src"],
+  "exclude": ["node_modules", "dist", "dist-scalprum"],
   "compilerOptions": {
-    "target": "ES2022",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "jsx": "react-jsx",
-    "strict": true,
-    "noUncheckedIndexedAccess": true,
-    "noImplicitOverride": true,
-    "skipLibCheck": true,
-    "noEmit": true,
-    "allowImportingTsExtensions": true,
-    "forceConsistentCasingInFileNames": true,
-    "types": ["vite/client"]
-  },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "vite.config.ts"]
+    // backstage-cli package build expects declarations under the workspace root at
+    // dist-types/<package-path>/. rootDir "." keeps the src/ prefix it looks for.
+    "outDir": "../../dist-types/plugins/aro-planner",
+    "rootDir": ".",
+    // Backstage's shared config pulls in jest types; this package has no tests
+    // (the logic it renders is covered in @aro-planner/common).
+    "types": ["node"]
+  }
 }

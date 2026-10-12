@@ -1,3 +1,18 @@
+# Who may sign in.
+#
+# app-config uses the `usernameMatchingUserEntityName` resolver, so a GitHub login
+# only succeeds if a User entity here has the same name. GitHub OAuth on its own
+# would let ANY GitHub account authenticate; this file is what prevents that.
+# Adding a person to this file grants them access.
+apiVersion: backstage.io/v1alpha1
+kind: User
+metadata:
+  name: andyrepton
+spec:
+  profile:
+    displayName: Andy Repton
+  memberOf: [platform-team]
+---
 apiVersion: backstage.io/v1alpha1
 kind: Group
 metadata:
@@ -6,6 +21,7 @@ metadata:
 spec:
   type: team
   children: []
+  members: [andyrepton]
 ---
 apiVersion: backstage.io/v1alpha1
 kind: Group

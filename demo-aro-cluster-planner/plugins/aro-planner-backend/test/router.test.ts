@@ -3,7 +3,7 @@ import request from 'supertest';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { PriceTable, Sku } from '@aro-planner/common';
-import { createRouter } from '../src/router.js';
+import { createRouter } from '../src/router';
 
 const PRICES: PriceTable = {
   currency: 'USD',
@@ -191,5 +191,48 @@ describe('POST /plan - price fetch failures', () => {
       await request(a).post('/api/aro-planner/plan').send({ vcpu: 40, ramGiB: 160, region: 'westeurope' });
     }
     expect(buildPrices).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('POST /plan - malformed endpoints', () => {
+  // Each of these previously threw inside the async handler: no response sent,
+  // client left waiting for its own timeout.
+  const bad: [string, unknown][] = [
+    ['missing target', [{ name: 'x', direction: 'egress' }]],
+    ['unknown target kind', [{ name: 'x', direction: 'egress', target: { kind: 'carrier-pigeon' } }]],
+    ['namespace target with no namespace', [{ name: 'x', direction: 'egress', target: { kind: 'namespace' } }]],
+    ['bad direction', [{ name: 'x', direction: 'sideways', target: { kind: 'internet' } }]],
+    ['endpoints not an array', { name: 'x' }],
+    ['port out of range', [{ name: 'x', direction: 'egress', target: { kind: 'internet' }, ports: [{ protocol: 'TCP', port: 99999 }] }]],
+  ];
+
+  for (const [name, endpoints] of bad) {
+    it(`returns 400 for ${name} rather than hanging`, async () => {
+      const res = await request(app())
+        .post('/api/aro-planner/plan')
+        .send({ vcpu: 40, ramGiB: 160, endpoints });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('Invalid endpoints');
+    });
+  }
+
+  it('accepts on-premises with no cidrs, defaulting to empty', async () => {
+    const res = await request(app())
+      .post('/api/aro-planner/plan')
+      .send({ vcpu: 40, ramGiB: 160, endpoints: [{ name: 'db', direction: 'egress', target: { kind: 'on-premises' } }] });
+    expect(res.status).toBe(200);
+  });
+
+  it('generates policies for valid endpoints', async () => {
+    const res = await request(app())
+      .post('/api/aro-planner/plan')
+      .send({
+        applicationName: 'payments',
+        vcpu: 40, ramGiB: 160,
+        endpoints: [{ name: 'web', direction: 'ingress', target: { kind: 'internet' } }],
+      });
+    expect(res.status).toBe(200);
+    expect(res.body.networkPlan.namespace).toBe('payments');
+    expect(res.body.networkPlan.policies.length).toBeGreaterThan(4);
   });
 });

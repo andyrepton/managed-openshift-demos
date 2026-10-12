@@ -126,15 +126,21 @@ export function estimateCost(
           'The real total will be higher than shown.',
       );
     } else {
+      const note = opts.hcpControlPlaneNote;
       lines.push({
         label: 'Hosted control plane fee',
         hourly: round(fee),
         source: 'override',
-        sourceNote: 'Locally configured rate - not published by Microsoft.',
+        sourceNote: note
+          ? `ASSUMPTION: ${note}`
+          : 'Locally configured rate - Microsoft has not published one for ARO HCP.',
         included: true,
       });
       assumptions.push(
-        `The hosted control plane fee of $${fee}/hr is a locally configured value, not an Azure-published rate.`,
+        `ASSUMPTION, NOT A CONFIRMED PRICE: the hosted control plane fee of $${fee}/hr is a ` +
+          `locally configured value. Microsoft has not published a rate for ARO HCP. ` +
+          (note ? `${note} ` : '') +
+          `Do not quote this figure as an Azure price.`,
       );
     }
   }

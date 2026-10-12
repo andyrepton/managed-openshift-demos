@@ -11,9 +11,20 @@ data:
     auth:
       environment: development
       providers:
-        # Guest sign-in keeps the demo frictionless. For anything resembling
-        # production, swap this for the GitHub or OIDC provider and remove
-        # dangerouslyAllowOutsideDevelopment.
+        # Guest sign-in is ENABLED so the demo can be shown without accounts.
+        #
+        # `dangerouslyAllowOutsideDevelopment` is named that way for good reason:
+        # it hands a valid Backstage identity to anyone who can reach the Route.
+        # That is acceptable HERE, and only here, because this instance holds no
+        # credential a visitor could use:
+        #   - no GitHub token (integrations above are unauthenticated, public repo)
+        #   - no Scaffolder template that writes anywhere
+        #   - the ARO planner is read-only and prices from a public Azure API
+        #   - the MCP endpoint only accepts in-pod callers
+        #
+        # Re-check this the moment any of those stop being true. Adding a
+        # credential, a write action, or private data to this instance means guest
+        # sign-in must be turned off in the same change.
         guest:
           dangerouslyAllowOutsideDevelopment: true
 
@@ -27,8 +38,13 @@ data:
 
     integrations:
       github:
+        # No token on purpose. This demo reads a PUBLIC repo, which works
+        # unauthenticated, and holds no credential that an anonymous visitor could
+        # drive. Adding a token here re-creates the exposure that forced guest
+        # sign-in off: a stored write credential reachable by anyone who can load
+        # the page. If a token ever becomes necessary, turn guest sign-in off in
+        # the same change.
         - host: github.com
-          token: "${GITHUB_TOKEN}"
 
     catalog:
       # Allow the Scaffolder to register the components it creates.
@@ -47,3 +63,19 @@ data:
         name: Red Hat Developer Hub
         email: rhdh@example.com
       defaultCommitMessage: "Scaffolded by Red Hat Developer Hub"
+
+    # ARO cluster planner (../demo-aro-cluster-planner).
+    #
+    # Microsoft has NOT published a per-cluster control-plane fee for ARO HCP - it
+    # is absent from both the pricing page and the Azure Retail Prices API. The
+    # figure below is the published ROSA HCP cluster fee, used as a stand-in so the
+    # demo shows a complete total. It is an assumption, not a confirmed ARO price,
+    # and the estimate labels it as such wherever it appears.
+    #
+    # Remove both keys to have the fee excluded from the total and flagged instead.
+    aroPlanner:
+      hcpControlPlanePerHour: 0.25
+      hcpControlPlaneNote: >-
+        Borrowed from the published ROSA HCP cluster fee of $0.25/hr as a demo
+        stand-in. Microsoft has not published an ARO HCP equivalent and has not
+        confirmed that the two are the same.

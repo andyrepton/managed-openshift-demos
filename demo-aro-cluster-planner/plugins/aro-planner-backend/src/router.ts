@@ -6,19 +6,25 @@ import {
   type ClusterPlan,
   type PriceTable,
   type PricingOverrides,
+  type EndpointRequest,
   type SizingRequest,
   type Sku,
   type WorkloadProfile,
   buildPriceTable,
+  cheapestPriced,
+  compareModels,
   categoriesForProfile,
   estimateCost,
   findSkus,
   getSku,
   inferProfile,
+  planNetworkPolicies,
   recommendNodePools,
 } from '@aro-planner/common';
 
-import { TtlCache } from './cache.js';
+import { TtlCache } from './cache';
+import { endpointsSchema } from './schema';
+import { mcpRouter } from './mcp';
 
 /** Azure publishes prices rarely; an hour of staleness is not material to an estimate. */
 const PRICE_TTL_MS = 60 * 60 * 1000;
@@ -72,6 +78,13 @@ function parsePlanRequest(body: unknown): SizingRequest {
     profile,
     highAvailability: b.highAvailability !== false,
     dayTwo: b.dayTwo === true,
+    onPremises: b.deploymentModel === 'on-premises',
+    ...(typeof b.deploymentModel === 'string'
+      ? { deploymentModel: b.deploymentModel as SizingRequest['deploymentModel'] }
+      : {}),
+    ...(typeof b.applicationName === 'string' && b.applicationName
+      ? { applicationName: b.applicationName }
+      : {}),
     ...(version ? { openshiftVersion: version } : {}),
   };
 }
@@ -81,6 +94,10 @@ export function createRouter(options: RouterOptions = {}): Router {
   const cache = new TtlCache<PriceTable>(ttlMs);
   const router = express.Router();
   router.use(express.json({ limit: '64kb' }));
+
+  // MCP tools over the same engine. The lightspeed-core sidecar shares this pod,
+  // so it reaches them at http://localhost:7007/api/aro-planner/mcp.
+  router.use('/mcp', mcpRouter(overrides));
 
   router.get('/health', (_req, res) => {
     res.json({ status: 'ok', cachedRegions: cache.size });
@@ -110,6 +127,7 @@ export function createRouter(options: RouterOptions = {}): Router {
    * with the form without the UI having to orchestrate several calls.
    */
   router.post('/plan', async (req, res) => {
+    try {
     let request: SizingRequest;
     try {
       request = parsePlanRequest(req.body);
@@ -171,14 +189,53 @@ export function createRouter(options: RouterOptions = {}): Router {
       workerPools: [recommendations[0]!],
     };
 
+    // Connectivity -> NetworkPolicies. Namespace defaults to the application name
+    // so the generated manifests are usable as-is.
+    const parsedEndpoints = endpointsSchema.safeParse(
+      (req.body as Record<string, unknown>)?.endpoints ?? [],
+    );
+    if (!parsedEndpoints.success) {
+      res.status(400).json({
+        error: 'Invalid endpoints',
+        detail: parsedEndpoints.error.issues
+          .map(i => `${i.path.join('.') || 'endpoints'}: ${i.message}`)
+          .join('; '),
+      });
+      return;
+    }
+    const endpoints = parsedEndpoints.data as EndpointRequest[];
+    const networkPlan = planNetworkPolicies({
+      namespace: request.applicationName || 'my-application',
+      endpoints,
+    });
+
     const merged: Partial<PricingOverrides> = { ...DEFAULT_OVERRIDES, ...overrides };
+    const comparison = compareModels(request, {
+      prices,
+      dedicated: { plan, pool: recommendations[0]!, ...(cpSku ? { controlPlaneSku: cpSku } : {}) },
+      overrides: merged,
+    });
+
     res.json({
       request,
       recommendations,
       estimate: estimateCost(plan, prices, merged),
+      comparison,
+      cheapest: cheapestPriced(comparison)?.model ?? null,
+      networkPlan,
       pricesRetrievedAt: prices.retrievedAt,
       pricesStale: prices.stale === true,
     });
+    } catch (err) {
+      // Express 4 does not catch throws from an async handler - without this the
+      // socket stays open and the client waits for its own timeout.
+      if (!res.headersSent) {
+        res.status(500).json({
+          error: 'Could not build a plan.',
+          detail: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
   });
 
   return router;

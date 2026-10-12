@@ -27,6 +27,12 @@ export interface Sku {
 /** Standard ARO (customer-visible control plane) vs hosted control planes. */
 export type AroFlavour = 'classic' | 'hcp';
 
+/**
+ * Where a workload could run. The planner compares these so the choice of whether
+ * to use ARO at all is made on evidence rather than instinct.
+ */
+export type DeploymentModel = 'shared-namespace' | 'dedicated-cluster' | 'on-premises';
+
 export type WorkloadProfile =
   | 'general'
   | 'memory-heavy'
@@ -48,6 +54,12 @@ export interface SizingRequest {
   /** Adding a pool to an existing cluster, which permits day-2-only sizes. */
   dayTwo: boolean;
   openshiftVersion?: string;
+  /** Include on-premises in the comparison. */
+  onPremises?: boolean;
+  /** Which model the user has chosen. Drives what the UI shows and what is emitted. */
+  deploymentModel?: DeploymentModel;
+  /** The application this is for. Used to name the namespace and the artifacts. */
+  applicationName?: string;
 }
 
 /** A concrete worker pool: one SKU, a node count, and what that actually yields. */
@@ -129,6 +141,26 @@ export interface PricingOverrides {
    * rather than quietly pricing it at zero.
    */
   hcpControlPlanePerHour: number | null;
+  /**
+   * Cost of a vCPU-hour on a shared cluster someone already pays for. This is an
+   * ALLOCATION, not a price: a share of an existing cluster's cost. There is no
+   * Azure meter for it.
+   */
+  sharedClusterPerVcpuHour: number | null;
+  sharedClusterNote: string | null;
+  /**
+   * Fully-loaded cost of an on-premises vCPU-hour: amortised hardware, power,
+   * cooling, OpenShift subscription, staff. No pricing API exists for this - it is
+   * whatever the organisation's own figures say.
+   */
+  onPremPerVcpuHour: number | null;
+  onPremNote: string | null;
+  /**
+   * Where `hcpControlPlanePerHour` came from, surfaced verbatim in the estimate.
+   * Required reading when the figure is borrowed from elsewhere rather than
+   * published for ARO.
+   */
+  hcpControlPlaneNote: string | null;
   hoursPerMonth: number;
   /** OS disk per node. */
   osDiskGiB: number;
@@ -137,6 +169,11 @@ export interface PricingOverrides {
 
 export const DEFAULT_OVERRIDES: PricingOverrides = {
   hcpControlPlanePerHour: null,
+  hcpControlPlaneNote: null,
+  sharedClusterPerVcpuHour: null,
+  sharedClusterNote: null,
+  onPremPerVcpuHour: null,
+  onPremNote: null,
   hoursPerMonth: 730,
   osDiskGiB: 128,
   osDiskPerGiBMonth: null,
@@ -148,4 +185,25 @@ export interface ClusterPlan {
   /** Classic ARO only: three control plane nodes, charged as infra but not licensed. */
   controlPlaneSku?: Sku;
   workerPools: NodePoolPlan[];
+}
+
+/** How a model's cost lands: a recurring bill, or a single capital outlay. */
+export type BillingMode = 'monthly' | 'one-off';
+
+/** One deployment model, costed as far as it honestly can be. */
+export interface ModelComparison {
+  model: DeploymentModel;
+  label: string;
+  /** Monthly for cloud, one-off for on-premises capacity you buy up front. */
+  billing: BillingMode;
+  /** The headline figure, in whatever `billing` says it is. */
+  amount: number | null;
+  /** Null when no rate is configured. Null means UNPRICED, never free. */
+  estimate: CostEstimate | null;
+  /** Why this model is or is not priced, and what the reader must know. */
+  summary: string;
+  /** Shown when `estimate` is null, explaining what is needed to price it. */
+  unpricedReason?: string;
+  /** Operational differences that cost alone does not capture. */
+  tradeoffs: string[];
 }

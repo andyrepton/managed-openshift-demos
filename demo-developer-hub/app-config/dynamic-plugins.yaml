@@ -9,17 +9,15 @@ data:
     includes:
       - dynamic-plugins.default.yaml
     plugins:
-      # Provides the `publish:github:*` Scaffolder actions, including
-      # `publish:github:pull-request` which the namespace-request template uses.
+      # Disabled deliberately. This provides the `publish:github:*` Scaffolder
+      # actions, which need a stored GitHub token to do anything. With guest
+      # sign-in enabled there is no credential here for an anonymous visitor to
+      # drive, and these actions are what would change that.
       #
-      # RHDH ships this preinstalled in the image but DISABLED. Without this entry the
-      # template renders its files happily and then fails the publish step with
-      # "Template action with ID 'publish:github:pull-request' is not registered",
-      # which reads like a missing plugin rather than a disabled one.
-      #
-      # `./dynamic-plugins/dist/...` means the copy already in the image - no pull.
+      # Note RHDH ships this disabled by default anyway; re-enabling it means
+      # `disabled: false` AND a token, and so means turning guest sign-in off.
       - package: ./dynamic-plugins/dist/backstage-plugin-scaffolder-backend-module-github-dynamic
-        disabled: false
+        disabled: true
 
       # GitHub catalog discovery. Not needed here - the catalog/ locations in
       # app-config cover it - but this is the usual next step, so it is present and
@@ -37,17 +35,34 @@ data:
                     timeout: { minutes: 3 }
                     initialDelay: { seconds: 15 }
 
-      # This is where demo-aro-cluster-planner's aro-planner frontend plugin gets
-      # wired in later. Left here as a marker so the wiring point is obvious.
+      # ARO cluster planner, from ../demo-aro-cluster-planner. Two plugins ship in
+      # one registry image: the backend serves /api/aro-planner (the Azure Retail
+      # Prices API sends no CORS headers, so pricing must happen server-side), and
+      # the frontend provides the wizard page and the Scaffolder field.
       #
-      # IMPORTANT: the key under dynamicPlugins.frontend must match `scalprum.name`
-      # in the plugin's package.json, or the plugin is discovered but never loaded.
+      # The `!<plugin-path>` suffix names the plugin inside the image explicitly.
+      # Without it RHDH auto-detects the path from the `io.backstage.dynamic-packages`
+      # OCI manifest annotation, which an ordinary OpenShift build cannot set.
       #
-      # - package: 'oci://<registry>/aro-planner:<tag>'
-      #   disabled: false
-      #   pluginConfig:
-      #     dynamicPlugins:
-      #       frontend:
-      #         red-hat-developer-hub.backstage-plugin-aro-planner:
-      #           scaffolderFieldExtensions:
-      #             - importName: AroClusterPlannerFieldExtension
+      # The key under dynamicPlugins.frontend MUST equal `scalprum.name` from the
+      # plugin's package.json, or the plugin is discovered but never loaded.
+      - package: 'oci://quay.io/andyrepton/aro-planner:1.1.0!aro-planner-backstage-plugin-aro-planner-backend'
+        disabled: false
+
+      - package: 'oci://quay.io/andyrepton/aro-planner:1.1.0!aro-planner-backstage-plugin-aro-planner'
+        disabled: false
+        pluginConfig:
+          dynamicPlugins:
+            frontend:
+              aro-planner.backstage-plugin-aro-planner:
+                # No appIcons entry. `importName` under appIcons must name an icon
+                # component; pointing it at AroPlannerPage makes RHDH render the
+                # whole wizard inside the sidebar. `icon` below names a built-in.
+                dynamicRoutes:
+                  - path: /deployment-planner
+                    importName: AroPlannerPage
+                    menuItem:
+                      icon: category
+                      text: Deployment Planner
+                scaffolderFieldExtensions:
+                  - importName: AroClusterPlannerFieldExtension

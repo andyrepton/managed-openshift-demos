@@ -16,5 +16,11 @@
     "test": "yarn workspaces foreach --all --topological run test",
     "build": "yarn workspaces foreach --all --topological run build",
     "typecheck": "yarn workspaces foreach --all --topological run typecheck"
+  },
+  "resolutions": {
+    "got": "11.8.2"
+  },
+  "devDependencies": {
+    "@backstage/cli-defaults": "^0.1.0"
   }
 }

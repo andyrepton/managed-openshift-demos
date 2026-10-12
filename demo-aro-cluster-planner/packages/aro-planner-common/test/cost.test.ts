@@ -93,6 +93,20 @@ describe('estimateCost - ARO HCP', () => {
     expect(estimate.hourly).toBe(2.406);
   });
 
+  it('surfaces the provenance note verbatim so the reader knows where the figure came from', () => {
+    const note = 'Borrowed from the ROSA HCP cluster fee as a demo stand-in.';
+    const estimate = estimateCost(plan, WESTEUROPE_PRICES, {
+      hcpControlPlanePerHour: 0.25,
+      hcpControlPlaneNote: note,
+    });
+    const fee = estimate.lines.find(l => l.label === 'Hosted control plane fee');
+    expect(fee?.sourceNote).toContain(note);
+    expect(fee?.sourceNote).toMatch(/^ASSUMPTION:/);
+    expect(estimate.assumptions.join(' ')).toContain(note);
+    // Never dressed up as a real Azure price.
+    expect(fee?.source).not.toBe('azure-api');
+  });
+
   it('includes the fee when one is configured, and flags it as not from Azure', () => {
     const estimate = estimateCost(plan, WESTEUROPE_PRICES, { hcpControlPlanePerHour: 0.25 });
     const cp = estimate.lines.find(l => l.label === 'Hosted control plane fee');
@@ -100,7 +114,8 @@ describe('estimateCost - ARO HCP', () => {
     expect(cp?.included).toBe(true);
     expect(cp?.source).toBe('override');
     expect(estimate.hourly).toBe(2.656);
-    expect(estimate.assumptions.join(' ')).toContain('locally configured');
+    expect(estimate.assumptions.join(' ')).toContain('ASSUMPTION, NOT A CONFIRMED PRICE');
+    expect(estimate.assumptions.join(' ')).toContain('has not published a rate for ARO HCP');
   });
 
   it('bills no control plane VMs at all', () => {

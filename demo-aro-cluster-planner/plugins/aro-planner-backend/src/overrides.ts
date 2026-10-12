@@ -27,6 +27,11 @@ export function loadOverrides(path?: string): Partial<PricingOverrides> {
     if (typeof raw.hoursPerMonth === 'number') out.hoursPerMonth = raw.hoursPerMonth;
     if (typeof raw.osDiskGiB === 'number') out.osDiskGiB = raw.osDiskGiB;
     if (typeof raw.osDiskPerGiBMonth === 'number') out.osDiskPerGiBMonth = raw.osDiskPerGiBMonth;
+    if (typeof raw.hcpControlPlaneNote === 'string') out.hcpControlPlaneNote = raw.hcpControlPlaneNote;
+    if (typeof raw.sharedClusterPerVcpuHour === 'number') out.sharedClusterPerVcpuHour = raw.sharedClusterPerVcpuHour;
+    if (typeof raw.sharedClusterNote === 'string') out.sharedClusterNote = raw.sharedClusterNote;
+    if (typeof raw.onPremPerVcpuHour === 'number') out.onPremPerVcpuHour = raw.onPremPerVcpuHour;
+    if (typeof raw.onPremNote === 'string') out.onPremNote = raw.onPremNote;
 
     return out;
   } catch {
