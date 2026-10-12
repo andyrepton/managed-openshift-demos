@@ -37,7 +37,7 @@ data:
                     timeout: { minutes: 3 }
                     initialDelay: { seconds: 15 }
 
-      # This is where developer-tooling-dashboard's aro-planner frontend plugin gets
+      # This is where demo-aro-cluster-planner's aro-planner frontend plugin gets
       # wired in later. Left here as a marker so the wiring point is obvious.
       #
       # IMPORTANT: the key under dynamicPlugins.frontend must match `scalprum.name`

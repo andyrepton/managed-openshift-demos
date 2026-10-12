@@ -1,0 +1,27 @@
+{
+  "name": "@aro-planner/wizard",
+  "version": "0.1.0",
+  "description": "ARO cluster planner wizard with a live cost panel",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "preview": "vite preview",
+    "test": "echo \"no unit tests yet - the logic lives in @aro-planner/common\" && exit 0"
+  },
+  "dependencies": {
+    "@aro-planner/common": "workspace:*",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.9.2",
+    "vite": "^6.0.0"
+  }
+}

@@ -1,5 +1,5 @@
 # Default-deny baseline. Nothing reaches these pods until something explicitly
-# allows it, which is the posture developer-tooling-dashboard will generate properly
+# allows it, which is the posture demo-aro-cluster-planner will generate properly
 # from a team's stated connectivity needs.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

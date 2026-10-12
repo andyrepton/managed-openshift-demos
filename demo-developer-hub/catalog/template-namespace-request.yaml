@@ -3,7 +3,7 @@
 #
 # If this runs end to end, the GitHub integration, the Scaffolder and the catalog are
 # all wired correctly, which is the prerequisite for everything in
-# developer-tooling-dashboard.
+# demo-aro-cluster-planner.
 apiVersion: scaffolder.backstage.io/v1beta3
 kind: Template
 metadata:

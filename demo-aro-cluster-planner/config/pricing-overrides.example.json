@@ -1,0 +1,17 @@
+{
+  "_comment": [
+    "Copy to pricing-overrides.json and fill in. Anything omitted stays unpriced,",
+    "which means it is shown as excluded and flagged rather than counted as zero.",
+    "",
+    "hcpControlPlanePerHour: the ARO HCP per-cluster control-plane fee. Microsoft has",
+    "not published this - it is absent from both the pricing page and the Retail",
+    "Prices API - so it must be supplied here or left out. 0.25 is the ROSA HCP",
+    "figure, used only as a placeholder; it is NOT an Azure rate.",
+    "",
+    "osDiskPerGiBMonth: managed disk price per GiB per month for your chosen tier."
+  ],
+  "hcpControlPlanePerHour": null,
+  "hoursPerMonth": 730,
+  "osDiskGiB": 128,
+  "osDiskPerGiBMonth": null
+}

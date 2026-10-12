@@ -1,0 +1,207 @@
+/* Deliberately plain CSS rather than MUI: it keeps the wizard free of any Backstage
+   version coupling, so the component ports into the RHDH plugin at phase C3 by
+   swapping its data layer, not its markup. */
+
+:root {
+  --bg: #f7f7f8;
+  --surface: #ffffff;
+  --border: #d9d9de;
+  --text: #1a1a1c;
+  --muted: #65656d;
+  --accent: #0066cc;
+  --accent-soft: #e8f1fb;
+  --warn-bg: #fdf3e2;
+  --warn-border: #e6a23c;
+  --error-bg: #fdecec;
+  --error-border: #c9190b;
+  --live: #2a7d4f;
+  --radius: 8px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #16161a;
+    --surface: #1f1f24;
+    --border: #35353d;
+    --text: #ececf0;
+    --muted: #9b9ba5;
+    --accent: #5ca8f0;
+    --accent-soft: #1b2b3d;
+    --warn-bg: #3a2f1a;
+    --error-bg: #3b1f1d;
+    --live: #5ec98c;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 400px;
+  gap: 24px;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 32px 24px 64px;
+  align-items: start;
+}
+
+@media (max-width: 960px) {
+  .layout { grid-template-columns: 1fr; }
+  .cost-panel { position: static !important; }
+}
+
+h1 { font-size: 26px; margin: 0 0 4px; }
+h2 { font-size: 16px; margin: 0 0 10px; }
+h3 { font-size: 14px; margin: 0 0 6px; }
+
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+
+section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+  margin-top: 18px;
+}
+
+.row { display: flex; gap: 14px; align-items: flex-end; flex-wrap: wrap; }
+.row > label { flex: 1 1 150px; }
+
+label {
+  display: block;
+  font-weight: 600;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+input[type="number"], select {
+  display: block;
+  width: 100%;
+  margin-top: 5px;
+  padding: 8px 10px;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+input[type="number"]:focus, select:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.check { font-weight: 400; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.check input { margin: 0; }
+
+.hint { font-size: 13px; color: var(--muted); margin: 0 0 12px; }
+.hint-inline { font-size: 12px; color: var(--muted); font-weight: 400; }
+.hint-warn {
+  background: var(--warn-bg);
+  border-left: 3px solid var(--warn-border);
+  padding: 8px 10px;
+  border-radius: 0 4px 4px 0;
+  color: var(--text);
+}
+
+.ratio { text-align: center; padding-bottom: 12px; min-width: 90px; }
+.ratio-value { display: block; font-size: 22px; font-weight: 700; }
+.ratio-label { display: block; font-size: 11px; color: var(--muted); }
+
+/* Node pool options */
+.options { display: flex; flex-direction: column; gap: 10px; }
+
+.option {
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  cursor: pointer;
+}
+.option:hover { border-color: var(--accent); }
+.option-selected { border-color: var(--accent); background: var(--accent-soft); }
+
+.option-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.option-title { font-weight: 700; }
+.option-spec { font-size: 13px; color: var(--muted); margin-top: 2px; }
+.option-delta { margin-left: 8px; color: var(--warn-border); font-weight: 600; }
+.option-why { margin: 8px 0 0; padding-left: 16px; font-size: 12px; color: var(--muted); }
+
+/* Cost panel */
+.cost-panel {
+  position: sticky;
+  top: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+}
+
+.cost-panel-head { display: flex; align-items: center; justify-content: space-between; }
+
+.headline { text-align: center; padding: 14px 0 18px; border-bottom: 1px solid var(--border); }
+.headline-figure { font-size: 38px; font-weight: 700; line-height: 1.1; }
+.headline-unit { font-size: 13px; color: var(--muted); }
+.headline-sub { font-size: 13px; color: var(--muted); margin-top: 6px; }
+
+.lines { width: 100%; border-collapse: collapse; margin-top: 10px; }
+.lines td { padding: 9px 0; border-bottom: 1px solid var(--border); vertical-align: top; }
+.line-label { font-size: 13px; font-weight: 600; }
+.line-detail { font-size: 12px; color: var(--muted); }
+.line-note { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.line-amount { text-align: right; white-space: nowrap; font-size: 13px; font-variant-numeric: tabular-nums; }
+.row-excluded .line-label, .row-excluded .line-amount { color: var(--muted); }
+
+.tag {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 6px;
+  border-radius: 10px;
+  margin-top: 3px;
+}
+.tag-live { background: var(--live); color: #fff; }
+.tag-override { background: var(--accent); color: #fff; }
+.tag-assumption { background: var(--warn-border); color: #fff; }
+.tag-excluded { background: var(--border); color: var(--muted); }
+.tag-best { background: var(--live); color: #fff; }
+
+.assumptions {
+  margin-top: 14px;
+  background: var(--warn-bg);
+  border-left: 3px solid var(--warn-border);
+  padding: 10px 12px;
+  border-radius: 0 4px 4px 0;
+}
+.assumptions ul { margin: 0; padding-left: 16px; font-size: 12px; }
+.assumptions li { margin-bottom: 4px; }
+
+.banner { padding: 10px 12px; border-radius: 6px; font-size: 13px; margin-bottom: 12px; }
+.banner-error { background: var(--error-bg); border-left: 3px solid var(--error-border); }
+.banner-warn { background: var(--warn-bg); border-left: 3px solid var(--warn-border); }
+
+.spinner {
+  width: 14px; height: 14px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation: none; }
+}

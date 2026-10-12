@@ -21,7 +21,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "estimate": "tsc -p tsconfig.json && node dist/src/cli.js"
+    "estimate": "tsc -p tsconfig.json && node dist/cli.js"
   },
   "devDependencies": {
     "@types/node": "^24",
