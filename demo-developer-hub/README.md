@@ -1,58 +1,33 @@
 # Red Hat Developer Hub on ROSA/ARO
 
-This demo installs Red Hat Developer Hub (RHDH) and proves the self-service golden path end to end: a developer fills in a form, RHDH renders manifests and opens a pull request for the platform team to review.
-
-It is the foundation for two demos that build on it:
-
-* **[RHDH Lightspeed with a custom MCP server](../demo-rhdh-lightspeed-with-custom-mcp)** -- enables the assistant, backed by your own self-hosted model, and teaches it new tools via MCP.
-* **[Developer Tooling Dashboard](../developer-tooling-dashboard)** -- a live-costed ARO cluster planner.
+Install Red Hat Developer Hub (RHDH) 1.10 as the base other demos plug into: the software catalog, the dynamic-plugin loader, and GitHub sign-in restricted to a named list of people.
 
 ## Overview
 
 * **RHDH 1.10.5** -- installed via OLM from the standard `redhat-operators` catalog.
-* **Software catalog** -- two teams, a sample system and component.
-* **One Scaffolder template** -- `Request a namespace`, which renders a Namespace plus a default-deny NetworkPolicy baseline and opens a GitHub PR.
-* **Guest sign-in** -- no identity provider needed to demo it.
-* **No assistant** -- deliberately disabled here; see the Lightspeed demo.
+* **Software catalog** -- two teams, a sample system and component, loaded from this repo.
+* **Software catalog from git** -- entities read from a public repo, unauthenticated.
+* **GitHub sign-in** -- via a GitHub App, with the software catalog as the access list.
 
-## Why 1.10 and not 2.x
-
-RHDH 2.x exists (`release-2.1` is active upstream) and renames Lightspeed to Intelligent Assistant. It is **not installable on ROSA HCP**, for two compounding reasons:
-
-1. The 2.x images were never promoted to `registry.redhat.io` -- that repository returns zero tags from the Red Hat container catalog API, and the operator pod fails with `manifest unknown` (not an auth error; ROSA's pull secret does carry Red Hat credentials). The images exist only on `quay.io/rhdh`.
-2. Redirecting them needs an `ImageDigestMirrorSet`, which ROSA HCP refuses:
-
-   ```
-   ValidatingAdmissionPolicy 'mirror' denied request: This resource cannot be created,
-   updated, or deleted. Please ask your administrator to modify the resource in the
-   HostedCluster object.
-   ```
-
-   That object belongs to Red Hat SRE, not the customer.
-
-Crucially, **nothing we need is missing from 1.10**. The Lightspeed flavour in 1.10.5 ships the MCP tool runtime (`remote::model-context-protocol`) and an `mcp_servers` registration block byte-identical to the one in the 2.1 examples, so custom MCP servers work exactly the same. The only real 2.x gain is RAG grounding: 2.x can retarget the Offline Knowledge Portal with a `chunk_filter_query`, where 1.10 pins a fixed `rhdh-rag-content-rhel9` image scoped to RHDH product docs.
-
-When 2.x reaches `registry.redhat.io`, the port is small: the flavour name (`lightspeed` -> `intelligent-assistant`), the plugin package name, and the `lightspeed-stack.yaml` shape.
+Verified on ROSA HCP, OpenShift 4.22.12.
 
 ## Prerequisites
 
-* A ROSA, ARO or OSD cluster with `cluster-admin`. Verified on ROSA HCP, OpenShift 4.22.12.
+* A ROSA, ARO or OSD cluster with `cluster-admin`. Build one with `../andys-demo-cluster-tf` using `basic_rosa.tfvars` or `basic_aro_hcp.tfvars` -- this demo is provider-agnostic.
 * `oc` CLI, logged in.
-* A GitHub personal access token with `repo` and `workflow` scopes, so the Scaffolder can open PRs.
+* A **GitHub App** for sign-in. See [Set up sign-in](#2-set-up-sign-in).
 
-Build a cluster with `../andys-demo-cluster-tf` if you need one -- `basic_rosa.tfvars` or `basic_aro_hcp.tfvars` are both fine. This demo does not care which provider it runs on.
+No GitHub personal access token is needed. The catalog is read from a public repository and this demo performs no git writes.
 
 ## How to Run the Demo
 
 ### 1. Install the operator
 
-RHDH 1.10 is in the catalog OpenShift already ships, so there is no CatalogSource to create:
+RHDH 1.10 ships in the catalog OpenShift already has, so there is no CatalogSource to create:
 
 ```bash
 oc apply -f operator/subscription.yaml
 ```
-
-The Subscription uses channel `fast-1.10` rather than `fast`, so the cluster stays on the 1.10 stream and will not jump to 2.x the moment that reaches the catalog.
 
 Wait for the CSV:
 
@@ -62,64 +37,73 @@ oc get csv -n rhdh-operator
 # rhdh-operator.v1.10.5  Red Hat Developer Hub Operator   1.10.5    Succeeded
 ```
 
-### 2. Create the secrets
+### 2. Set up sign-in
 
-Do this from the CLI rather than editing `secrets/rhdh-secrets.yaml`, so nothing sensitive is written into the repo:
+Register a **GitHub App** at <https://github.com/settings/apps/new>. Red Hat recommends a GitHub App over an OAuth App: fine-grained permissions and short-lived tokens.
+
+| Field | Value |
+| --- | --- |
+| GitHub App name | anything unique, e.g. `rhdh-demo-signin` |
+| Homepage URL | `https://<your-rhdh-host>` |
+| Authorization callback URL | `https://<your-rhdh-host>/api/auth/github/handler/frame` |
+| Webhook | clear **Active** -- no webhook is used |
+| Organization permissions | Members: `Read-only` |
+| Where can this be installed | Only on this account |
+
+Generate a client secret, then install the app on your account.
+
+Add yourself to `catalog/org.yaml` as a `User` whose `metadata.name` is your GitHub login. **That file is the access list** -- GitHub authenticates anyone, the catalog decides who gets in.
+
+### 3. Create the secrets
 
 ```bash
 oc create namespace rhdh
 
 oc -n rhdh create secret generic rhdh-secrets \
   --from-literal=BACKEND_SECRET="$(openssl rand -base64 24)" \
-  --from-literal=GITHUB_TOKEN="${GITHUB_TOKEN}" \
+  --from-literal=SESSION_SECRET="$(openssl rand -base64 24)" \
+  --from-literal=GITHUB_APP_CLIENT_ID="${GITHUB_APP_CLIENT_ID}" \
+  --from-literal=GITHUB_APP_CLIENT_SECRET="${GITHUB_APP_CLIENT_SECRET}" \
   --from-literal=GITHUB_ORG="andyrepton" \
   --from-literal=GITHUB_REPO="managed-openshift-demos" \
   --from-literal=CATALOG_BRANCH="main"
 ```
 
-`CATALOG_BRANCH` is the branch the catalog is read from. Point it at a feature branch to verify catalog or template changes before merging, without editing `app-config-rhdh.yaml`:
+`secrets/rhdh-secrets.yaml` documents the shape of the Secret with `REPLACE_ME` placeholders. Do not commit a filled-in copy.
 
-```bash
-oc -n rhdh patch secret rhdh-secrets \
-  -p '{"stringData":{"CATALOG_BRANCH":"feat/my-branch"}}'
-oc -n rhdh rollout restart deployment/backstage-developer-hub
-```
+There is deliberately no GitHub personal access token in it. The two `GITHUB_APP_*` values belong to a sign-in app and grant no repository access.
 
-`secrets/rhdh-secrets.yaml` exists as a reference for the shape of the Secret, with `REPLACE_ME` placeholders. Do not commit a filled-in copy.
-
-### 3. Apply the configuration
+### 4. Apply the configuration
 
 ```bash
 oc apply -f app-config/app-config-rhdh.yaml
 oc apply -f app-config/dynamic-plugins.yaml
 ```
 
-* `app-config-rhdh.yaml` -- GitHub integration, guest auth, and the catalog location pointing at `catalog/all.yaml` in this repo.
-* `dynamic-plugins.yaml` -- starts from `dynamic-plugins.default.yaml`. The commented-out block near the bottom is where the `aro-planner` plugin gets wired in later.
-
-### 4. Deploy RHDH
+### 5. Deploy RHDH
 
 ```bash
 oc apply -f backstage.yaml
 oc -n rhdh rollout status deployment/backstage-developer-hub --timeout=10m
-```
 
-Then open it:
-
-```bash
-# The operator names both the Deployment and the Route "backstage-<cr-name>".
 echo "https://$(oc get route backstage-developer-hub -n rhdh -o jsonpath='{.spec.host}')"
 ```
 
-Sign in as **Guest**.
+Raise the Route timeout. The default is 30 seconds, which is shorter than a
+reasoning model takes to answer, so the planner's assistant returns a bare 504
+with nothing in the backend log:
 
-### 5. Verify the golden path
+```bash
+oc annotate route backstage-developer-hub -n rhdh \
+  haproxy.router.openshift.io/timeout=10m --overwrite
+```
 
-1. Go to **Catalog** -- you should see `payments-api`, the `payments` system and two groups. If the catalog is empty, the location in `app-config-rhdh.yaml` could not be fetched; check the GitHub token and that your changes to `catalog/` are pushed.
-2. Go to **Create** and run **Request a namespace**. Enter a name like `payments-dev` and pick an owner.
-3. The template should finish with a link to a real pull request against this repo, adding `requested-namespaces/payments-dev/` with a Namespace and the NetworkPolicy baseline.
+Sign in with **GitHub**. Only accounts with a matching `User` entity in `catalog/org.yaml` are admitted.
 
-If that PR appears, the GitHub integration, the Scaffolder and the catalog are all wired correctly -- which is the prerequisite for everything built on top of this demo.
+### 6. Verify
+
+1. Open **Catalog**. You should see `payments-api`, the `payments` system and two groups.
+2. Open **Deployment Planner** in the sidebar, if you have also installed [demo-aro-cluster-planner](../demo-aro-cluster-planner).
 
 ## What gets created
 
@@ -128,47 +112,36 @@ If that PR appears, the GitHub integration, the Scaffolder and the catalog are a
 | `operator/subscription.yaml` | Namespace, OperatorGroup and Subscription (channel `fast-1.10`) |
 | `secrets/rhdh-secrets.yaml` | Reference shape for the Secret (placeholders only) |
 | `app-config/app-config-rhdh.yaml` | Auth, GitHub integration, catalog locations |
-| `app-config/dynamic-plugins.yaml` | Dynamic plugin set; wiring point for later demos |
+| `app-config/dynamic-plugins.yaml` | Dynamic plugin set |
 | `backstage.yaml` | The `Backstage` CR (`rhdh.redhat.com/v1alpha5`) |
-| `catalog/` | Sample entities and the `namespace-request` template |
-| `catalog/skeleton/` | Files the template renders into the PR |
-
-## Gotchas worth knowing
-
-Both of these cost real debugging time on first setup.
-
-**The GitHub Scaffolder actions ship disabled.** RHDH preinstalls
-`backstage-plugin-scaffolder-backend-module-github` in the image but leaves it off. Without the explicit `disabled: false` entry in `dynamic-plugins.yaml`, the template renders its files perfectly and then fails the publish step with:
-
-```
-Template action with ID 'publish:github:pull-request' is not registered
-```
-
-which reads like a missing plugin rather than a disabled one. Enabling it takes the registered action count from 17 to 30. Check with:
-
-```bash
-curl -s -H "Authorization: Bearer <token>" \
-  http://localhost:7007/api/scaffolder/v2/actions | jq -r '.[].id' | grep github
-```
-
-**Do not put a `/` in a branch you point `CATALOG_BRANCH` at.** Backstage's GitHub URL reader parses the ref in `/blob/<ref>/<path>` as a *single* path segment. A branch called `feat/developer-hub-demo` is read as ref `feat` with the remainder as a directory, and you get:
-
-```
-Unable to read url, no matching files found for
-https://github.com/.../tree/feat/developer-hub-demo/demo-developer-hub/catalog/all.yaml
-```
-
-Note the `/tree/` — that is the tell. Use `feat-developer-hub-demo` instead. `main` is unaffected.
+| `catalog/` | Sample entities |
 
 ## Notes
 
-* The CR uses `rhdh.redhat.com/v1alpha5`. The 1.10.5 CRD serves `v1alpha4` and `v1alpha5`, with `v1alpha5` as the storage version -- it is the one that carries `spec.flavours`.
-* The operator enables the `lightspeed` flavour by default, which adds an `init-rag-data` init container and a `lightspeed-core` sidecar to the pod. `backstage.yaml` explicitly disables it so this demo is plain RHDH; the Lightspeed demo turns it back on and gives it a model.
-* `enableLocalDb: true` means the operator runs PostgreSQL for you. Use an external database for anything you care about keeping.
-* Guest sign-in is enabled with `dangerouslyAllowOutsideDevelopment: true`. Swap in the GitHub or OIDC auth provider before showing this to anyone who might mistake it for production.
-* The catalog location points at `main` in this repo. If you are iterating on `catalog/`, push your changes -- RHDH reads from GitHub, not from your laptop.
+* **Pinned to 1.10, not 2.x.** RHDH 2.x images are published only to `quay.io/rhdh` and not to `registry.redhat.io`, so the operator pod fails with `manifest unknown`. Redirecting them needs an `ImageDigestMirrorSet`, which ROSA HCP does not permit. 1.10 is not missing anything required here -- its `lightspeed` flavour already provides the MCP tool runtime and `mcp_servers` block.
+* **`catalog/org.yaml` is the access list, and nothing else is.** GitHub will authenticate anyone on the internet with an account; `usernameMatchingUserEntityName` is what turns that into a closed list. Adding a person is one `User` entity. Never set `dangerouslyAllowSignInWithoutUserInCatalog` with a public identity provider -- behind a corporate IdP that flag is defensible, here it would make the instance world-open.
+* **`User` must be in the catalog `rules` allow list.** It is easy to miss, and the failure is quiet: `org.yaml` also contains Groups, so with `User` omitted the Groups load, the file looks fine, and the only thing dropped is the entity that gates access. Sign-in then fails with `unable to resolve user identity` and nothing appears in the logs.
+* **`auth.session.secret` is mandatory for GitHub auth.** Without it sign-in fails *after* the GitHub callback, which reads like a bad callback URL and is not.
+* **There is no OpenShift auth provider in RHDH 1.10.** The upstream Backstage one needs `@backstage/backend-plugin-api` `^1.10.1`; RHDH 1.10 ships 1.8.0 and 2.1 ships 1.10.0. The cluster's own OAuth server is not OIDC either -- its `scopes_supported` has no `openid` -- so the `oidc` provider cannot stand in. Revisit when a release bundles it.
+* **The GitHub Scaffolder module is enabled but unused.** RHDH preinstalls `backstage-plugin-scaffolder-backend-module-github` disabled; without the `disabled: false` entry in `dynamic-plugins.yaml`, a template that publishes fails with `Template action with ID 'publish:github:pull-request' is not registered`. Enabling it takes the registered action count from 17 to 30. It is on here so the publishing path works the moment auth is in place.
+* **Do not use a `/` in a branch name set as `CATALOG_BRANCH`.** Backstage parses the ref in `/blob/<ref>/<path>` as a single path segment, so `feat/my-branch` resolves as ref `feat` with the remainder read as a directory. Use `feat-my-branch`. `main` is unaffected.
+* `CATALOG_BRANCH` lets you verify catalog changes on a branch before merging without editing `app-config-rhdh.yaml`:
+  ```bash
+  oc -n rhdh patch secret rhdh-secrets -p '{"stringData":{"CATALOG_BRANCH":"feat-my-branch"}}'
+  oc -n rhdh rollout restart deployment/backstage-developer-hub
+  ```
+* The operator names both the Deployment and the Route `backstage-<cr-name>`.
+* The CR uses `rhdh.redhat.com/v1alpha5`. The 1.10.5 CRD serves `v1alpha4` and `v1alpha5`; `v1alpha5` is the storage version and the one carrying `spec.flavours`.
+* The operator enables the `lightspeed` flavour by default, adding an `init-rag-data` init container and a `lightspeed-core` sidecar. `backstage.yaml` disables it so this demo is plain RHDH.
+* `enableLocalDb: true` means the operator runs PostgreSQL. Use an external database for anything persistent.
+* **The Route's 30s default timeout is shorter than a reasoning model's reply.** Without `haproxy.router.openshift.io/timeout`, haproxy cuts the connection first and the browser gets a bare 504 with no JSON body and nothing in the backend log -- which looks like an application bug and is not. The RHDH operator does not manage Route annotations, so setting it by hand holds.
+* **`CATALOG_BRANCH` and sign-in are coupled.** The access list is read from git, so pointing `CATALOG_BRANCH` at a branch whose `org.yaml` lacks your `User` entity locks you out. Check before switching branches.
 
-## Cleaning Up
+## Related Demos
+
+* **[Deployment Planner](../demo-aro-cluster-planner)** -- a self-service wizard that compares a shared namespace, a dedicated ARO cluster and on-premises, and runs as a plugin inside this RHDH instance.
+
+## Clean Up
 
 ```bash
 oc delete -f backstage.yaml

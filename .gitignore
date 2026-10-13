@@ -8,3 +8,9 @@
 **/hf-token-secret.yaml
 **/litellm-secret.yaml
 **/postgres-secret.yaml
+
+# Saved Terraform plans - binary, large, and they embed resolved variable values
+tfplan
+tfplan.*
+*/tfplan
+*/tfplan.*

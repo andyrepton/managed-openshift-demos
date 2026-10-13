@@ -8,14 +8,47 @@ data:
     # On OpenShift the operator injects app.baseUrl / backend.baseUrl from the Route,
     # so they are deliberately not set here.
 
+    # Sign in with GitHub.
+    #
+    # RHDH 1.10 documents GitHub, GitLab, Microsoft Entra, PingFederate and OIDC
+    # (Red Hat Build of Keycloak). It has NO OpenShift provider - the upstream
+    # Backstage one needs @backstage/backend-plugin-api ^1.10.1 and no shipped
+    # RHDH carries that yet - and this cluster's OAuth server is not OIDC, so
+    # cluster accounts are not an option here. GitHub is the cheapest documented
+    # provider to adopt and to drop again when an OpenShift one ships.
+    #
+    # Red Hat recommends a GitHub App over an OAuth App: fine-grained
+    # permissions and short-lived tokens. See the README for creating it.
     auth:
-      environment: development
+      # `production` is what removes the guest option from the sign-in page.
+      environment: production
+
+      # Required for GitHub auth. Without it sign-in fails after the callback,
+      # which looks like a GitHub misconfiguration and is not.
+      session:
+        secret: "${SESSION_SECRET}"
+
       providers:
-        # Guest sign-in keeps the demo frictionless. For anything resembling
-        # production, swap this for the GitHub or OIDC provider and remove
-        # dangerouslyAllowOutsideDevelopment.
-        guest:
-          dangerouslyAllowOutsideDevelopment: true
+        github:
+          production:
+            clientId: "${GITHUB_APP_CLIENT_ID}"
+            clientSecret: "${GITHUB_APP_CLIENT_SECRET}"
+            signIn:
+              resolvers:
+                # Exactly one resolver, so there is one way in and it is obvious
+                # which. The GitHub login must match a User entity name in
+                # catalog/org.yaml.
+                #
+                # `dangerouslyAllowSignInWithoutUserInCatalog` is deliberately
+                # NOT set. GitHub will authenticate anyone on the internet with
+                # an account; the catalog is the entire access control. Setting
+                # that flag here would make this instance world-open - a very
+                # different proposition from the same flag behind a corporate or
+                # cluster-gated identity provider.
+                - resolver: usernameMatchingUserEntityName
+
+    # Without this the frontend offers no way to sign in.
+    signInPage: github
 
     backend:
       auth:
@@ -27,23 +60,66 @@ data:
 
     integrations:
       github:
+        # No token on purpose. This demo reads a PUBLIC repo, which works
+        # unauthenticated, and holds no credential that an anonymous visitor could
+        # drive. Adding a token here re-creates the exposure that forced guest
+        # sign-in off: a stored write credential reachable by anyone who can load
+        # the page. If a token ever becomes necessary, turn guest sign-in off in
+        # the same change.
         - host: github.com
-          token: "${GITHUB_TOKEN}"
 
     catalog:
       # Allow the Scaffolder to register the components it creates.
       rules:
-        - allow: [Component, System, Group, Resource, Location, Template, API]
+        # User must be here. Without it org.yaml's User entities are rejected
+        # silently - the Groups in the same file still load, so the catalog
+        # looks fine - and GitHub sign-in then fails with "unable to resolve
+        # user identity", because the resolver has nothing to match against.
+        - allow: [Component, System, Group, User, Resource, Location, Template, API]
       locations:
         # CATALOG_BRANCH is normally `main`. Pointing it at a feature branch lets you
         # verify catalog changes before they are merged, without editing this file.
         - type: url
           target: https://github.com/${GITHUB_ORG}/${GITHUB_REPO}/blob/${CATALOG_BRANCH}/demo-developer-hub/catalog/all.yaml
           rules:
-            - allow: [Component, System, Group, Resource, Location, Template, API]
+            - allow: [Component, System, Group, User, Resource, Location, Template, API]
 
     scaffolder:
       defaultAuthor:
         name: Red Hat Developer Hub
         email: rhdh@example.com
       defaultCommitMessage: "Scaffolded by Red Hat Developer Hub"
+
+    # ARO cluster planner (../demo-aro-cluster-planner).
+    #
+    # Microsoft has NOT published a per-cluster control-plane fee for ARO HCP - it
+    # is absent from both the pricing page and the Azure Retail Prices API. The
+    # figure below is the published ROSA HCP cluster fee, used as a stand-in so the
+    # demo shows a complete total. It is an assumption, not a confirmed ARO price,
+    # and the estimate labels it as such wherever it appears.
+    #
+    # Remove both keys to have the fee excluded from the total and flagged instead.
+    aroPlanner:
+      hcpControlPlanePerHour: 0.25
+      hcpControlPlaneNote: >-
+        Borrowed from the published ROSA HCP cluster fee of $0.25/hr as a demo
+        stand-in. Microsoft has not published an ARO HCP equivalent and has not
+        confirmed that the two are the same.
+
+      # In-page assistant for the deployment planner.
+      #
+      # Enabled now that sign-in is real and restricted to catalog/org.yaml.
+      # It was deliberately off while guest sign-in was on: an endpoint that
+      # spends model tokens, reachable by anyone who could load the page, is the
+      # same shape as the credential exposure of 2026-10-12.
+      #
+      # Both values come from the Secret, never from this file. The backend
+      # refuses a plaintext http baseUrl and reports itself unavailable unless
+      # baseUrl, apiKey and model are all present.
+      assistant:
+        baseUrl: "${ARO_PLANNER_AI_BASE_URL}"
+        apiKey: "${ARO_PLANNER_AI_API_KEY}"
+        # Served by the MaaS endpoint from demo-claude-via-open-source-models.
+        # Must support tool calling - the assistant is useless without it, since
+        # every number it quotes comes from a tool rather than from the model.
+        model: qwen38-27b

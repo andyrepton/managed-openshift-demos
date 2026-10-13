@@ -1,0 +1,10 @@
+{
+  "extends": "@backstage/cli/config/tsconfig.json",
+  "include": ["src"],
+  "exclude": ["node_modules", "dist", "dist-dynamic"],
+  "compilerOptions": {
+    "outDir": "../../dist-types/plugins/aro-planner-backend",
+    "rootDir": ".",
+    "types": ["node"]
+  }
+}

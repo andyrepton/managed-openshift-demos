@@ -1,0 +1,14 @@
+{
+  "extends": "@backstage/cli/config/tsconfig.json",
+  "include": ["src"],
+  "exclude": ["node_modules", "dist", "dist-scalprum"],
+  "compilerOptions": {
+    // backstage-cli package build expects declarations under the workspace root at
+    // dist-types/<package-path>/. rootDir "." keeps the src/ prefix it looks for.
+    "outDir": "../../dist-types/plugins/aro-planner",
+    "rootDir": ".",
+    // Backstage's shared config pulls in jest types; this package has no tests
+    // (the logic it renders is covered in @aro-planner/common).
+    "types": ["node"]
+  }
+}

@@ -10,4 +10,3 @@ spec:
   targets:
     - ./org.yaml
     - ./sample-component.yaml
-    - ./template-namespace-request.yaml
