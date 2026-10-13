@@ -21,9 +21,51 @@ import json
 import sys
 
 # SKU -> (GPU model, GPU qty as display string, total VRAM GB across the VM)
+#
+# WHY THIS IS A TABLE AND NOT AN API CALL
+# ---------------------------------------
+# Everything else in this script is read live from Azure. This is not, because
+# Azure does not publish it. `az vm list-skus` returns ~28 capabilities for a
+# GPU size and exactly one of them concerns the GPU:
+#
+#     GPUs    1
+#
+# A count. No model, no memory. Verified against the live API for
+# Standard_NC40ads_H100_v5 on 2026-10-13. There is no other Azure endpoint that
+# fills the gap - the Retail Prices API does not carry hardware detail either.
+#
+# A bare count is worse than useless for sizing model serving, because it is not
+# even a count of whole GPUs: several NV sizes report "GPUs: 1" while giving a
+# FRACTION of a physical card. Standard_NV6ads_A10_v5 reports 1 and is one sixth
+# of an A10 with 4 GB of VRAM. Picking it to serve a 27B model on the strength
+# of "1 GPU" would waste an afternoon.
+#
 # Figures from the Microsoft Learn "Accelerators" table for each size series.
 # NVv2 and the NP FPGA sizes are derived from the per-card spec (M60 8 GB per
 # exposed GPU, Alveo U250 64 GB per card); both are blocked in most regions.
+#
+# WHEN TO UPDATE
+# --------------
+# This WILL go stale: Azure adds GPU series faster than anyone updates a table.
+# Refresh it when:
+#   - the report prints "unknown" for a size you care about. That is the
+#     designed signal - lookup falls back to ("unknown", <live count>, None)
+#     rather than failing, so a missing entry degrades instead of breaking;
+#   - a new accelerator series appears (H200, GB200, MI300X and successors);
+#   - Microsoft re-specs an existing size, which does happen.
+#
+# To find sizes Azure offers here that this table does not know about:
+#
+#   az vm list-skus --location <region> --resource-type virtualMachines \
+#     --query "[?capabilities[?name=='GPUs']].name" -o tsv | sort -u
+#
+# (slow - tens of seconds, it enumerates every size in the region) then
+# cross-check each against its Microsoft Learn size-series page, which is the
+# only authoritative source for model and VRAM:
+#   https://learn.microsoft.com/azure/virtual-machines/sizes/overview
+#
+# Last reviewed 2026-10-13: the table covered all 37 GPU sizes Azure offers in
+# westeurope, with nothing falling through to "unknown".
 GPU_SPECS = {
     # NCads_H100_v5 — NVIDIA H100 NVL, 94 GB per GPU
     "Standard_NC40ads_H100_v5":  ("H100 NVL",   "1",   94),
