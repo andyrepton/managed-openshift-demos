@@ -1,0 +1,9 @@
+name,region,q1_sales,q2_sales,q3_sales,q4_sales,status
+Alice,EMEA,12500,13200,11800,14500,active
+Bob,APAC,9800,10500,11200,10800,active
+Charlie,EMEA,15600,14200,16100,15800,active
+Diana,AMER,8200,7900,8500,9100,inactive
+Eve,APAC,11300,12100,11900,12800,active
+Frank,AMER,13400,14600,13900,15200,active
+Grace,EMEA,7600,8100,7900,8400,active
+Hank,AMER,10200,9800,10500,11000,inactive
