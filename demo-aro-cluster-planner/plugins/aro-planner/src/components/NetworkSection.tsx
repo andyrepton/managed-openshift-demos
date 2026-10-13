@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import Accordion from '@mui/material/Accordion';
@@ -15,7 +15,7 @@ import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 
-import type { EndpointInput, NetworkPlanDto } from '../api/client';
+import type { EndpointInput, NetworkPlan } from '../api/client';
 
 /**
  * Connectivity the team needs, turned into NetworkPolicies.
@@ -36,16 +36,50 @@ const TARGETS = [
 export interface NetworkSectionProps {
   endpoints: EndpointInput[];
   onChange: (endpoints: EndpointInput[]) => void;
-  networkPlan: NetworkPlanDto | null;
+  networkPlan: NetworkPlan | null;
 }
 
 function blank(): EndpointInput {
   return { name: '', direction: 'egress', target: { kind: 'internet' } };
 }
 
+/**
+ * A stable React key per row.
+ *
+ * Index keys were wrong here: removing the middle of three rows shifts every
+ * later index, so React reuses the wrong DOM node and focus lands in a
+ * different connection's field than the one being edited. The name cannot be
+ * the key either - it is empty on a new row and changes as it is typed.
+ *
+ * So identity is tracked out of band, in a WeakMap keyed on the endpoint object.
+ * Rows that arrive without one - a new row, or one the assistant added - get an
+ * id on first render and keep it, because `update` copies the object and the
+ * copy is registered against the same id.
+ */
+function useRowKeys() {
+  const keys = useRef(new WeakMap<object, string>());
+  const next = useRef(0);
+  return (ep: EndpointInput, previous?: EndpointInput) => {
+    const existing = keys.current.get(ep);
+    if (existing) return existing;
+    const inherited = previous ? keys.current.get(previous) : undefined;
+    const id = inherited ?? `row-${next.current++}`;
+    keys.current.set(ep, id);
+    return id;
+  };
+}
+
 export function NetworkSection({ endpoints, onChange, networkPlan }: NetworkSectionProps) {
+  const rowKey = useRowKeys();
+  const previous = useRef<EndpointInput[]>([]);
+
   const update = (i: number, next: Partial<EndpointInput>) =>
     onChange(endpoints.map((e, j) => (j === i ? { ...e, ...next } : e)));
+
+  // Resolve keys against last render's list, then record this one. Done before
+  // the JSX so the order is explicit rather than depending on when the map runs.
+  const keys = endpoints.map((ep, i) => rowKey(ep, previous.current[i]));
+  previous.current = endpoints;
 
   const setTargetKind = (i: number, kind: EndpointInput['target']['kind']) => {
     const target: EndpointInput['target'] =
@@ -69,7 +103,10 @@ export function NetworkSection({ endpoints, onChange, networkPlan }: NetworkSect
 
       <Stack spacing={1.5}>
         {endpoints.map((ep, i) => (
-          <Box key={i} sx={{ p: 1.5, border: 1, borderColor: 'divider', borderRadius: 1 }}>
+          <Box
+            key={keys[i]}
+            sx={{ p: 1.5, border: 1, borderColor: 'divider', borderRadius: 1 }}
+          >
             <Grid container spacing={1.5} alignItems="flex-start">
               <Grid item xs={12} sm={3}>
                 <TextField

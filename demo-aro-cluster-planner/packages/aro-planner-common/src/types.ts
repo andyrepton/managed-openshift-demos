@@ -54,8 +54,6 @@ export interface SizingRequest {
   /** Adding a pool to an existing cluster, which permits day-2-only sizes. */
   dayTwo: boolean;
   openshiftVersion?: string;
-  /** Include on-premises in the comparison. */
-  onPremises?: boolean;
   /** Which model the user has chosen. Drives what the UI shows and what is emitted. */
   deploymentModel?: DeploymentModel;
   /** The application this is for. Used to name the namespace and the artifacts. */

@@ -1,20 +1,35 @@
-import type { CostEstimate, SizingRequest } from '@aro-planner/common';
+import type {
+  CostEstimate,
+  DeploymentModel,
+  EndpointRequest,
+  ModelComparison,
+  NetworkPlan,
+  Recommendation,
+  SizingRequest,
+} from '@aro-planner/common';
 
-/** The shape the backend's POST /plan returns. */
-export interface ModelComparisonDto {
-  model: 'shared-namespace' | 'dedicated-cluster' | 'on-premises';
-  label: string;
-  billing: 'monthly' | 'one-off';
-  amount: number | null;
-  estimate: CostEstimate | null;
-  summary: string;
-  unpricedReason?: string;
-  tradeoffs: string[];
-}
+/**
+ * Types for the backend's `POST /plan`.
+ *
+ * These re-export the engine's own types rather than restating them. Local copies
+ * drifted from the originals once already - the UI carried a `ModelComparison`
+ * missing `billing`, so an on-premises one-off rendered as "/month". The backend
+ * serialises these exact shapes, so there is nothing for a parallel definition to
+ * add except an opportunity to disagree.
+ */
+export type { CostEstimate, DeploymentModel, ModelComparison, NetworkPlan, Recommendation };
 
+/**
+ * An endpoint while the user is still typing it.
+ *
+ * Deliberately looser than the engine's `EndpointRequest`: a row is in the form
+ * before it is complete, so `namespace`, `cidrs` and `service` are optional here
+ * and required there. The backend validates with zod and rejects the incomplete
+ * ones, which is why this is a separate type rather than drift.
+ */
 export interface EndpointInput {
   name: string;
-  direction: 'ingress' | 'egress';
+  direction: EndpointRequest['direction'];
   target:
     | { kind: 'internet' }
     | { kind: 'namespace'; namespace?: string }
@@ -23,53 +38,29 @@ export interface EndpointInput {
   ports?: { protocol: 'TCP' | 'UDP'; port: number }[];
 }
 
-export interface NetworkPlanDto {
-  namespace: string;
-  policies: { metadata: { name: string }; spec: unknown }[];
-  caveats: string[];
-  clusterSettings: {
-    apiVisibility: string;
-    ingressVisibility: string;
-    outboundType: string;
-  };
-}
-
 export interface PlanResponse {
   request: SizingRequest;
   recommendations: Recommendation[];
   estimate: CostEstimate | null;
-  comparison: ModelComparisonDto[];
-  cheapest: string | null;
-  networkPlan: NetworkPlanDto | null;
+  comparison: ModelComparison[];
+  cheapest: DeploymentModel | null;
+  networkPlan: NetworkPlan | null;
   warning?: string;
   pricesRetrievedAt: string;
   pricesStale: boolean;
 }
 
-export interface Recommendation {
-  sku: { name: string; vcpu: number; ramGiB: number; category: string; day2Only: boolean };
-  nodes: number;
-  totalVcpu: number;
-  totalRamGiB: number;
-  allocatableVcpu: number;
-  allocatableRamGiB: number;
-  waste: number;
-  rationale: string[];
-  hourlyVmCost?: number;
-}
-
-export interface PlanInput {
-  vcpu: number;
-  ramGiB: number;
-  region: string;
-  flavour: 'hcp' | 'classic';
+/**
+ * What the wizard sends.
+ *
+ * A subset of `SizingRequest` - `profile` may be absent, because the backend
+ * infers it from the RAM:vCPU ratio - plus the endpoints, which the engine takes
+ * separately.
+ */
+export interface PlanInput
+  extends Omit<SizingRequest, 'profile' | 'deploymentModel' | 'openshiftVersion'> {
   profile?: string | undefined;
-  highAvailability: boolean;
-  dayTwo: boolean;
-  /** Which deployment model the user has chosen. */
-  deploymentModel: 'shared-namespace' | 'dedicated-cluster' | 'on-premises';
-  /** The application this request is for. */
-  applicationName?: string;
+  deploymentModel: DeploymentModel;
   /** What the application needs to talk to. Becomes NetworkPolicies. */
   endpoints?: EndpointInput[];
   controlPlaneSku?: string;
@@ -104,4 +95,40 @@ export async function fetchPlan(
     );
   }
   return (await res.json()) as PlanResponse;
+}
+
+export interface EmitFile {
+  path: string;
+  contents: string;
+}
+
+export interface EmitBundle {
+  name: string;
+  files: EmitFile[];
+}
+
+/**
+ * The files this request would produce.
+ *
+ * A separate call from `fetchPlan` because it is only wanted when someone opens
+ * the review dialog, and generating it on every keystroke alongside the cost
+ * panel would be wasted work.
+ */
+export async function fetchArtifacts(
+  baseUrl: string,
+  fetchFn: typeof fetch,
+  input: PlanInput,
+  signal?: AbortSignal,
+): Promise<EmitBundle> {
+  const res = await fetchFn(`${baseUrl}/artifacts`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+    ...(signal ? { signal } : {}),
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(body.error ?? `Could not generate the artifacts: ${res.status}`);
+  }
+  return (await res.json()) as EmitBundle;
 }

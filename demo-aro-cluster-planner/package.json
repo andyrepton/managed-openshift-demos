@@ -18,7 +18,8 @@
     "typecheck": "yarn workspaces foreach --all --topological run typecheck"
   },
   "resolutions": {
-    "got": "11.8.2"
+    "got": "^11.8.5",
+    "adm-zip": "^0.6.1"
   },
   "devDependencies": {
     "@backstage/cli-defaults": "^0.1.0"

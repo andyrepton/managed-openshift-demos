@@ -2,29 +2,11 @@ import express from 'express';
 import request from 'supertest';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { PriceTable, Sku } from '@aro-planner/common';
+import type { Sku } from '@aro-planner/common';
 import { createRouter } from '../src/router';
+import { WESTEUROPE_PRICES } from './fixtures';
 
-const PRICES: PriceTable = {
-  currency: 'USD',
-  region: 'westeurope',
-  vm: {
-    Standard_D8s_v5: 0.46,
-    Standard_D16s_v5: 0.92,
-    Standard_D16as_v5: 0.832,
-    Standard_D8s_v3: 0.464,
-    Standard_E16s_v5: 1.208,
-    Standard_E32s_v5: 2.416,
-  },
-  aroLicence: {
-    'Azure Red Hat OpenShift General Purpose|8': 0.342,
-    'Azure Red Hat OpenShift General Purpose|16': 0.684,
-    'Azure Red Hat OpenShift Memory Optimized|16': 0.684,
-    'Azure Red Hat OpenShift Memory Optimized|32': 1.368,
-  },
-  aroLicencePerVcpu: 0.0428,
-  retrievedAt: '2026-10-12T00:00:00.000Z',
-};
+const PRICES = WESTEUROPE_PRICES;
 
 function app(opts: Parameters<typeof createRouter>[0] = {}) {
   const a = express();
@@ -234,5 +216,62 @@ describe('POST /plan - malformed endpoints', () => {
     expect(res.status).toBe(200);
     expect(res.body.networkPlan.namespace).toBe('payments');
     expect(res.body.networkPlan.policies.length).toBeGreaterThan(4);
+  });
+});
+
+describe('POST /artifacts', () => {
+  const body = {
+    applicationName: 'payments-api',
+    vcpu: 40,
+    ramGiB: 160,
+    region: 'westeurope',
+    flavour: 'hcp',
+    deploymentModel: 'dedicated-cluster',
+    endpoints: [{ name: 'Public web', direction: 'ingress', target: { kind: 'internet' } }],
+  };
+  const post = (over: Record<string, unknown> = {}) =>
+    request(app({ buildPrices: async () => PRICES }))
+      .post('/api/aro-planner/artifacts')
+      .send({ ...body, ...over });
+
+  it('returns the files a dedicated cluster needs', async () => {
+    const res = await post().expect(200);
+    const paths = (res.body.files as { path: string }[]).map(f => f.path);
+    expect(paths).toContain('plan.md');
+    expect(paths).toContain('payments-api.tfvars');
+    expect(paths).toContain('manifests/20-networkpolicies.yaml');
+    expect(res.body.name).toBe('payments-api');
+  });
+
+  it('omits the tfvars for a shared namespace, which creates no infrastructure', async () => {
+    const res = await post({ deploymentModel: 'shared-namespace' }).expect(200);
+    const paths = (res.body.files as { path: string }[]).map(f => f.path);
+    expect(paths).not.toContain('payments-api.tfvars');
+    expect(paths).toContain('manifests/00-namespace.yaml');
+  });
+
+  it('generates from the same numbers /plan reported', async () => {
+    // The artifacts must not be a recomputation that could drift from the price
+    // the user was shown.
+    const planned = await request(app({ buildPrices: async () => PRICES }))
+      .post('/api/aro-planner/plan')
+      .send(body)
+      .expect(200);
+    const res = await post().expect(200);
+    const md = (res.body.files as { path: string; contents: string }[]).find(
+      f => f.path === 'plan.md',
+    )!.contents;
+    const monthly = planned.body.comparison.find(
+      (c: { model: string }) => c.model === 'dedicated-cluster',
+    ).amount;
+    expect(md).toContain(monthly.toLocaleString('en-US', { minimumFractionDigits: 2 }));
+  });
+
+  it('rejects malformed endpoints with 400 rather than hanging', async () => {
+    await post({ endpoints: [{ name: 'x', direction: 'egress' }] }).expect(400);
+  });
+
+  it('rejects an impossible request with 422, not an empty bundle', async () => {
+    await post({ vcpu: 19000, ramGiB: 190000 }).expect(422);
   });
 });

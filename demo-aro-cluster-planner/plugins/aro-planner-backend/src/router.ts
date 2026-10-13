@@ -14,6 +14,7 @@ import {
   cheapestPriced,
   compareModels,
   categoriesForProfile,
+  emitBundle,
   estimateCost,
   findSkus,
   getSku,
@@ -25,6 +26,8 @@ import {
 import { TtlCache } from './cache';
 import { endpointsSchema } from './schema';
 import { mcpRouter } from './mcp';
+import { assistantRouter } from './assistant/router';
+import type { AssistantConfig } from './assistant/client';
 
 /** Azure publishes prices rarely; an hour of staleness is not material to an estimate. */
 const PRICE_TTL_MS = 60 * 60 * 1000;
@@ -34,7 +37,20 @@ export interface RouterOptions {
   /** Injectable for tests. */
   buildPrices?: typeof buildPriceTable;
   ttlMs?: number;
+  /** Absent means the in-page assistant is off and says so. */
+  assistant?: AssistantConfig;
 }
+
+/** The assistant is off unless a model endpoint has been configured for it. */
+const ASSISTANT_OFF: AssistantConfig = {
+  enabled: false,
+  baseUrl: '',
+  apiKey: '',
+  model: '',
+  disabledReason: 'No model endpoint configured for the assistant.',
+  timeoutMs: 60_000,
+  maxRounds: 5,
+};
 
 const PROFILES: readonly WorkloadProfile[] = [
   'general',
@@ -78,7 +94,6 @@ function parsePlanRequest(body: unknown): SizingRequest {
     profile,
     highAvailability: b.highAvailability !== false,
     dayTwo: b.dayTwo === true,
-    onPremises: b.deploymentModel === 'on-premises',
     ...(typeof b.deploymentModel === 'string'
       ? { deploymentModel: b.deploymentModel as SizingRequest['deploymentModel'] }
       : {}),
@@ -90,17 +105,45 @@ function parsePlanRequest(body: unknown): SizingRequest {
 }
 
 export function createRouter(options: RouterOptions = {}): Router {
-  const { overrides = {}, buildPrices = buildPriceTable, ttlMs = PRICE_TTL_MS } = options;
+  const {
+    overrides = {},
+    buildPrices = buildPriceTable,
+    ttlMs = PRICE_TTL_MS,
+    assistant = ASSISTANT_OFF,
+  } = options;
   const cache = new TtlCache<PriceTable>(ttlMs);
   const router = express.Router();
   router.use(express.json({ limit: '64kb' }));
 
-  // MCP tools over the same engine. The lightspeed-core sidecar shares this pod,
-  // so it reaches them at http://localhost:7007/api/aro-planner/mcp.
-  router.use('/mcp', mcpRouter(overrides));
+  /**
+   * One cached path to Azure for everything in this plugin.
+   *
+   * The key is the region plus the exact set of SKUs asked for, so two callers
+   * wanting the same catalogue share an entry while a different slice still gets
+   * its own. Sorted, because the caller's array order is incidental.
+   */
+  const loadPrices = async (skus: Sku[], region: string): Promise<PriceTable> => {
+    const names = skus.map(s => s.name).sort();
+    const entry = await cache.get(`${region}|${names.join(',')}`, () => buildPrices(skus, region));
+    return entry.stale ? { ...entry.value, stale: true } : entry.value;
+  };
+
+  // MCP tools over the same engine, and now the same price cache. The
+  // lightspeed-core sidecar shares this pod, so it reaches them at
+  // http://localhost:7007/api/aro-planner/mcp.
+  router.use('/mcp', mcpRouter(overrides, loadPrices));
+
+  // The in-page assistant. Unlike MCP this is called from the browser, so it is
+  // reachable through the Route - and therefore off until a model endpoint is
+  // configured. See assistant/config.ts.
+  router.use('/assistant', assistantRouter(assistant, overrides, loadPrices));
 
   router.get('/health', (_req, res) => {
-    res.json({ status: 'ok', cachedRegions: cache.size });
+    res.json({
+      status: 'ok',
+      cachedRegions: cache.size,
+      assistant: assistant.enabled ? 'enabled' : 'disabled',
+    });
   });
 
   /** The supported VM size catalogue, optionally filtered. Static - no Azure call. */
@@ -122,18 +165,36 @@ export function createRouter(options: RouterOptions = {}): Router {
   });
 
   /**
-   * The endpoint the wizard actually uses: form state in, ranked options and a
-   * costed breakdown out. One round trip per change keeps the cost panel in step
-   * with the form without the UI having to orchestrate several calls.
+   * Everything a request implies, computed once.
+   *
+   * Shared by /plan and /artifacts so the files that get published are generated
+   * from the same numbers the page showed, not a recomputation that could drift.
+   * Returns a failure rather than throwing, because the two callers report it
+   * differently.
    */
-  router.post('/plan', async (req, res) => {
-    try {
+  type PlanFailure = { ok: false; status: number; body: Record<string, unknown> };
+  type PlanSuccess = {
+    ok: true;
+    request: SizingRequest;
+    prices: PriceTable;
+    recommendations: ReturnType<typeof recommendNodePools>;
+    plan: ClusterPlan;
+    comparison: ReturnType<typeof compareModels>;
+    networkPlan: ReturnType<typeof planNetworkPolicies>;
+    cpSku: Sku | undefined;
+    merged: Partial<PricingOverrides>;
+  };
+
+  const buildPlan = async (body: unknown): Promise<PlanSuccess | PlanFailure> => {
     let request: SizingRequest;
     try {
-      request = parsePlanRequest(req.body);
+      request = parsePlanRequest(body);
     } catch (err) {
-      res.status(400).json({ error: err instanceof Error ? err.message : 'invalid request' });
-      return;
+      return {
+        ok: false,
+        status: 400,
+        body: { error: err instanceof Error ? err.message : 'invalid request' },
+      };
     }
 
     // Price only the plausible candidates, not all 272 supported sizes.
@@ -145,41 +206,61 @@ export function createRouter(options: RouterOptions = {}): Router {
     });
 
     const controlPlaneSkuName = String(
-      (req.body as Record<string, unknown>)?.controlPlaneSku ?? 'Standard_D8s_v3',
+      (body as Record<string, unknown>)?.controlPlaneSku ?? 'Standard_D8s_v3',
     );
     const cpSku = getSku(controlPlaneSkuName, 'control-plane');
     if (request.flavour === 'classic' && !cpSku) {
-      res.status(400).json({ error: `${controlPlaneSkuName} is not a supported ARO control plane size` });
-      return;
+      return {
+        ok: false,
+        status: 400,
+        body: { error: `${controlPlaneSkuName} is not a supported ARO control plane size` },
+      };
     }
 
-    const toPrice = cpSku ? [...candidates, cpSku] : candidates;
-    const cacheKey = `${request.region}|${request.profile}|${request.dayTwo}|${request.openshiftVersion ?? 'any'}|${cpSku?.name ?? '-'}`;
+    const parsedEndpoints = endpointsSchema.safeParse(
+      (body as Record<string, unknown>)?.endpoints ?? [],
+    );
+    if (!parsedEndpoints.success) {
+      return {
+        ok: false,
+        status: 400,
+        body: {
+          error: 'Invalid endpoints',
+          detail: parsedEndpoints.error.issues
+            .map(i => `${i.path.join('.') || 'endpoints'}: ${i.message}`)
+            .join('; '),
+        },
+      };
+    }
 
-    let entry;
+    let prices: PriceTable;
     try {
-      entry = await cache.get(cacheKey, () => buildPrices(toPrice, request.region));
+      prices = await loadPrices(cpSku ? [...candidates, cpSku] : candidates, request.region);
     } catch (err) {
-      res.status(502).json({
-        error: 'Could not reach the Azure Retail Prices API and no cached prices are available.',
-        detail: err instanceof Error ? err.message : String(err),
-      });
-      return;
+      return {
+        ok: false,
+        status: 502,
+        body: {
+          error: 'Could not reach the Azure Retail Prices API and no cached prices are available.',
+          detail: err instanceof Error ? err.message : String(err),
+        },
+      };
     }
 
-    const prices: PriceTable = entry.stale ? { ...entry.value, stale: true } : entry.value;
     const recommendations = recommendNodePools(request, { prices, limit: 3 });
-
     if (recommendations.length === 0) {
-      res.json({
-        request,
-        recommendations: [],
-        estimate: null,
-        warning: `No supported VM size can satisfy that request in ${request.region}.`,
-        pricesRetrievedAt: prices.retrievedAt,
-        pricesStale: prices.stale === true,
-      });
-      return;
+      return {
+        ok: false,
+        status: 200,
+        body: {
+          request,
+          recommendations: [],
+          estimate: null,
+          warning: `No supported VM size can satisfy that request in ${request.region}.`,
+          pricesRetrievedAt: prices.retrievedAt,
+          pricesStale: prices.stale === true,
+        },
+      };
     }
 
     const plan: ClusterPlan = {
@@ -191,22 +272,9 @@ export function createRouter(options: RouterOptions = {}): Router {
 
     // Connectivity -> NetworkPolicies. Namespace defaults to the application name
     // so the generated manifests are usable as-is.
-    const parsedEndpoints = endpointsSchema.safeParse(
-      (req.body as Record<string, unknown>)?.endpoints ?? [],
-    );
-    if (!parsedEndpoints.success) {
-      res.status(400).json({
-        error: 'Invalid endpoints',
-        detail: parsedEndpoints.error.issues
-          .map(i => `${i.path.join('.') || 'endpoints'}: ${i.message}`)
-          .join('; '),
-      });
-      return;
-    }
-    const endpoints = parsedEndpoints.data as EndpointRequest[];
     const networkPlan = planNetworkPolicies({
       namespace: request.applicationName || 'my-application',
-      endpoints,
+      endpoints: parsedEndpoints.data as EndpointRequest[],
     });
 
     const merged: Partial<PricingOverrides> = { ...DEFAULT_OVERRIDES, ...overrides };
@@ -216,22 +284,78 @@ export function createRouter(options: RouterOptions = {}): Router {
       overrides: merged,
     });
 
-    res.json({
-      request,
-      recommendations,
-      estimate: estimateCost(plan, prices, merged),
-      comparison,
-      cheapest: cheapestPriced(comparison)?.model ?? null,
-      networkPlan,
-      pricesRetrievedAt: prices.retrievedAt,
-      pricesStale: prices.stale === true,
-    });
+    return { ok: true, request, prices, recommendations, plan, comparison, networkPlan, cpSku, merged };
+  };
+
+  /**
+   * The endpoint the wizard actually uses: form state in, ranked options and a
+   * costed breakdown out. One round trip per change keeps the cost panel in step
+   * with the form without the UI having to orchestrate several calls.
+   */
+  router.post('/plan', async (req, res) => {
+    try {
+      const built = await buildPlan(req.body);
+      if (!built.ok) {
+        res.status(built.status).json(built.body);
+        return;
+      }
+      const { request, prices, recommendations, plan, comparison, networkPlan, merged } = built;
+
+      res.json({
+        request,
+        recommendations,
+        estimate: estimateCost(plan, prices, merged),
+        comparison,
+        cheapest: cheapestPriced(comparison)?.model ?? null,
+        networkPlan,
+        pricesRetrievedAt: prices.retrievedAt,
+        pricesStale: prices.stale === true,
+      });
     } catch (err) {
       // Express 4 does not catch throws from an async handler - without this the
       // socket stays open and the client waits for its own timeout.
       if (!res.headersSent) {
         res.status(500).json({
           error: 'Could not build a plan.',
+          detail: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+  });
+
+  /**
+   * The files this request would produce: plan.md, the namespace manifests and,
+   * for a dedicated cluster, a tfvars.
+   *
+   * Generated from the same computed plan as /plan, so the preview is the
+   * artifact - not an approximation of it that could disagree with the price the
+   * user was just shown.
+   */
+  router.post('/artifacts', async (req, res) => {
+    try {
+      const built = await buildPlan(req.body);
+      if (!built.ok) {
+        res.status(built.status === 200 ? 422 : built.status).json(built.body);
+        return;
+      }
+      const { request, prices, recommendations, plan, comparison, networkPlan } = built;
+
+      res.json(
+        emitBundle({
+          request,
+          plan,
+          pool: recommendations[0]!,
+          alternatives: recommendations.slice(1),
+          comparison,
+          networkPlan,
+          prices: { retrievedAt: prices.retrievedAt, ...(prices.stale ? { stale: true } : {}) },
+          generatedAt: new Date().toISOString().slice(0, 10),
+        }),
+      );
+    } catch (err) {
+      if (!res.headersSent) {
+        res.status(500).json({
+          error: 'Could not generate the artifacts.',
           detail: err instanceof Error ? err.message : String(err),
         });
       }

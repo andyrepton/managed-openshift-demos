@@ -5,3 +5,4 @@ export * from './cost.js';
 export * from './azurePrices.js';
 export * from './netpol.js';
 export * from './recommend.js';
+export * from './emit/index.js';

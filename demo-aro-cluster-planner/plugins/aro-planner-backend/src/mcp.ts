@@ -7,10 +7,11 @@ import {
   type AroFlavour,
   type ClusterPlan,
   type EndpointRequest,
+  type PriceTable,
   type PricingOverrides,
   type SizingRequest,
+  type Sku,
   type WorkloadProfile,
-  buildPriceTable,
   categoriesForProfile,
   estimateCost,
   findSkus,
@@ -21,6 +22,17 @@ import {
 } from '@aro-planner/common';
 
 import { ARO_DOCS, lookupDocs } from './docs.js';
+
+/**
+ * How the tools get prices.
+ *
+ * Injected rather than calling `buildPriceTable` directly so the MCP tools share
+ * the router's TTL cache. They previously had their own path straight to Azure,
+ * which meant an assistant sweeping a range of sizes issued one live request per
+ * call and hit the endpoint's 429 rate limit - while the wizard, asking the same
+ * questions, was served from cache.
+ */
+export type PriceLoader = (skus: Sku[], region: string) => Promise<PriceTable>;
 
 /**
  * MCP tools over the planner.
@@ -66,7 +78,10 @@ const text = (v: unknown) => ({
   content: [{ type: 'text' as const, text: typeof v === 'string' ? v : JSON.stringify(v, null, 2) }],
 });
 
-export function buildMcpServer(overrides: Partial<PricingOverrides>): McpServer {
+export function buildMcpServer(
+  overrides: Partial<PricingOverrides>,
+  loadPrices: PriceLoader,
+): McpServer {
   const server = new McpServer({ name: 'aro-planner', version: '0.1.0' });
 
   server.tool(
@@ -106,7 +121,7 @@ export function buildMcpServer(overrides: Partial<PricingOverrides>): McpServer 
         categories: categoriesForProfile(req.profile),
         allowDay2Only: req.dayTwo,
       });
-      const prices = await buildPriceTable(candidates, req.region);
+      const prices = await loadPrices(candidates, req.region);
       const recs = recommendNodePools(req, { prices, limit: 3 });
 
       if (recs.length === 0) {
@@ -143,7 +158,7 @@ export function buildMcpServer(overrides: Partial<PricingOverrides>): McpServer 
       if (req.flavour === 'classic' && !cpSku) {
         return text(`${a.controlPlaneSku} is not a supported ARO control plane size.`);
       }
-      const prices = await buildPriceTable(cpSku ? [...candidates, cpSku] : candidates, req.region);
+      const prices = await loadPrices(cpSku ? [...candidates, cpSku] : candidates, req.region);
       const recs = recommendNodePools(req, { prices, limit: 1 });
       if (recs.length === 0) return text(`Nothing supported fits that request in ${req.region}.`);
 
@@ -219,6 +234,25 @@ function loopbackOnly(req: Request, res: Response, next: express.NextFunction): 
     next();
     return;
   }
+
+  /*
+   * `trust proxy` would make this check meaningless without changing it.
+   *
+   * It is off today, but if it were ever turned on, Express would start
+   * believing `X-Forwarded-For` - and a caller who sets that header to
+   * `127.0.0.1` would look local. The control would still be here, still
+   * returning 403 to nobody, while the endpoint was open. Fail closed and say
+   * why rather than let that happen quietly.
+   */
+  if (req.app?.get('trust proxy') ) {
+    res.status(500).json({
+      error:
+        'The MCP endpoint is restricted by TCP peer address, which "trust proxy" ' +
+        'makes forgeable. Refusing to serve until that is resolved.',
+    });
+    return;
+  }
+
   const peer = req.socket.remoteAddress ?? '';
   if (LOOPBACK.has(peer)) {
     next();
@@ -232,13 +266,13 @@ function loopbackOnly(req: Request, res: Response, next: express.NextFunction): 
 }
 
 /** Mount the MCP endpoint. Stateless: one server and transport per request. */
-export function mcpRouter(overrides: Partial<PricingOverrides>): Router {
+export function mcpRouter(overrides: Partial<PricingOverrides>, loadPrices: PriceLoader): Router {
   const router = express.Router();
   router.use(loopbackOnly);
   router.use(express.json({ limit: '1mb' }));
 
   const handle = async (req: Request, res: Response) => {
-    const server = buildMcpServer(overrides);
+    const server = buildMcpServer(overrides, loadPrices);
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
     res.on('close', () => {
       void transport.close();

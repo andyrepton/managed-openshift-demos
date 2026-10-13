@@ -1,4 +1,4 @@
-# ARO Cluster Planner
+# Deployment Planner
 
 A self-service wizard where a team names an application, says how much capacity it needs and what it must talk to, and gets back a live Azure-priced comparison of where it could run, a recommended node pool, and the NetworkPolicies to go with it. Runs as a Red Hat Developer Hub dynamic plugin.
 
@@ -8,19 +8,24 @@ A self-service wizard where a team names an application, says how much capacity 
 * **Live Azure pricing** -- worker VMs, control plane and ARO licence, from the Azure Retail Prices API as the form changes.
 * **Provenance on every figure** -- each line is tagged as a live Azure price, a configured override, or an assumption.
 * **NetworkPolicy generation** -- connectivity requirements become a default-deny baseline plus one rule per connection.
-* **MCP tools** -- the same engine exposed to an AI assistant, so it cannot disagree with the page.
+* **Artifact generation** -- a plan document, a tfvars for one Terraform module, and the namespace manifests.
+* **In-page assistant** -- asks questions and fills the form in, using tools over the same engine.
+* **MCP tools** -- the same engine exposed to RHDH's assistant, so it cannot disagree with the page.
 
 Depends on **[demo-developer-hub](../demo-developer-hub)** for the RHDH instance it plugs into.
 
 ## What works today
 
-Sizing, costing, the deployment model comparison and NetworkPolicy generation are
-complete and deployed as an RHDH dynamic plugin, along with MCP tools that expose the
-same engine to an AI assistant.
+Sizing, costing, the deployment model comparison, NetworkPolicy generation and
+artifact generation are complete and deployed as an RHDH dynamic plugin, along with
+MCP tools exposing the same engine to RHDH's assistant.
 
-Not yet built: an in-page assistant that can adjust the form, artifact generation
-(`plan.md`, tfvars, manifests), and the Scaffolder template that raises the request as
-a pull request. The Request button therefore shows a summary rather than submitting.
+The in-page assistant is built but **ships switched off**, because turning it on means
+putting a model API key on an instance that allows guest sign-in. See
+[The assistant](#the-assistant).
+
+Not yet built: the Scaffolder template that raises the request as a pull request. The
+Request button therefore shows a summary rather than submitting.
 
 ## Prerequisites
 
@@ -36,8 +41,8 @@ a pull request. The Request button therefore shows a summary rather than submitt
 yarn install
 yarn workspace @aro-planner/common build
 
-yarn workspace @aro-planner/common test                          # 66 tests
-yarn workspace @aro-planner/backstage-plugin-aro-planner-backend test   # 31 tests
+yarn workspace @aro-planner/common test                          # 132 tests
+yarn workspace @aro-planner/backstage-plugin-aro-planner-backend test   # 65 tests
 ```
 
 ### 2. Price a cluster from the CLI
@@ -134,6 +139,71 @@ Add both to `dynamic-plugins.yaml` in [demo-developer-hub](../demo-developer-hub
 
 Then `oc -n rhdh rollout restart deployment/backstage-developer-hub` and open **ARO Planner** in the sidebar.
 
+## The assistant
+
+An in-page chat that both answers and **acts**: it calls tools over the same engine the
+page uses, and the ones that write return patches the browser applies to the form. Ask
+for "the payments team, 50 users, needs our on-prem Oracle" and the capacity, the
+deployment model and the network connection are all set, with the cost panel moving as
+it goes. Every change it makes is listed under its reply.
+
+It lives in the plugin rather than using RHDH's Lightspeed drawer because that one is
+mounted in a separate React tree with no access to this form's state -- it could advise,
+but it could not set a field.
+
+| Read-only | Writes to the form |
+| --- | --- |
+| `recommend_node_pools` | `set_application_name` |
+| `estimate_cost` | `set_capacity` |
+| `list_supported_skus` | `set_deployment_model` |
+| `suggest_network_policies` | `set_cluster_options` |
+| `lookup_aro_doc` | `add_network_connection` |
+
+**It ships off, and that is deliberate.** Enabling it means a model API key on an
+instance that allows guest sign-in, which is a credential anyone who can load the page
+can spend. Configure an identity provider and turn guest sign-in off first. The UI shows
+why it is unavailable rather than offering an input that silently discards text.
+
+To enable, under `aroPlanner.assistant` in app-config:
+
+| Key | Notes |
+| --- | --- |
+| `baseUrl` | OpenAI-compatible endpoint, e.g. a MaaS or vLLM `/v1`. Must be https |
+| `apiKey` | `${ARO_PLANNER_AI_API_KEY}`, backed by a Secret. Never a literal |
+| `model` | Served model name |
+| `timeoutMs` | Default 60000 |
+| `maxRounds` | Tool-calling rounds per turn. Default 5 |
+
+All three of `baseUrl`, `apiKey` and `model` are required; any missing and the assistant
+reports itself unavailable. The model must support tool calling.
+
+## Generated artifacts
+
+`emitBundle()` turns a finished plan into the files a request needs. Pure, so the same
+input always yields the same bytes and the wizard can preview exactly what would be
+published.
+
+| File | When |
+| --- | --- |
+| `plan.md` | Always. What was asked for, the comparison, the cost with provenance, the networking |
+| `catalog-info.yaml` | Always. A Backstage Component for the namespace |
+| `manifests/00-namespace.yaml` | Always |
+| `manifests/10-resourcequota.yaml` | Always. Quota and LimitRange, capped at exactly what was costed |
+| `manifests/20-networkpolicies.yaml` | Always. Every generated policy, caveats as comments |
+| `manifests/30-machineset.yaml` | Classic ARO only -- HCP pools are declared in the tfvars |
+| `<name>.tfvars` | Dedicated cluster only |
+
+The absences are the point. A shared namespace and an on-premises request get no tfvars,
+because neither creates infrastructure. The tfvars targets exactly one Terraform module
+and states all four `create_*` flags explicitly -- `andys-demo-cluster-tf` shares one
+state across ROSA, ARO, ARO HCP and OSD, so a file that omits a flag plans a destroy
+against whatever that flag defaults to.
+
+The classic-ARO MachineSet carries `REPLACE_ME` placeholders for the infrastructure ID
+and image, which do not exist until the cluster does. A guessed infrastructure ID
+applies cleanly and then silently creates no machines, so the file says how to fill them
+in instead.
+
 ## Costing model
 
 Four components, each tagged with its source:
@@ -176,8 +246,12 @@ packages/aro-planner-common/     Pure TypeScript. No React, no cluster.
   src/compare.ts                 Deployment model comparison
   src/netpol.ts                  NetworkPolicy generation
   src/azurePrices.ts             Retail Prices API client (server-side only)
+  src/emit/                      plan.md, tfvars and manifests from a finished plan
   src/cli.ts                     yarn estimate
-plugins/aro-planner-backend/     Backstage backend plugin: router, cache, MCP tools
+plugins/aro-planner-backend/     Backstage backend plugin
+  src/router.ts                  /plan, /skus, shared price cache
+  src/mcp.ts                     MCP tools, in-pod callers only
+  src/assistant/                 In-page assistant: tool loop and form actions
 plugins/aro-planner/             Backstage frontend plugin: the wizard
 ```
 
@@ -193,7 +267,9 @@ All pure logic lives in `aro-planner-common` so the wizard, the backend and the 
 * **A VM SKU query returns six rows, not one** -- Linux and Windows, each in standard, Spot and Low Priority. Spot is $0.085/hr against $0.46 on-demand, so taking the wrong row understates a cluster fivefold.
 * The OData filter fails between 15 and 18 `armSkuName` clauses, and the endpoint rate-limits with 429. Requests are chunked at 12 and retried; a 400 is never retried.
 * The Retail Prices API sends **no CORS headers**, so pricing must run server-side.
-* The MCP endpoint only accepts in-pod callers, checked on the TCP peer address. The assistant sidecar shares the pod; an `Origin` header would be forgeable.
+* The MCP endpoint only accepts in-pod callers, checked on the TCP peer address. The assistant sidecar shares the pod; an `Origin` header would be forgeable. It refuses to serve at all if Express `trust proxy` is ever enabled, since that would make `X-Forwarded-For` -- and therefore the peer address -- caller-controlled.
+* **The in-page assistant endpoint is the opposite case.** It is called by a browser, so it must be reachable through the Route. That is why it is off unless configured, rather than restricted by address.
+* `@aro-planner/common` has no runtime dependencies, because it is embedded wholesale into the frontend bundle. That is why the YAML emitter is 120 lines of our own rather than `js-yaml`.
 
 ## Related Demos
 

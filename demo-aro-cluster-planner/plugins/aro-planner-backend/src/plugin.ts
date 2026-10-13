@@ -3,6 +3,7 @@ import {
   createBackendPlugin,
 } from '@backstage/backend-plugin-api';
 
+import { readAssistantConfig } from './assistant/config';
 import { loadOverrides } from './overrides';
 import { createRouter } from './router';
 
@@ -61,7 +62,18 @@ export const aroPlannerPlugin = createBackendPlugin({
           );
         }
 
-        http.use(createRouter({ overrides }));
+        // The in-page assistant. Off unless a model endpoint is configured, and
+        // it is deliberately not configured here: guest sign-in is enabled on
+        // this instance, so a key would be spendable by anyone who can load the
+        // page. Set aroPlanner.assistant.* once that is no longer true.
+        const assistant = readAssistantConfig(config);
+        logger.info(
+          assistant.enabled
+            ? `Planner assistant enabled against model ${assistant.model}.`
+            : `Planner assistant disabled: ${assistant.disabledReason}`,
+        );
+
+        http.use(createRouter({ overrides, assistant }));
       },
     });
   },

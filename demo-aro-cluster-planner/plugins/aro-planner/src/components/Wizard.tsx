@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
@@ -77,6 +77,18 @@ export function Wizard({ onPlanChange, initial }: WizardProps) {
   const set = <K extends keyof PlanInput>(key: K, value: PlanInput[K]) =>
     setForm(f => ({ ...f, [key]: value }));
 
+  /**
+   * Apply a change the assistant made.
+   *
+   * Functional update, because a single turn can return several patches and they
+   * are applied in a loop - reading `form` from the closure would make each one
+   * overwrite the last.
+   */
+  const applyPatch = useCallback(
+    (patch: Partial<PlanInput>) => setForm(f => ({ ...f, ...patch })),
+    [],
+  );
+
   const discoveryApi = useApi(discoveryApiRef);
   const fetchApi = useApi(fetchApiRef);
 
@@ -142,6 +154,10 @@ export function Wizard({ onPlanChange, initial }: WizardProps) {
   const recs = plan?.recommendations ?? [];
   const cheapest = recs[0]?.hourlyVmCost;
 
+  // Comes from the estimate rather than a literal 730, so a configured
+  // hoursPerMonth moves the per-option delta with everything else.
+  const hoursPerMonth = plan?.estimate?.hoursPerMonth ?? 730;
+
   const ratio = useMemo(
     () => (form.vcpu > 0 ? (form.ramGiB / form.vcpu).toFixed(1) : '--'),
     [form.vcpu, form.ramGiB],
@@ -156,7 +172,9 @@ export function Wizard({ onPlanChange, initial }: WizardProps) {
       <Grid container spacing={2}>
         <Grid item xs={12} md={7} lg={8}>
           <Stack spacing={2}>
-            <AssistantPanel />
+            {/* Above the form, not beside it: the assistant writes to these
+                fields, so it reads as the thing driving them. */}
+            <AssistantPanel state={form} onApply={applyPatch} />
 
             <Paper variant="outlined" sx={{ p: 2 }}>
               <Typography variant="h6" gutterBottom>Your application</Typography>
@@ -339,7 +357,7 @@ export function Wizard({ onPlanChange, initial }: WizardProps) {
                   {recs.map((r, i) => {
                     const delta =
                       r.hourlyVmCost !== undefined && cheapest !== undefined
-                        ? (r.hourlyVmCost - cheapest) * 730
+                        ? (r.hourlyVmCost - cheapest) * hoursPerMonth
                         : 0;
                     return (
                       <Card
