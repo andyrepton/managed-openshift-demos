@@ -106,18 +106,20 @@ data:
         stand-in. Microsoft has not published an ARO HCP equivalent and has not
         confirmed that the two are the same.
 
-      # In-page assistant. Deliberately left unset.
+      # In-page assistant for the deployment planner.
       #
-      # Setting these turns on an endpoint that spends model tokens. Guest
-      # sign-in is enabled on this instance (see the auth block above), so
-      # anyone who can reach the Route could spend them. Guest access and a
-      # stored credential are mutually exclusive here - configure an identity
-      # provider and turn guest sign-in off before filling these in.
+      # Enabled now that sign-in is real and restricted to catalog/org.yaml.
+      # It was deliberately off while guest sign-in was on: an endpoint that
+      # spends model tokens, reachable by anyone who could load the page, is the
+      # same shape as the credential exposure of 2026-10-12.
       #
-      # The API key must be an env-var reference backed by a Secret, never a
-      # literal. The backend refuses a plaintext http baseUrl outright.
-      #
-      # assistant:
-      #   baseUrl: https://<maas-or-vllm-endpoint>/v1
-      #   apiKey: ${ARO_PLANNER_AI_API_KEY}
-      #   model: qwen3-8-27b
+      # Both values come from the Secret, never from this file. The backend
+      # refuses a plaintext http baseUrl and reports itself unavailable unless
+      # baseUrl, apiKey and model are all present.
+      assistant:
+        baseUrl: "${ARO_PLANNER_AI_BASE_URL}"
+        apiKey: "${ARO_PLANNER_AI_API_KEY}"
+        # Served by the MaaS endpoint from demo-claude-via-open-source-models.
+        # Must support tool calling - the assistant is useless without it, since
+        # every number it quotes comes from a tool rather than from the model.
+        model: qwen38-27b

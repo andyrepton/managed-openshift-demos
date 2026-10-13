@@ -20,8 +20,8 @@ Sizing, costing, the deployment model comparison, NetworkPolicy generation and
 artifact generation are complete and deployed as an RHDH dynamic plugin, along with
 MCP tools exposing the same engine to RHDH's assistant.
 
-The in-page assistant is built but **ships switched off**, because turning it on means
-putting a model API key on an instance that allows guest sign-in. See
+The in-page assistant works, against an OpenAI-compatible endpoint. It is off unless
+configured, because enabling it puts a model API key on the instance. See
 [The assistant](#the-assistant).
 
 Not yet built: the Scaffolder template that raises the request as a pull request. The
@@ -159,10 +159,11 @@ but it could not set a field.
 | `suggest_network_policies` | `set_cluster_options` |
 | `lookup_aro_doc` | `add_network_connection` |
 
-**It ships off, and that is deliberate.** Enabling it means a model API key on an
-instance that allows guest sign-in, which is a credential anyone who can load the page
-can spend. Configure an identity provider and turn guest sign-in off first. The UI shows
-why it is unavailable rather than offering an input that silently discards text.
+**It stays off until sign-in is real.** Enabling it puts a model API key on the
+instance, so anyone who can load the page can spend it. In
+[demo-developer-hub](../demo-developer-hub) that means GitHub sign-in restricted to
+`catalog/org.yaml`; while guest sign-in was on, this was deliberately disabled and the
+UI said why rather than offering an input that silently discarded text.
 
 To enable, under `aroPlanner.assistant` in app-config:
 
