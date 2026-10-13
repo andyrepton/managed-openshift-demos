@@ -218,6 +218,21 @@ export function buildMcpServer(
 const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 
 /**
+ * Headers that mean a request was relayed rather than made in-pod.
+ *
+ * `x-forwarded-user` and `x-forwarded-email` are what the OpenShift oauth-proxy
+ * sidecar adds; the rest are what any reverse proxy adds. Used only to reject.
+ */
+const PROXY_HEADERS = [
+  'x-forwarded-for',
+  'x-forwarded-user',
+  'x-forwarded-email',
+  'x-forwarded-host',
+  'x-forwarded-proto',
+  'forwarded',
+] as const;
+
+/**
  * Only the in-pod assistant may call these tools.
  *
  * `lightspeed-core` is a sidecar in this pod and reaches the router over
@@ -249,6 +264,30 @@ function loopbackOnly(req: Request, res: Response, next: express.NextFunction): 
       error:
         'The MCP endpoint is restricted by TCP peer address, which "trust proxy" ' +
         'makes forgeable. Refusing to serve until that is resolved.',
+    });
+    return;
+  }
+
+  /*
+   * Loopback alone stopped being sufficient once an oauth-proxy sidecar went in
+   * front of Backstage.
+   *
+   * The proxy upstreams over `http://localhost:7007`, so EVERY external request
+   * now arrives with a loopback peer address. The check would have passed for
+   * anyone on the internet while still looking like it was doing something.
+   *
+   * A proxied request is distinguishable because the proxy adds headers. This
+   * uses their PRESENCE to deny, never to allow: a caller can forge a header to
+   * make themselves look proxied (and be rejected), but cannot remove one the
+   * proxy added. The in-pod assistant connects to the port directly and sets
+   * none of these.
+   */
+  const proxied = PROXY_HEADERS.find(h => req.headers[h] !== undefined);
+  if (proxied) {
+    res.status(403).json({
+      error:
+        'The MCP endpoint only accepts direct in-pod callers. This request came ' +
+        `through a proxy (${proxied}), so it did not originate inside the pod.`,
     });
     return;
   }

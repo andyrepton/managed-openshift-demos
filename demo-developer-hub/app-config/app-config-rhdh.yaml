@@ -8,25 +8,47 @@ data:
     # On OpenShift the operator injects app.baseUrl / backend.baseUrl from the Route,
     # so they are deliberately not set here.
 
+    # Sign in with GitHub.
+    #
+    # RHDH 1.10 documents GitHub, GitLab, Microsoft Entra, PingFederate and OIDC
+    # (Red Hat Build of Keycloak). It has NO OpenShift provider - the upstream
+    # Backstage one needs @backstage/backend-plugin-api ^1.10.1 and no shipped
+    # RHDH carries that yet - and this cluster's OAuth server is not OIDC, so
+    # cluster accounts are not an option here. GitHub is the cheapest documented
+    # provider to adopt and to drop again when an OpenShift one ships.
+    #
+    # Red Hat recommends a GitHub App over an OAuth App: fine-grained
+    # permissions and short-lived tokens. See the README for creating it.
     auth:
-      environment: development
+      # `production` is what removes the guest option from the sign-in page.
+      environment: production
+
+      # Required for GitHub auth. Without it sign-in fails after the callback,
+      # which looks like a GitHub misconfiguration and is not.
+      session:
+        secret: "${SESSION_SECRET}"
+
       providers:
-        # Guest sign-in is ENABLED so the demo can be shown without accounts.
-        #
-        # `dangerouslyAllowOutsideDevelopment` is named that way for good reason:
-        # it hands a valid Backstage identity to anyone who can reach the Route.
-        # That is acceptable HERE, and only here, because this instance holds no
-        # credential a visitor could use:
-        #   - no GitHub token (integrations above are unauthenticated, public repo)
-        #   - no Scaffolder template that writes anywhere
-        #   - the ARO planner is read-only and prices from a public Azure API
-        #   - the MCP endpoint only accepts in-pod callers
-        #
-        # Re-check this the moment any of those stop being true. Adding a
-        # credential, a write action, or private data to this instance means guest
-        # sign-in must be turned off in the same change.
-        guest:
-          dangerouslyAllowOutsideDevelopment: true
+        github:
+          production:
+            clientId: "${GITHUB_APP_CLIENT_ID}"
+            clientSecret: "${GITHUB_APP_CLIENT_SECRET}"
+            signIn:
+              resolvers:
+                # Exactly one resolver, so there is one way in and it is obvious
+                # which. The GitHub login must match a User entity name in
+                # catalog/org.yaml.
+                #
+                # `dangerouslyAllowSignInWithoutUserInCatalog` is deliberately
+                # NOT set. GitHub will authenticate anyone on the internet with
+                # an account; the catalog is the entire access control. Setting
+                # that flag here would make this instance world-open - a very
+                # different proposition from the same flag behind a corporate or
+                # cluster-gated identity provider.
+                - resolver: usernameMatchingUserEntityName
+
+    # Without this the frontend offers no way to sign in.
+    signInPage: github
 
     backend:
       auth:
@@ -49,14 +71,18 @@ data:
     catalog:
       # Allow the Scaffolder to register the components it creates.
       rules:
-        - allow: [Component, System, Group, Resource, Location, Template, API]
+        # User must be here. Without it org.yaml's User entities are rejected
+        # silently - the Groups in the same file still load, so the catalog
+        # looks fine - and GitHub sign-in then fails with "unable to resolve
+        # user identity", because the resolver has nothing to match against.
+        - allow: [Component, System, Group, User, Resource, Location, Template, API]
       locations:
         # CATALOG_BRANCH is normally `main`. Pointing it at a feature branch lets you
         # verify catalog changes before they are merged, without editing this file.
         - type: url
           target: https://github.com/${GITHUB_ORG}/${GITHUB_REPO}/blob/${CATALOG_BRANCH}/demo-developer-hub/catalog/all.yaml
           rules:
-            - allow: [Component, System, Group, Resource, Location, Template, API]
+            - allow: [Component, System, Group, User, Resource, Location, Template, API]
 
     scaffolder:
       defaultAuthor:

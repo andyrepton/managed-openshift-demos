@@ -36,3 +36,18 @@ spec:
 
     route:
       enabled: true
+
+  # Pin the ServiceAccount back to `default`.
+  #
+  # An earlier oauth-proxy experiment set this to a dedicated SA. Removing the
+  # patch from this CR did NOT reset the field on the live Deployment - the
+  # operator leaves it where it was - so deleting that SA left the Deployment
+  # pointing at one that no longer existed and no pod could be created. Setting
+  # it explicitly is what actually reverts it.
+  deployment:
+    patch:
+      spec:
+        template:
+          spec:
+            serviceAccountName: default
+

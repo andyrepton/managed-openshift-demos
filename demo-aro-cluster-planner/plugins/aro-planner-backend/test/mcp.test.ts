@@ -102,3 +102,28 @@ describe('lookupDocs', () => {
     }
   });
 });
+
+describe('a proxy in front of Backstage must not defeat the loopback check', () => {
+  // The oauth-proxy sidecar upstreams over localhost, so every external request
+  // arrives with a loopback peer address. Without this, adding the proxy would
+  // silently open the endpoint to anyone who could log into the cluster.
+  it.each([
+    'x-forwarded-for',
+    'x-forwarded-user',
+    'x-forwarded-email',
+    'x-forwarded-host',
+    'x-forwarded-proto',
+    'forwarded',
+  ])('rejects a loopback request carrying %s', async header => {
+    const res = await request(app()).post('/api/aro-planner/mcp').set(header, 'anything').send({});
+    expect(res.status).toBe(403);
+    expect(res.body.error).toMatch(/did not originate inside the pod/);
+  });
+
+  it('still accepts a direct in-pod call with no proxy headers', async () => {
+    // supertest connects over loopback with no forwarded headers, which is
+    // exactly the assistant sidecar's shape.
+    const res = await request(app()).post('/api/aro-planner/mcp').send({});
+    expect(res.status).not.toBe(403);
+  });
+});

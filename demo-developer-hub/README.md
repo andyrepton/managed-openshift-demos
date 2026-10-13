@@ -1,13 +1,13 @@
 # Red Hat Developer Hub on ROSA/ARO
 
-Install Red Hat Developer Hub (RHDH) 1.10 as the base other demos plug into: the software catalog, the dynamic-plugin loader and guest sign-in, with no credentials stored on the instance.
+Install Red Hat Developer Hub (RHDH) 1.10 as the base other demos plug into: the software catalog, the dynamic-plugin loader, and GitHub sign-in restricted to a named list of people.
 
 ## Overview
 
 * **RHDH 1.10.5** -- installed via OLM from the standard `redhat-operators` catalog.
 * **Software catalog** -- two teams, a sample system and component, loaded from this repo.
 * **Software catalog from git** -- entities read from a public repo, unauthenticated.
-* **Guest sign-in** -- no identity provider required, and no stored credential to go with it.
+* **GitHub sign-in** -- via a GitHub App, with the software catalog as the access list.
 
 Verified on ROSA HCP, OpenShift 4.22.12.
 
@@ -15,8 +15,9 @@ Verified on ROSA HCP, OpenShift 4.22.12.
 
 * A ROSA, ARO or OSD cluster with `cluster-admin`. Build one with `../andys-demo-cluster-tf` using `basic_rosa.tfvars` or `basic_aro_hcp.tfvars` -- this demo is provider-agnostic.
 * `oc` CLI, logged in.
+* A **GitHub App** for sign-in. See [Set up sign-in](#2-set-up-sign-in).
 
-No GitHub token is needed. The catalog is read from a public repository and this demo performs no writes.
+No GitHub personal access token is needed. The catalog is read from a public repository and this demo performs no git writes.
 
 ## How to Run the Demo
 
@@ -36,13 +37,33 @@ oc get csv -n rhdh-operator
 # rhdh-operator.v1.10.5  Red Hat Developer Hub Operator   1.10.5    Succeeded
 ```
 
-### 2. Create the secrets
+### 2. Set up sign-in
+
+Register a **GitHub App** at <https://github.com/settings/apps/new>. Red Hat recommends a GitHub App over an OAuth App: fine-grained permissions and short-lived tokens.
+
+| Field | Value |
+| --- | --- |
+| GitHub App name | anything unique, e.g. `rhdh-demo-signin` |
+| Homepage URL | `https://<your-rhdh-host>` |
+| Authorization callback URL | `https://<your-rhdh-host>/api/auth/github/handler/frame` |
+| Webhook | clear **Active** -- no webhook is used |
+| Organization permissions | Members: `Read-only` |
+| Where can this be installed | Only on this account |
+
+Generate a client secret, then install the app on your account.
+
+Add yourself to `catalog/org.yaml` as a `User` whose `metadata.name` is your GitHub login. **That file is the access list** -- GitHub authenticates anyone, the catalog decides who gets in.
+
+### 3. Create the secrets
 
 ```bash
 oc create namespace rhdh
 
 oc -n rhdh create secret generic rhdh-secrets \
   --from-literal=BACKEND_SECRET="$(openssl rand -base64 24)" \
+  --from-literal=SESSION_SECRET="$(openssl rand -base64 24)" \
+  --from-literal=GITHUB_APP_CLIENT_ID="${GITHUB_APP_CLIENT_ID}" \
+  --from-literal=GITHUB_APP_CLIENT_SECRET="${GITHUB_APP_CLIENT_SECRET}" \
   --from-literal=GITHUB_ORG="andyrepton" \
   --from-literal=GITHUB_REPO="managed-openshift-demos" \
   --from-literal=CATALOG_BRANCH="main"
@@ -50,16 +71,16 @@ oc -n rhdh create secret generic rhdh-secrets \
 
 `secrets/rhdh-secrets.yaml` documents the shape of the Secret with `REPLACE_ME` placeholders. Do not commit a filled-in copy.
 
-There is deliberately no GitHub token in it. See Notes.
+There is deliberately no GitHub personal access token in it. The two `GITHUB_APP_*` values belong to a sign-in app and grant no repository access.
 
-### 3. Apply the configuration
+### 4. Apply the configuration
 
 ```bash
 oc apply -f app-config/app-config-rhdh.yaml
 oc apply -f app-config/dynamic-plugins.yaml
 ```
 
-### 4. Deploy RHDH
+### 5. Deploy RHDH
 
 ```bash
 oc apply -f backstage.yaml
@@ -68,9 +89,9 @@ oc -n rhdh rollout status deployment/backstage-developer-hub --timeout=10m
 echo "https://$(oc get route backstage-developer-hub -n rhdh -o jsonpath='{.spec.host}')"
 ```
 
-Sign in as **Guest**.
+Sign in with **GitHub**. Only accounts with a matching `User` entity in `catalog/org.yaml` are admitted.
 
-### 5. Verify
+### 6. Verify
 
 1. Open **Catalog**. You should see `payments-api`, the `payments` system and two groups.
 2. Open **Deployment Planner** in the sidebar, if you have also installed [demo-aro-cluster-planner](../demo-aro-cluster-planner).
@@ -89,7 +110,10 @@ Sign in as **Guest**.
 ## Notes
 
 * **Pinned to 1.10, not 2.x.** RHDH 2.x images are published only to `quay.io/rhdh` and not to `registry.redhat.io`, so the operator pod fails with `manifest unknown`. Redirecting them needs an `ImageDigestMirrorSet`, which ROSA HCP does not permit. 1.10 is not missing anything required here -- its `lightspeed` flavour already provides the MCP tool runtime and `mcp_servers` block.
-* **No write credential lives here, and that is a constraint, not an oversight.** Guest sign-in means anyone who can reach the Route has a valid Backstage identity. A stored token with write access would therefore be a write credential exposed to the internet, which is how a real PAT was exposed on this instance on 2026-10-12. Guest access and stored credentials are mutually exclusive: add an identity provider before adding either a git token or a model API key.
+* **`catalog/org.yaml` is the access list, and nothing else is.** GitHub will authenticate anyone on the internet with an account; `usernameMatchingUserEntityName` is what turns that into a closed list. Adding a person is one `User` entity. Never set `dangerouslyAllowSignInWithoutUserInCatalog` with a public identity provider -- behind a corporate IdP that flag is defensible, here it would make the instance world-open.
+* **`User` must be in the catalog `rules` allow list.** It is easy to miss, and the failure is quiet: `org.yaml` also contains Groups, so with `User` omitted the Groups load, the file looks fine, and the only thing dropped is the entity that gates access. Sign-in then fails with `unable to resolve user identity` and nothing appears in the logs.
+* **`auth.session.secret` is mandatory for GitHub auth.** Without it sign-in fails *after* the GitHub callback, which reads like a bad callback URL and is not.
+* **There is no OpenShift auth provider in RHDH 1.10.** The upstream Backstage one needs `@backstage/backend-plugin-api` `^1.10.1`; RHDH 1.10 ships 1.8.0 and 2.1 ships 1.10.0. The cluster's own OAuth server is not OIDC either -- its `scopes_supported` has no `openid` -- so the `oidc` provider cannot stand in. Revisit when a release bundles it.
 * **The GitHub Scaffolder module is enabled but unused.** RHDH preinstalls `backstage-plugin-scaffolder-backend-module-github` disabled; without the `disabled: false` entry in `dynamic-plugins.yaml`, a template that publishes fails with `Template action with ID 'publish:github:pull-request' is not registered`. Enabling it takes the registered action count from 17 to 30. It is on here so the publishing path works the moment auth is in place.
 * **Do not use a `/` in a branch name set as `CATALOG_BRANCH`.** Backstage parses the ref in `/blob/<ref>/<path>` as a single path segment, so `feat/my-branch` resolves as ref `feat` with the remainder read as a directory. Use `feat-my-branch`. `main` is unaffected.
 * `CATALOG_BRANCH` lets you verify catalog changes on a branch before merging without editing `app-config-rhdh.yaml`:
@@ -101,7 +125,7 @@ Sign in as **Guest**.
 * The CR uses `rhdh.redhat.com/v1alpha5`. The 1.10.5 CRD serves `v1alpha4` and `v1alpha5`; `v1alpha5` is the storage version and the one carrying `spec.flavours`.
 * The operator enables the `lightspeed` flavour by default, adding an `init-rag-data` init container and a `lightspeed-core` sidecar. `backstage.yaml` disables it so this demo is plain RHDH.
 * `enableLocalDb: true` means the operator runs PostgreSQL. Use an external database for anything persistent.
-* Guest sign-in uses `dangerouslyAllowOutsideDevelopment: true`. Swap in GitHub or OIDC auth before showing this as a production pattern, and before storing any credential on the instance.
+* **`CATALOG_BRANCH` and sign-in are coupled.** The access list is read from git, so pointing `CATALOG_BRANCH` at a branch whose `org.yaml` lacks your `User` entity locks you out. Check before switching branches.
 
 ## Related Demos
 
