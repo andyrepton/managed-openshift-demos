@@ -1,0 +1,17 @@
+# Mark generated files so GitHub collapses them in diffs and leaves them out of
+# the language statistics. They are still committed and still reviewed when they
+# change for a reason - this only stops them drowning the files a human wrote.
+#
+# Without this, the deployment planner's first pull request read as 34,310 added
+# lines, of which 23,200 were these two.
+
+# Yarn 4 lockfile. Pins every transitive resolution in a Backstage dependency
+# tree, so it is enormous and nobody reads it line by line. It must stay
+# committed: it is what makes the build reproducible, and it carries the
+# security resolutions for got and adm-zip.
+demo-aro-cluster-planner/yarn.lock linguist-generated=true
+
+# 272 ARO-supported VM sizes, produced by scripts/generate-sku-catalog.py from
+# Microsoft's support policy page. Committed output, regenerated deliberately,
+# never fetched at runtime.
+demo-aro-cluster-planner/packages/aro-planner-common/data/sku-catalog.json linguist-generated=true
