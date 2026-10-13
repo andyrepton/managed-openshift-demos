@@ -20,13 +20,14 @@ import {
   getSku,
   inferProfile,
   planNetworkPolicies,
+  planStorage,
   recommendNodePools,
 } from '@aro-planner/common';
 
 import { TtlCache } from './cache';
 import { endpointsSchema } from './schema';
 import { mcpRouter } from './mcp';
-import { assistantRouter } from './assistant/router';
+import { assistantRouter, type AssistantLogger } from './assistant/router';
 import type { AssistantConfig } from './assistant/client';
 
 /** Azure publishes prices rarely; an hour of staleness is not material to an estimate. */
@@ -39,6 +40,8 @@ export interface RouterOptions {
   ttlMs?: number;
   /** Absent means the in-page assistant is off and says so. */
   assistant?: AssistantConfig;
+  /** Backstage's logger, so a failed assistant turn leaves a trace. */
+  logger?: AssistantLogger;
 }
 
 /** The assistant is off unless a model endpoint has been configured for it. */
@@ -48,8 +51,11 @@ const ASSISTANT_OFF: AssistantConfig = {
   apiKey: '',
   model: '',
   disabledReason: 'No model endpoint configured for the assistant.',
-  timeoutMs: 60_000,
+  timeoutMs: 120_000,
+  turnTimeoutMs: 300_000,
   maxRounds: 5,
+  maxTokens: 4096,
+  thinking: false,
 };
 
 const PROFILES: readonly WorkloadProfile[] = [
@@ -86,6 +92,17 @@ function parsePlanRequest(body: unknown): SizingRequest {
 
   const version = b.openshiftVersion === undefined ? undefined : String(b.openshiftVersion);
 
+  const storageGiB = b.storageGiB === undefined ? 0 : Number(b.storageGiB);
+  if (!Number.isFinite(storageGiB) || storageGiB < 0) {
+    throw new BadRequest('storageGiB must be zero or a positive number');
+  }
+  // 32767 GiB is the largest managed disk Azure sells; above that the planner
+  // cannot honestly cost it as one volume.
+  if (storageGiB > 32767) {
+    throw new BadRequest('storageGiB is larger than the largest managed disk (32767 GiB)');
+  }
+  const tier = b.storageTier === 'standard-ssd' ? 'standard-ssd' : 'premium-ssd';
+
   return {
     flavour,
     region,
@@ -101,6 +118,7 @@ function parsePlanRequest(body: unknown): SizingRequest {
       ? { applicationName: b.applicationName }
       : {}),
     ...(version ? { openshiftVersion: version } : {}),
+    ...(storageGiB > 0 ? { storageGiB, storageTier: tier } : {}),
   };
 }
 
@@ -110,6 +128,7 @@ export function createRouter(options: RouterOptions = {}): Router {
     buildPrices = buildPriceTable,
     ttlMs = PRICE_TTL_MS,
     assistant = ASSISTANT_OFF,
+    logger,
   } = options;
   const cache = new TtlCache<PriceTable>(ttlMs);
   const router = express.Router();
@@ -136,7 +155,7 @@ export function createRouter(options: RouterOptions = {}): Router {
   // The in-page assistant. Unlike MCP this is called from the browser, so it is
   // reachable through the Route - and therefore off until a model endpoint is
   // configured. See assistant/config.ts.
-  router.use('/assistant', assistantRouter(assistant, overrides, loadPrices));
+  router.use('/assistant', assistantRouter(assistant, overrides, loadPrices, logger));
 
   router.get('/health', (_req, res) => {
     res.json({
@@ -180,6 +199,8 @@ export function createRouter(options: RouterOptions = {}): Router {
     recommendations: ReturnType<typeof recommendNodePools>;
     plan: ClusterPlan;
     comparison: ReturnType<typeof compareModels>;
+    /** The pool the costing used - the selected one, or the cheapest. */
+    chosenPool: ReturnType<typeof recommendNodePools>[number];
     networkPlan: ReturnType<typeof planNetworkPolicies>;
     cpSku: Sku | undefined;
     merged: Partial<PricingOverrides>;
@@ -263,11 +284,25 @@ export function createRouter(options: RouterOptions = {}): Router {
       };
     }
 
+    // Honour a chosen node pool. The cards in the UI were previously inert
+    // because the costing always took recommendations[0]; selecting one has to
+    // move the price or it is worse than not offering the choice.
+    const wanted = (body as Record<string, unknown>)?.nodePoolSku;
+    const chosenPool =
+      (typeof wanted === 'string'
+        ? recommendations.find(r => r.sku.name === wanted)
+        : undefined) ?? recommendations[0]!;
+
+    const storage = request.storageGiB
+      ? planStorage(request.storageGiB, request.storageTier ?? 'premium-ssd')
+      : null;
+
     const plan: ClusterPlan = {
       flavour: request.flavour,
       region: request.region,
       ...(request.flavour === 'classic' && cpSku ? { controlPlaneSku: cpSku } : {}),
-      workerPools: [recommendations[0]!],
+      workerPools: [chosenPool],
+      ...(storage ? { storage } : {}),
     };
 
     // Connectivity -> NetworkPolicies. Namespace defaults to the application name
@@ -280,11 +315,14 @@ export function createRouter(options: RouterOptions = {}): Router {
     const merged: Partial<PricingOverrides> = { ...DEFAULT_OVERRIDES, ...overrides };
     const comparison = compareModels(request, {
       prices,
-      dedicated: { plan, pool: recommendations[0]!, ...(cpSku ? { controlPlaneSku: cpSku } : {}) },
+      dedicated: { plan, pool: chosenPool, ...(cpSku ? { controlPlaneSku: cpSku } : {}) },
       overrides: merged,
     });
 
-    return { ok: true, request, prices, recommendations, plan, comparison, networkPlan, cpSku, merged };
+    return {
+      ok: true, request, prices, recommendations, plan, comparison, networkPlan,
+      cpSku, merged, chosenPool,
+    };
   };
 
   /**
@@ -304,6 +342,7 @@ export function createRouter(options: RouterOptions = {}): Router {
       res.json({
         request,
         recommendations,
+        selectedSku: built.chosenPool.sku.name,
         estimate: estimateCost(plan, prices, merged),
         comparison,
         cheapest: cheapestPriced(comparison)?.model ?? null,
@@ -344,8 +383,8 @@ export function createRouter(options: RouterOptions = {}): Router {
         emitBundle({
           request,
           plan,
-          pool: recommendations[0]!,
-          alternatives: recommendations.slice(1),
+          pool: built.chosenPool,
+          alternatives: recommendations.filter(r => r.sku.name !== built.chosenPool.sku.name),
           comparison,
           networkPlan,
           prices: { retrievedAt: prices.retrievedAt, ...(prices.stale ? { stale: true } : {}) },

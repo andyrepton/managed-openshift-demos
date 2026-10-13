@@ -1,3 +1,4 @@
+import { storageClassFor } from '../storage.js';
 import { toYaml, toYamlDocuments, type YamlValue } from './yaml.js';
 import type { EmitFile, EmitInput } from './types.js';
 
@@ -32,6 +33,9 @@ function namespaceManifest(name: string, input: EmitInput): YamlValue {
         // Required for the monitoring and ingress baseline NetworkPolicies to
         // select this namespace from the other side.
         'kubernetes.io/metadata.name': name,
+        // What the ClusterResourceQuota selects on. Label a second namespace
+        // with this and it shares the same quota rather than getting its own.
+        [`${LABEL_PREFIX}/application`]: name,
       },
       annotations: {
         'openshift.io/display-name': input.request.applicationName ?? name,
@@ -45,26 +49,61 @@ function namespaceManifest(name: string, input: EmitInput): YamlValue {
 /**
  * A quota at exactly what was asked for, and therefore at exactly what was priced.
  *
+ * A ClusterResourceQuota rather than a ResourceQuota, selecting on a label, so
+ * the budget follows the APPLICATION rather than a single namespace. A team that
+ * later wants `payments-api-staging` labels it and the two share one pot -
+ * whereas a per-namespace ResourceQuota silently doubles the entitlement every
+ * time someone adds a namespace, which is how a costed request stops matching
+ * what is actually running.
+ *
+ * It is cluster-scoped, so applying it needs a cluster admin. That is the point:
+ * the quota is the platform team's control, not the requesting team's.
+ *
  * Limits equal requests on purpose. The costing bought capacity for the stated
  * vCPU and RAM; letting limits exceed that would let the namespace burst into
- * capacity nobody paid for, and the first anyone would know is a pending pod on a
- * full cluster.
+ * capacity nobody paid for, and the first anyone would know is a pending pod on
+ * a full cluster.
  */
-function resourceQuotaManifest(name: string, input: EmitInput): YamlValue {
+function clusterResourceQuotaManifest(name: string, input: EmitInput): YamlValue {
   const { vcpu, ramGiB } = input.request;
+  const hard: Record<string, string> = {
+    'requests.cpu': String(vcpu),
+    'requests.memory': `${ramGiB}Gi`,
+    'limits.cpu': String(vcpu),
+    'limits.memory': `${ramGiB}Gi`,
+    'count/services.loadbalancers': '2',
+  };
+
+  // Capped at what was ASKED FOR, not at the provisioned tier. A 300 GiB
+  // request is billed as a 512 GiB disk, but 300 is the team's entitlement -
+  // the difference is waste the estimate already calls out, not headroom.
+  //
+  // Only set when some storage was asked for: `requests.storage: 0` blocks
+  // every PVC, which is a very confusing way to discover the field was blank.
+  const storageGiB = input.request.storageGiB ?? 0;
+  if (storageGiB > 0) {
+    const sc = storageClassFor(input.request.storageTier ?? 'premium-ssd');
+    hard['requests.storage'] = `${storageGiB}Gi`;
+    // Also scoped to the class, so the budget cannot be spent on a dearer tier
+    // than the one that was costed.
+    hard[`${sc.name}.storageclass.storage.k8s.io/requests.storage`] = `${storageGiB}Gi`;
+    // A ceiling on volume count, not capacity. It exists because each PVC is a
+    // separate managed disk billed at its own tier, so many small volumes cost
+    // more than the estimate assumes.
+    hard.persistentvolumeclaims = '20';
+  }
+
   return {
-    apiVersion: 'v1',
-    kind: 'ResourceQuota',
-    metadata: { name: `${name}-quota`, namespace: name, labels: commonLabels(name, input) },
+    apiVersion: 'quota.openshift.io/v1',
+    kind: 'ClusterResourceQuota',
+    metadata: { name: `${name}-quota`, labels: commonLabels(name, input) },
     spec: {
-      hard: {
-        'requests.cpu': String(vcpu),
-        'requests.memory': `${ramGiB}Gi`,
-        'limits.cpu': String(vcpu),
-        'limits.memory': `${ramGiB}Gi`,
-        'persistentvolumeclaims': '20',
-        'count/services.loadbalancers': '2',
+      selector: {
+        labels: {
+          matchLabels: { [`${LABEL_PREFIX}/application`]: name },
+        },
       },
+      quota: { hard },
     },
   };
 }
@@ -158,6 +197,43 @@ function machineSetManifest(name: string, input: EmitInput, zone: string, replic
   };
 }
 
+const STORAGECLASS_HEADER = `# A StorageClass for the chosen disk tier.
+#
+# ARO ships exactly one disk class - \`managed-csi\`, which is Premium_LRS and the
+# cluster default. Standard SSD has to be created, and this is CLUSTER-SCOPED so
+# it needs an admin. Without it the PVCs land on Premium and cost more than the
+# estimate says.
+#
+# Safe to skip if a class of this name already exists.
+`;
+
+function storageClassManifest(sc: ReturnType<typeof storageClassFor>): YamlValue {
+  return {
+    apiVersion: 'storage.k8s.io/v1',
+    kind: 'StorageClass',
+    metadata: { name: sc.name },
+    provisioner: 'disk.csi.azure.com',
+    parameters: { skuName: sc.skuName },
+    reclaimPolicy: 'Delete',
+    // Matches managed-csi: bind only once a pod is scheduled, so the disk is
+    // created in the zone the pod actually lands in.
+    volumeBindingMode: 'WaitForFirstConsumer',
+    allowVolumeExpansion: true,
+  };
+}
+
+const QUOTA_HEADER = `# Capacity budget for this application.
+#
+# The ClusterResourceQuota is CLUSTER-SCOPED and needs a cluster admin to apply.
+# It selects namespaces by label, so the budget follows the application: label a
+# second namespace with the same value and the two share one pot rather than
+# each getting a full entitlement of its own.
+#
+# The LimitRange below is namespaced and must exist in every namespace the quota
+# covers - without it, a pod that sets no resources is rejected outright rather
+# than defaulted, which is a poor first experience of a new namespace.
+`;
+
 const MACHINESET_HEADER = `# Worker MachineSets for classic ARO.
 #
 # Fill the REPLACE_ME values in from the live cluster - they do not exist until it
@@ -203,11 +279,13 @@ export function renderManifests(name: string, input: EmitInput): EmitFile[] {
       contents: `${toYaml(namespaceManifest(name, input))}\n`,
     },
     {
-      path: `${dir}/10-resourcequota.yaml`,
-      contents: toYamlDocuments([
-        resourceQuotaManifest(name, input),
-        limitRangeManifest(name, input),
-      ]),
+      path: `${dir}/10-quota.yaml`,
+      contents:
+        QUOTA_HEADER +
+        toYamlDocuments([
+          clusterResourceQuotaManifest(name, input),
+          limitRangeManifest(name, input),
+        ]),
     },
     {
       path: `${dir}/20-networkpolicies.yaml`,
@@ -225,6 +303,16 @@ export function renderManifests(name: string, input: EmitInput): EmitFile[] {
       contents:
         MACHINESET_HEADER +
         toYamlDocuments(zones.map(z => machineSetManifest(name, input, z, per))),
+    });
+  }
+
+  // ARO provides only `managed-csi` (Premium_LRS). Anything else has to be
+  // created, or the PVCs silently land on Premium and the estimate is wrong.
+  const sc = storageClassFor(input.request.storageTier ?? 'premium-ssd');
+  if ((input.request.storageGiB ?? 0) > 0 && sc.mustCreate) {
+    files.push({
+      path: `${dir}/05-storageclass.yaml`,
+      contents: STORAGECLASS_HEADER + `${toYaml(storageClassManifest(sc))}\n`,
     });
   }
 

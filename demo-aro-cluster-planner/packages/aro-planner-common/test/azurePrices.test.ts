@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { fetchAroLicencePrices, fetchVmPrices, isLinuxOnDemand } from '../src/azurePrices.js';
+import {
+  fetchAroLicencePrices,
+  fetchDiskPrices,
+  fetchVmPrices,
+  isLinuxOnDemand,
+} from '../src/azurePrices.js';
 
 /** The six rows the live API really returns for a single D8s_v5 query in westeurope. */
 const D8S_V5_ROWS = [
@@ -112,5 +117,37 @@ describe('error handling', () => {
     const out = await fetchVmPrices(['Standard_D8s_v5'], 'westeurope', { fetchImpl: f as never });
     expect(out).toEqual({ Standard_D8s_v5: 0.46 });
     expect(n).toBe(2);
+  });
+});
+
+describe('fetchDiskPrices', () => {
+  // Every managed disk SKU has three meters, and they are not distinguishable
+  // by skuName or by unit. Taking the wrong one priced a 2 TiB E40 below a
+  // 512 GiB E20 - cheaper for more storage, which no one would question.
+  const rows = [
+    { productName: 'Standard SSD Managed Disks', skuName: 'E40 LRS', meterName: 'E40 LRS Disk Mount', retailPrice: 17.082, unitOfMeasure: '1/Month' },
+    { productName: 'Standard SSD Managed Disks', skuName: 'E40 LRS', meterName: 'E40 LRS Disk', retailPrice: 153.6, unitOfMeasure: '1/Month' },
+    { productName: 'Standard SSD Managed Disks', skuName: 'E40 LRS', meterName: 'E40 LRS Disk Operations', retailPrice: 0.002, unitOfMeasure: '10K' },
+    { productName: 'Standard SSD Managed Disks', skuName: 'E40 ZRS', meterName: 'E40 ZRS Disk', retailPrice: 230.4, unitOfMeasure: '1/Month' },
+    { productName: 'Premium SSD Managed Disks', skuName: 'P20 LRS', meterName: 'P20 LRS Disk', retailPrice: 80.54, unitOfMeasure: '1/Month' },
+  ].map(r => ({ armSkuName: '', currencyCode: 'USD', armRegionName: 'westeurope', type: 'Consumption', ...r }));
+
+  const fetchStub = async () =>
+    ({ ok: true, status: 200, json: async () => ({ Items: rows, NextPageLink: null }) }) as unknown as Response;
+
+  it('takes the disk meter, not the mount fee or the IO meter', async () => {
+    const out = await fetchDiskPrices('westeurope', { fetchFn: fetchStub });
+    expect(out['Standard SSD Managed Disks|E40']).toBe(153.6);
+    expect(out['Premium SSD Managed Disks|P20']).toBe(80.54);
+  });
+
+  it('ignores ZRS, which is about 30% dearer than the LRS we size for', async () => {
+    const out = await fetchDiskPrices('westeurope', { fetchFn: fetchStub });
+    expect(Object.values(out)).not.toContain(230.4);
+  });
+
+  it('never returns the per-IO transaction meter as a disk price', async () => {
+    const out = await fetchDiskPrices('westeurope', { fetchFn: fetchStub });
+    expect(Object.values(out)).not.toContain(0.002);
   });
 });

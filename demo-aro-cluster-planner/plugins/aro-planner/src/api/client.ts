@@ -41,6 +41,8 @@ export interface EndpointInput {
 export interface PlanResponse {
   request: SizingRequest;
   recommendations: Recommendation[];
+  /** The pool the costing actually used - the selected one, or the cheapest. */
+  selectedSku?: string;
   estimate: CostEstimate | null;
   comparison: ModelComparison[];
   cheapest: DeploymentModel | null;
@@ -65,6 +67,8 @@ export interface PlanInput
   endpoints?: EndpointInput[];
   controlPlaneSku?: string;
   openshiftVersion?: string;
+  /** A node pool the user picked. Absent means the cheapest is used. */
+  nodePoolSku?: string;
 }
 
 /**

@@ -265,6 +265,8 @@ All pure logic lives in `aro-planner-common` so the wizard, the backend and the 
 * **Match the CLI to the RHDH version** -- `@red-hat-developer-hub/cli@release-1.10`. `@latest` is 2.x and treats the scalprum config as legacy.
 * The key under `dynamicPlugins.frontend` must equal `scalprum.name` in the plugin's `package.json`, or it is discovered and never loaded.
 * **ARO licence meters are not under `serviceName eq 'Azure Red Hat OpenShift'`** -- that returns nothing. They live under `Virtual Machines Licenses` with a `productName` of `Azure Red Hat OpenShift <category>`.
+* **A managed disk SKU returns three meters, not one** -- `E40 LRS Disk` ($153.60/mo), `E40 LRS Disk Mount` ($17.08/mo) and `E40 LRS Disk Operations` ($0.002/10K). Filtering on `unitOfMeasure eq '1/Month'` leaves the first two, and taking whichever arrives first priced a 2 TiB disk below a 512 GiB one. Match on `meterName`.
+* **Storage is billed per provisioned tier, not per GiB.** A 300 GiB PVC is an Azure P20 and bills as 512 GiB. Capacity is bought in whole units like nodes, so a per-GiB estimate understates every request not already on a tier boundary.
 * **A VM SKU query returns six rows, not one** -- Linux and Windows, each in standard, Spot and Low Priority. Spot is $0.085/hr against $0.46 on-demand, so taking the wrong row understates a cluster fivefold.
 * The OData filter fails between 15 and 18 `armSkuName` clauses, and the endpoint rate-limits with 429. Requests are chunked at 12 and retried; a 400 is never retried.
 * The Retail Prices API sends **no CORS headers**, so pricing must run server-side.

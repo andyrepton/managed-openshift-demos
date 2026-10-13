@@ -1,5 +1,7 @@
 /** Domain model shared by the wizard UI, the backend price proxy and the MCP server. */
 
+import type { StoragePlan, StorageTier } from './storage.js';
+
 export type SkuCategory =
   | 'general-purpose'
   | 'memory-optimized'
@@ -54,6 +56,13 @@ export interface SizingRequest {
   /** Adding a pool to an existing cluster, which permits day-2-only sizes. */
   dayTwo: boolean;
   openshiftVersion?: string;
+  /**
+   * Persistent volume storage in GiB, across all PVCs. 0 or absent means none,
+   * and storage is then left out of the estimate rather than shown as zero.
+   */
+  storageGiB?: number;
+  /** Managed disk tier backing those PVCs. Defaults to Premium SSD, as ARO does. */
+  storageTier?: StorageTier;
   /** Which model the user has chosen. Drives what the UI shows and what is emitted. */
   deploymentModel?: DeploymentModel;
   /** The application this is for. Used to name the namespace and the artifacts. */
@@ -118,6 +127,11 @@ export interface PriceTable {
   region: string;
   /** `armSkuName` -> Linux on-demand $/hr. Excludes Windows, Spot and Low Priority. */
   vm: Record<string, number>;
+  /**
+   * `<productName>|<tier>` -> $/month per disk, e.g. `Premium SSD Managed Disks|P20`.
+   * Monthly, not hourly: Azure bills managed disks per provisioned disk per month.
+   */
+  disk?: Record<string, number>;
   /** `<productName>|<vcpu>` -> $/hr, from the `Virtual Machines Licenses` meters. */
   aroLicence: Record<string, number>;
   /**
@@ -183,6 +197,8 @@ export interface ClusterPlan {
   /** Classic ARO only: three control plane nodes, charged as infra but not licensed. */
   controlPlaneSku?: Sku;
   workerPools: NodePoolPlan[];
+  /** PVC-backed managed disks. Absent means no storage was asked for. */
+  storage?: StoragePlan;
 }
 
 /** How a model's cost lands: a recurring bill, or a single capital outlay. */

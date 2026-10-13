@@ -46,10 +46,10 @@ data:
       #
       # The key under dynamicPlugins.frontend MUST equal `scalprum.name` from the
       # plugin's package.json, or the plugin is discovered but never loaded.
-      - package: 'oci://quay.io/andyrepton/aro-planner:1.3.1!aro-planner-backstage-plugin-aro-planner-backend'
+      - package: 'oci://quay.io/andyrepton/aro-planner:1.5.3!aro-planner-backstage-plugin-aro-planner-backend'
         disabled: false
 
-      - package: 'oci://quay.io/andyrepton/aro-planner:1.3.1!aro-planner-backstage-plugin-aro-planner'
+      - package: 'oci://quay.io/andyrepton/aro-planner:1.5.3!aro-planner-backstage-plugin-aro-planner'
         disabled: false
         pluginConfig:
           dynamicPlugins:

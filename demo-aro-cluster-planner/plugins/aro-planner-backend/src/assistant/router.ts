@@ -2,7 +2,7 @@ import express, { type Request, type Response, type Router } from 'express';
 
 import type { PricingOverrides } from '@aro-planner/common';
 
-import { runChatTurn, type AssistantConfig } from './client';
+import { ModelHttpError, runChatTurn, type AssistantConfig } from './client';
 import { chatRequestSchema } from './state';
 import type { PriceLoader } from './tools';
 
@@ -56,10 +56,16 @@ class Budget {
 
 const MAX_TURNS_PER_MINUTE = 10;
 
+/** Just the bit of Backstage's logger this needs, so tests can pass a stub. */
+export interface AssistantLogger {
+  error(message: string): void;
+}
+
 export function assistantRouter(
   cfg: AssistantConfig,
   overrides: Partial<PricingOverrides>,
   loadPrices: PriceLoader,
+  logger?: AssistantLogger,
 ): Router {
   const router = express.Router();
   router.use(express.json({ limit: '256kb' }));
@@ -104,14 +110,31 @@ export function assistantRouter(
     try {
       res.json(await runChatTurn(cfg, parsed.data, overrides, loadPrices));
     } catch (err) {
-      const aborted = err instanceof Error && err.name === 'AbortError';
-      // The upstream message can carry endpoint detail, so it is summarised
-      // rather than forwarded. The full error goes to the server log.
-      res.status(aborted ? 504 : 502).json({
-        error: aborted
-          ? 'The model took too long to answer.'
-          : 'Could not reach the model endpoint.',
-      });
+      // Actually log it. A previous version claimed to and did not, which made
+      // every failure look identical from the browser and left nothing behind.
+      logger?.error(
+        `Assistant turn failed: ${
+          err instanceof ModelHttpError
+            ? `HTTP ${err.status} from the model endpoint; body: ${err.body}`
+            : err instanceof Error
+              ? `${err.name}: ${err.message}${err.cause ? ` (cause: ${String(err.cause)})` : ''}`
+              : String(err)
+        }`,
+      );
+
+      if (err instanceof Error && err.name === 'AbortError') {
+        res.status(504).json({ error: 'The model took too long to answer.' });
+        return;
+      }
+      if (err instanceof ModelHttpError) {
+        // The status is safe to show; the body is not, as some gateways echo
+        // request headers back in it.
+        res.status(502).json({
+          error: `The model endpoint rejected the request (HTTP ${err.status}). See the backend log.`,
+        });
+        return;
+      }
+      res.status(502).json({ error: 'Could not reach the model endpoint.' });
     }
   });
 

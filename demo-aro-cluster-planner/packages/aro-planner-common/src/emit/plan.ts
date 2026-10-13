@@ -1,4 +1,5 @@
 import type { CostEstimate, ModelComparison, PriceSource } from '../types.js';
+import { STORAGE_TIER_LABEL, storageClassFor } from '../storage.js';
 import type { EmitInput } from './types.js';
 
 /**
@@ -77,6 +78,20 @@ export function renderPlanMarkdown(name: string, input: EmitInput): string {
   out.push(`| Application | ${cell(request.applicationName ?? name)} |`);
   out.push(`| Where it runs | ${cell(chosen?.label ?? model)} |`);
   out.push(`| Capacity | ${request.vcpu} vCPU / ${request.ramGiB} GiB **allocatable** |`);
+  if (input.plan?.storage) {
+    const st = input.plan.storage;
+    const sc = storageClassFor(st.tier);
+    out.push(
+      `| Persistent storage | ${st.requestedGiB} GiB on ${STORAGE_TIER_LABEL[st.tier]}, ` +
+        `billed as a ${st.disk.name} at ${st.disk.gib} GiB |`,
+    );
+    out.push(
+      `| StorageClass | \`${sc.name}\` (${sc.skuName})` +
+        `${sc.mustCreate ? ' — **must be created**, ARO only provides `managed-csi`' : ' — the ARO default'} |`,
+    );
+  } else if ((request.storageGiB ?? 0) === 0) {
+    out.push('| Persistent storage | None requested |');
+  }
   out.push(`| Workload profile | ${request.profile} |`);
   if (!onPrem) {
     out.push(`| Architecture | ${request.flavour === 'hcp' ? 'ARO with hosted control planes' : 'ARO standard architecture'} |`);

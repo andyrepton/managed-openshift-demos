@@ -4,11 +4,28 @@ import type { AssistantConfig } from './client';
 export interface ConfigReader {
   getOptionalString(key: string): string | undefined;
   getOptionalNumber(key: string): number | undefined;
+  getOptionalBoolean?(key: string): boolean | undefined;
 }
 
 const DEFAULTS = {
-  timeoutMs: 60_000,
+  /**
+   * Per model request. Generous because reasoning models are slow: Qwen with
+   * ten tool schemas routinely takes tens of seconds for one call.
+   */
+  timeoutMs: 120_000,
+  /**
+   * Whole turn. Must stay under the Route's own timeout or haproxy cuts the
+   * connection first and the browser gets a bare 504 with no explanation -
+   * see haproxy.router.openshift.io/timeout in the demo-developer-hub README.
+   */
+  turnTimeoutMs: 300_000,
   maxRounds: 5,
+  /** Reasoning comes out of this. 1024 was not enough for ten tool schemas. */
+  maxTokens: 4096,
+  /** Only used when thinking is enabled. */
+  reasoningEffort: 'low' as const,
+  /** See AssistantConfig.thinking - off because the gateway cuts at ~60s. */
+  thinking: false,
 };
 
 /**
@@ -35,8 +52,20 @@ export function readAssistantConfig(config: ConfigReader): AssistantConfig {
     !model && 'aroPlanner.assistant.model',
   ].filter(Boolean) as string[];
 
-  const base: Pick<AssistantConfig, 'timeoutMs' | 'maxRounds'> = {
+  const effort = config.getOptionalString('aroPlanner.assistant.reasoningEffort');
+  const base: Pick<
+    AssistantConfig,
+    'timeoutMs' | 'turnTimeoutMs' | 'maxRounds' | 'maxTokens' | 'reasoningEffort' | 'thinking'
+  > = {
+    thinking: config.getOptionalBoolean?.('aroPlanner.assistant.thinking') ?? DEFAULTS.thinking,
+    maxTokens: config.getOptionalNumber('aroPlanner.assistant.maxTokens') ?? DEFAULTS.maxTokens,
+    reasoningEffort:
+      effort === 'low' || effort === 'medium' || effort === 'xhigh'
+        ? effort
+        : DEFAULTS.reasoningEffort,
     timeoutMs: config.getOptionalNumber('aroPlanner.assistant.timeoutMs') ?? DEFAULTS.timeoutMs,
+    turnTimeoutMs:
+      config.getOptionalNumber('aroPlanner.assistant.turnTimeoutMs') ?? DEFAULTS.turnTimeoutMs,
     maxRounds: config.getOptionalNumber('aroPlanner.assistant.maxRounds') ?? DEFAULTS.maxRounds,
   };
 

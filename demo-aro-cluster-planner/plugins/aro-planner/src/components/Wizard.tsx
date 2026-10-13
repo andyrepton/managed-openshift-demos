@@ -4,6 +4,7 @@ import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Card from '@mui/material/Card';
+import CardActionArea from '@mui/material/CardActionArea';
 import CardContent from '@mui/material/CardContent';
 import Checkbox from '@mui/material/Checkbox';
 import Chip from '@mui/material/Chip';
@@ -17,6 +18,8 @@ import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import Typography from '@mui/material/Typography';
 
 import { discoveryApiRef, fetchApiRef, useApi } from '@backstage/core-plugin-api';
+
+import { planStorage } from '@aro-planner/common';
 
 import { fetchPlan, type EndpointInput, type PlanInput, type PlanResponse } from '../api/client';
 import { AssistantPanel } from './AssistantPanel';
@@ -41,10 +44,17 @@ const PROFILES = [
 
 const DEBOUNCE_MS = 400;
 
+const STORAGE_TIERS = [
+  { id: 'premium-ssd', label: 'Premium SSD - the ARO default' },
+  { id: 'standard-ssd', label: 'Standard SSD - cheaper, slower' },
+] as const;
+
 const INITIAL: PlanInput = {
   applicationName: '',
   vcpu: 40,
   ramGiB: 160,
+  storageGiB: 0,
+  storageTier: 'premium-ssd',
   region: 'westeurope',
   flavour: 'hcp',
   highAvailability: true,
@@ -157,6 +167,15 @@ export function Wizard({ onPlanChange, initial }: WizardProps) {
   // Comes from the estimate rather than a literal 730, so a configured
   // hoursPerMonth moves the per-option delta with everything else.
   const hoursPerMonth = plan?.estimate?.hoursPerMonth ?? 730;
+
+  // Mirrors the engine's tier rounding so the hint matches the costed figure.
+  const storagePlan = useMemo(
+    () =>
+      form.storageGiB && form.storageGiB > 0
+        ? planStorage(form.storageGiB, form.storageTier ?? 'premium-ssd')
+        : null,
+    [form.storageGiB, form.storageTier],
+  );
 
   const ratio = useMemo(
     () => (form.vcpu > 0 ? (form.ramGiB / form.vcpu).toFixed(1) : '--'),
@@ -288,6 +307,47 @@ export function Wizard({ onPlanChange, initial }: WizardProps) {
                     ))}
                   </TextField>
                 </Grid>
+
+                <Grid item xs={6} sm={4}>
+                  <TextField
+                    label="Persistent storage (GiB)" type="number" fullWidth size="small"
+                    inputProps={{ min: 0, max: 32767 }}
+                    value={form.storageGiB ?? 0}
+                    onChange={e => set('storageGiB', Math.max(0, Number(e.target.value)))}
+                    helperText="0 for none"
+                  />
+                </Grid>
+                <Grid item xs={6} sm={8}>
+                  <TextField
+                    select label="Disk tier" fullWidth size="small"
+                    SelectProps={{ native: true }}
+                    InputLabelProps={{ shrink: true }}
+                    disabled={!(form.storageGiB && form.storageGiB > 0)}
+                    value={form.storageTier ?? 'premium-ssd'}
+                    onChange={e => set('storageTier', e.target.value as PlanInput['storageTier'])}
+                  >
+                    {STORAGE_TIERS.map(t => (
+                      <option key={t.id} value={t.id}>{t.label}</option>
+                    ))}
+                  </TextField>
+                </Grid>
+
+                {/* Capacity is bought in whole tiers, the same as nodes, so the
+                    gap between what you ask for and what you pay for is worth
+                    showing at the point of asking. */}
+                {storagePlan && storagePlan.wastedGiB > 0 && (
+                  <Grid item xs={12}>
+                    <Alert severity="info">
+                      <Typography variant="caption">
+                        Azure bills a managed disk at its provisioned tier, so{' '}
+                        {form.storageGiB} GiB is charged as a{' '}
+                        <strong>{storagePlan.disk.name}</strong> at {storagePlan.disk.gib} GiB
+                        &mdash; {storagePlan.wastedGiB} GiB paid for and unusable. Asking for{' '}
+                        {storagePlan.disk.gib} GiB costs the same.
+                      </Typography>
+                    </Alert>
+                  </Grid>
+                )}
               </Grid>
             </Paper>
 
@@ -359,21 +419,33 @@ export function Wizard({ onPlanChange, initial }: WizardProps) {
                       r.hourlyVmCost !== undefined && cheapest !== undefined
                         ? (r.hourlyVmCost - cheapest) * hoursPerMonth
                         : 0;
+                    // The server's answer wins. A selection can stop being
+                    // offered when the capacity changes, and the backend then
+                    // falls back to the cheapest - the highlight has to follow
+                    // what was actually costed, not what was last clicked.
+                    const selected = (plan?.selectedSku ?? form.nodePoolSku) === r.sku.name;
                     return (
                       <Card
                         key={r.sku.name}
                         variant="outlined"
-                        sx={{ borderColor: i === 0 ? 'primary.main' : undefined }}
+                        sx={{
+                          borderColor: selected ? 'primary.main' : undefined,
+                          borderWidth: selected ? 2 : 1,
+                        }}
                       >
-                        {/* Read-only. These previously looked selectable but the
-                            costing always used the first option, so clicking them
-                            changed nothing anywhere. */}
-                        <CardContent sx={{ py: 1.5 }}>
+                        {/* Selecting one re-prices the cluster and changes what
+                            gets emitted. These were read-only until the costing
+                            could actually follow the choice. */}
+                        <CardActionArea onClick={() => set('nodePoolSku', r.sku.name)}>
+                          <CardContent sx={{ py: 1.5 }}>
                             <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
                               <Typography fontWeight={700}>
                                 {r.nodes} &times; {r.sku.name}
                               </Typography>
-                              {i === 0 && <Chip size="small" color="success" label="selected - cheapest" />}
+                              {selected && <Chip size="small" color="primary" label="selected" />}
+                              {i === 0 && (
+                                <Chip size="small" variant="outlined" color="success" label="cheapest" />
+                              )}
                               {delta > 0 && (
                                 <Chip size="small" variant="outlined" label={`+$${delta.toFixed(0)}/mo`} />
                               )}
@@ -382,7 +454,8 @@ export function Wizard({ onPlanChange, initial }: WizardProps) {
                               {r.totalVcpu} vCPU / {r.totalRamGiB} GiB raw &middot;{' '}
                               {Math.round(r.waste * 100)}% spare after OpenShift overhead
                             </Typography>
-                        </CardContent>
+                          </CardContent>
+                        </CardActionArea>
                       </Card>
                     );
                   })}

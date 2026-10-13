@@ -1,5 +1,6 @@
 import type { PriceTable, Sku } from './types.js';
 import { licenceMeterKey } from './skus.js';
+import { STORAGE_PRODUCT } from './storage.js';
 
 /**
  * Client for the Azure Retail Prices API.
@@ -24,6 +25,7 @@ interface RetailItem {
   currencyCode: string;
   armRegionName: string;
   type: string;
+  unitOfMeasure: string;
 }
 
 interface RetailPage {
@@ -175,21 +177,67 @@ export async function fetchAroLicencePrices(
   return out;
 }
 
+/**
+ * Managed disk prices, for the PVCs a namespace will provision.
+ *
+ * Billed per provisioned disk per month, so `unitOfMeasure` is `1/Month` and
+ * the retail price is the whole disk - not a rate per GiB. The transaction
+ * meters ("Disk Transactions", `/10K`) are filtered out: they are per-IO and
+ * cannot be estimated from a capacity request.
+ *
+ * ZRS is skipped in favour of LRS. Taking whichever row arrived first would
+ * pick ZRS about half the time and overstate storage by roughly 30%, which is
+ * the same trap as Spot pricing on the VM meters.
+ */
+export async function fetchDiskPrices(
+  region: string,
+  opts: FetchOptions = {},
+): Promise<Record<string, number>> {
+  const products = Object.values(STORAGE_PRODUCT);
+  const filter =
+    `serviceName eq 'Storage' and armRegionName eq '${region}' ` +
+    `and priceType eq 'Consumption' and (` +
+    products.map(p => `productName eq '${p}'`).join(' or ') +
+    ')';
+
+  const out: Record<string, number> = {};
+  for (const item of await queryAll(filter, opts)) {
+    // Match on meterName, not skuName. Every disk SKU has THREE meters and they
+    // are not distinguishable by skuName or unit:
+    //
+    //   E40 LRS Disk Mount          17.082  1/Month   <- shared-disk mount fee
+    //   E40 LRS Disk               153.600  1/Month   <- the disk itself
+    //   E40 LRS Disk Operations      0.002  10K       <- per-IO
+    //
+    // Filtering on unitOfMeasure alone leaves the first two, and taking
+    // whichever arrived first priced E40 below E20. Same trap as Spot pricing
+    // on the VM meters: several plausible rows, only one of them correct.
+    const m = /^([PE]\d+) LRS Disk$/.exec(item.meterName);
+    if (!m?.[1] || item.unitOfMeasure !== '1/Month') continue;
+    out[`${item.productName}|${m[1]}`] = item.retailPrice;
+  }
+  return out;
+}
+
 /** Build a complete PriceTable for the SKUs a plan needs. */
 export async function buildPriceTable(
   skus: readonly Sku[],
   region: string,
   opts: FetchOptions = {},
 ): Promise<PriceTable> {
-  const [vm, aroLicence] = await Promise.all([
+  const [vm, aroLicence, disk] = await Promise.all([
     fetchVmPrices(skus.map(s => s.name), region, opts),
     fetchAroLicencePrices(opts),
+    // Storage is optional: a failure here must not stop a cluster being priced,
+    // so it degrades to an unpriced storage line rather than a failed request.
+    fetchDiskPrices(region, opts).catch(() => ({})),
   ]);
 
   return {
     currency: opts.currency ?? 'USD',
     region,
     vm,
+    disk,
     aroLicence,
     aroLicencePerVcpu: ARO_LICENCE_PER_VCPU_FALLBACK,
     retrievedAt: new Date().toISOString(),

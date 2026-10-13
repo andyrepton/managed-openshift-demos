@@ -20,6 +20,8 @@ const state: PlannerState = {
   highAvailability: true,
   dayTwo: false,
   deploymentModel: 'dedicated-cluster',
+  storageGiB: 0,
+  storageTier: 'premium-ssd' as const,
   endpoints: [],
 };
 
@@ -29,6 +31,9 @@ const cfg: AssistantConfig = {
   apiKey: 'test-key',
   model: 'qwen3',
   timeoutMs: 5000,
+  turnTimeoutMs: 20000,
+  maxTokens: 4096,
+  thinking: false,
   maxRounds: 5,
 };
 
@@ -184,6 +189,19 @@ describe('runChatTurn', () => {
     expect(sent.some(m => m.content?.includes('deployment model: dedicated-cluster'))).toBe(true);
   });
 
+  it('sends exactly one system message, first', async () => {
+    // Qwen's chat template rejects a system message that is not at the start:
+    // the gateway answers 400 "System message must be at the beginning." Two
+    // system messages - prompt and form state - broke every turn in the cluster.
+    mockModel(call('set_capacity', { vcpu: 64, ramGiB: 256 }), say('Done.'));
+    await turn();
+    for (const c of calls) {
+      const sent = (c as { messages: { role: string }[] }).messages;
+      expect(sent.filter(m => m.role === 'system')).toHaveLength(1);
+      expect(sent[0]!.role).toBe('system');
+    }
+  });
+
   it('executes an action tool and returns the patch for the browser to apply', async () => {
     mockModel(call('set_capacity', { vcpu: 64, ramGiB: 256 }), say('Done.'));
     const out = await turn();
@@ -214,12 +232,115 @@ describe('runChatTurn', () => {
     expect(out.reply).toBe('Let me try again.');
   });
 
+  it('reports truncation instead of returning an empty bubble', async () => {
+    // The model spending its whole budget on reasoning comes back as a normal
+    // 200 with no content and no tool calls. Left alone it reached the browser
+    // as a successful, completely empty reply.
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ choices: [{ finish_reason: 'length', message: { role: 'assistant', content: null } }] }),
+    }) as unknown as Response));
+    await expect(turn()).rejects.toThrow(/whole token budget/);
+  });
+
+  it('describes what it changed when the model says nothing', async () => {
+    mockModel(call('set_capacity', { vcpu: 64, ramGiB: 256 }), say(''));
+    const out = await turn();
+    expect(out.reply).toMatch(/Done: set capacity to 64 vCPU/);
+  });
+
+  it('says so plainly when there is neither an answer nor a change', async () => {
+    mockModel(say(''));
+    const out = await turn();
+    expect(out.reply).toMatch(/did not get a usable answer/);
+  });
+
+  it('disables thinking by default, because the gateway cuts at ~60s', async () => {
+    // With thinking on, this workload spends 50-60s reasoning and the MaaS
+    // gateway drops the connection mid-request. Off, it answers in 2-3s.
+    mockModel(say('ok'));
+    await runChatTurn(
+      { ...cfg, thinking: false, maxTokens: 4096 },
+      { messages: [{ role: 'user', content: 'hi' }], state },
+      {},
+      loadPrices,
+    );
+    const body = calls[0] as Record<string, unknown>;
+    expect(body.chat_template_kwargs).toEqual({ enable_thinking: false });
+    expect(body.reasoning_effort).toBeUndefined();
+    expect(body.max_tokens).toBe(4096);
+  });
+
+  it('sends reasoning effort instead when thinking is enabled', async () => {
+    mockModel(say('ok'));
+    await runChatTurn(
+      { ...cfg, thinking: true, reasoningEffort: 'low' },
+      { messages: [{ role: 'user', content: 'hi' }], state },
+      {},
+      loadPrices,
+    );
+    const body = calls[0] as Record<string, unknown>;
+    expect(body.reasoning_effort).toBe('low');
+    expect(body.chat_template_kwargs).toBeUndefined();
+  });
+
   it('ignores a tool the model invents', async () => {
     mockModel(call('delete_cluster', {}), say('I cannot do that.'));
     const out = await turn();
     expect(out.actions).toEqual([]);
     const second = calls[1] as { messages: { role: string; content: string }[] };
     expect(second.messages.pop()!.content).toContain('no such tool');
+  });
+
+  it('gives each model request its own timeout, not one budget for the turn', async () => {
+    // The original wrapped the whole turn in a single 60s AbortController, so a
+    // tool-using conversation - the normal case - aborted part way through. Two
+    // calls that each take longer than one timeout must still succeed.
+    let n = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_u: string, init: { body: string; signal: AbortSignal }) => {
+        calls.push(JSON.parse(init.body));
+        await new Promise(r => setTimeout(r, 40));
+        if (init.signal.aborted) throw Object.assign(new Error('aborted'), { name: 'AbortError' });
+        const message =
+          n++ === 0
+            ? { role: 'assistant', content: null, tool_calls: [
+                { id: 'c1', type: 'function', function: { name: 'set_capacity', arguments: '{"vcpu":64,"ramGiB":256}' } }] }
+            : { role: 'assistant', content: 'Done.' };
+        return { ok: true, json: async () => ({ choices: [{ message }] }) } as unknown as Response;
+      }),
+    );
+
+    const out = await runChatTurn(
+      { ...cfg, timeoutMs: 60, turnTimeoutMs: 5000 },
+      { messages: [{ role: 'user', content: 'go' }], state },
+      {},
+      loadPrices,
+    );
+    expect(out.reply).toBe('Done.');
+    expect(out.actions).toHaveLength(1);
+  });
+
+  it('stops when the whole-turn deadline passes, keeping what it did', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_u: string, init: { body: string }) => {
+        calls.push(JSON.parse(init.body));
+        await new Promise(r => setTimeout(r, 30));
+        return { ok: true, json: async () => ({ choices: [{ message: {
+          role: 'assistant', content: null, tool_calls: [
+            { id: 'c1', type: 'function', function: { name: 'set_capacity', arguments: '{"vcpu":64,"ramGiB":256}' } }] } }] }) } as unknown as Response;
+      }),
+    );
+    const out = await runChatTurn(
+      { ...cfg, timeoutMs: 1000, turnTimeoutMs: 50, maxRounds: 10 },
+      { messages: [{ role: 'user', content: 'go' }], state },
+      {},
+      loadPrices,
+    );
+    expect(out.reply).toMatch(/ran out of time/);
+    expect(out.actions.length).toBeGreaterThan(0);
   });
 
   it('stops after maxRounds and keeps the actions already taken', async () => {
@@ -289,5 +410,54 @@ describe('the assistant endpoint', () => {
     for (let i = 0; i < 10; i++) await request(a).post('/assistant/chat').send(body).expect(200);
     await request(a).post('/assistant/chat').send(body).expect(429);
     vi.unstubAllGlobals();
+  });
+});
+
+describe('reporting a failed turn', () => {
+  // A previous version reported every failure as "could not reach the model
+  // endpoint" and logged nothing, so an HTTP error from the endpoint sent you
+  // looking at firewalls instead of at the response body.
+  const logged: string[] = [];
+  const app = () => {
+    const a = express();
+    a.use('/assistant', assistantRouter(cfg, {}, loadPrices, { error: m => logged.push(m) }));
+    return a;
+  };
+  const body = { messages: [{ role: 'user', content: 'hi' }], state };
+
+  beforeEach(() => {
+    logged.length = 0;
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('distinguishes an HTTP error from the endpoint, and logs the body', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: false,
+      status: 400,
+      text: async () => '{"error":"unknown field tool_choice"}',
+    }) as unknown as Response));
+
+    const res = await request(app()).post('/assistant/chat').send(body).expect(502);
+    expect(res.body.error).toMatch(/rejected the request \(HTTP 400\)/);
+    expect(logged.join()).toContain('unknown field tool_choice');
+  });
+
+  it('reports a genuine network failure differently', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      throw new TypeError('fetch failed');
+    }));
+    const res = await request(app()).post('/assistant/chat').send(body).expect(502);
+    expect(res.body.error).toBe('Could not reach the model endpoint.');
+    expect(logged.join()).toContain('fetch failed');
+  });
+
+  it('never puts the endpoint response body in the client reply', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: false,
+      status: 401,
+      text: async () => 'Authorization: Bearer super-secret-key',
+    }) as unknown as Response));
+    const res = await request(app()).post('/assistant/chat').send(body).expect(502);
+    expect(JSON.stringify(res.body)).not.toContain('super-secret-key');
   });
 });

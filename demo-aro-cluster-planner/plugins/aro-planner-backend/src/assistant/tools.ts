@@ -14,7 +14,10 @@ import {
   getSku,
   inferProfile,
   planNetworkPolicies,
+  planStorage,
   recommendNodePools,
+  storageClassFor,
+  STORAGE_TIER_LABEL,
 } from '@aro-planner/common';
 
 import { ARO_DOCS, lookupDocs } from '../docs';
@@ -76,6 +79,7 @@ function toSizingRequest(s: PlannerState): SizingRequest {
     dayTwo: s.dayTwo,
     deploymentModel: s.deploymentModel,
     ...(s.applicationName ? { applicationName: s.applicationName } : {}),
+    ...(s.storageGiB > 0 ? { storageGiB: s.storageGiB, storageTier: s.storageTier } : {}),
   };
 }
 
@@ -496,6 +500,62 @@ const addNetworkConnectionTool: ToolDef = {
   },
 };
 
+const setStorageTool: ToolDef = {
+  name: 'set_storage',
+  description:
+    'Set how much persistent volume storage the application needs, in GiB, and ' +
+    'which managed disk tier backs it. Azure bills a disk at its PROVISIONED ' +
+    'tier, not at what is used, so 300 GiB is billed as a 512 GiB disk - say so ' +
+    'if the request sits just above a boundary. Premium SSD is the default and ' +
+    'what ARO uses; Standard SSD is cheaper and slower.',
+  parameters: {
+    type: 'object',
+    properties: {
+      storageGiB: num('Total persistent volume storage in GiB, 0 to 32767. 0 means none.'),
+      tier: {
+        type: 'string',
+        enum: ['premium-ssd', 'standard-ssd'],
+        description: 'Managed disk tier. Omit to keep the current one.',
+      },
+    },
+    required: ['storageGiB'],
+    additionalProperties: false,
+  },
+  run: async (a, ctx) => {
+    const gib = Math.round(Number(a.storageGiB));
+    if (!Number.isFinite(gib) || gib < 0 || gib > 32767) {
+      return { result: { error: 'storageGiB must be between 0 and 32767' } };
+    }
+    const tier =
+      a.tier === 'standard-ssd' || a.tier === 'premium-ssd' ? a.tier : ctx.state.storageTier;
+
+    ctx.state.storageGiB = gib;
+    ctx.state.storageTier = tier;
+
+    const plan = gib > 0 ? planStorage(gib, tier) : null;
+    return {
+      result: {
+        ok: true,
+        storageGiB: gib,
+        tier,
+        // Hand back the billing consequence so the assistant can report it
+        // rather than implying the request is what gets charged.
+        billedAs: plan ? `${plan.disk.name} (${plan.disk.gib} GiB provisioned)` : 'no storage',
+        paidForButUnusableGiB: plan?.wastedGiB ?? 0,
+        storageClass: gib > 0 ? storageClassFor(tier) : null,
+      },
+      action: {
+        tool: 'set_storage',
+        patch: { storageGiB: gib, storageTier: tier },
+        describe:
+          gib > 0
+            ? `Set storage to ${gib} GiB (${STORAGE_TIER_LABEL[tier]})`
+            : 'Removed the storage request',
+      },
+    };
+  },
+};
+
 export const TOOLS: ToolDef[] = [
   recommendNodePoolsTool,
   estimateCostTool,
@@ -506,6 +566,7 @@ export const TOOLS: ToolDef[] = [
   setCapacityTool,
   setDeploymentModelTool,
   setClusterOptionsTool,
+  setStorageTool,
   addNetworkConnectionTool,
 ];
 

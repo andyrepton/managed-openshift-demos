@@ -20,6 +20,8 @@ export const plannerStateSchema = z.object({
   highAvailability: z.boolean(),
   dayTwo: z.boolean().default(false),
   deploymentModel: z.enum(['shared-namespace', 'dedicated-cluster', 'on-premises']),
+  storageGiB: z.number().min(0).max(32767).default(0),
+  storageTier: z.enum(['premium-ssd', 'standard-ssd']).default('premium-ssd'),
   endpoints: z.array(endpointSchema).max(50).default([]),
 });
 

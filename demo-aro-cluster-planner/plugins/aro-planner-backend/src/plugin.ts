@@ -73,7 +73,7 @@ export const aroPlannerPlugin = createBackendPlugin({
             : `Planner assistant disabled: ${assistant.disabledReason}`,
         );
 
-        http.use(createRouter({ overrides, assistant }));
+        http.use(createRouter({ overrides, assistant, logger }));
       },
     });
   },

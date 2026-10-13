@@ -4,5 +4,6 @@ export * from './compare.js';
 export * from './cost.js';
 export * from './azurePrices.js';
 export * from './netpol.js';
+export * from './storage.js';
 export * from './recommend.js';
 export * from './emit/index.js';

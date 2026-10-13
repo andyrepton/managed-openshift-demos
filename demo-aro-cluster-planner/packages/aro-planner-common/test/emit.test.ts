@@ -111,7 +111,7 @@ describe('what each deployment model emits', () => {
           'plan.md',
           'catalog-info.yaml',
           'manifests/00-namespace.yaml',
-          'manifests/10-resourcequota.yaml',
+          'manifests/10-quota.yaml',
           'manifests/20-networkpolicies.yaml',
         ]),
       );
@@ -217,10 +217,78 @@ describe('tfvars', () => {
 
 describe('manifests', () => {
   it('quotas at exactly what was costed', () => {
-    const body = file(input(), 'manifests/10-resourcequota.yaml')!;
+    const body = file(input(), 'manifests/10-quota.yaml')!;
     expect(body).toContain("requests.cpu: '40'");
     expect(body).toContain('limits.memory: 160Gi');
     expect(body).toContain('kind: LimitRange');
+  });
+
+  it('uses a ClusterResourceQuota selecting the application label', () => {
+    // Per-namespace ResourceQuotas silently double the entitlement each time a
+    // team adds a namespace. Selecting on a label keeps one pot per application.
+    const body = file(input(), 'manifests/10-quota.yaml')!;
+    expect(body).toContain('apiVersion: quota.openshift.io/v1');
+    expect(body).toContain('kind: ClusterResourceQuota');
+    expect(body).toContain('matchLabels:');
+    expect(body).toContain('aro-planner.redhat.com/application: payments-api');
+    expect(body).not.toContain('kind: ResourceQuota');
+    // Cluster-scoped: a namespace here would be rejected by the API server.
+    expect(/kind: ClusterResourceQuota[\s\S]*?namespace:/.exec(body.split('---')[0]!)).toBeNull();
+  });
+
+  it('labels the namespace so the quota selects it', () => {
+    expect(file(input(), 'manifests/00-namespace.yaml')).toContain(
+      'aro-planner.redhat.com/application: payments-api',
+    );
+  });
+
+  it('leaves storage out of the quota when none was asked for', () => {
+    // requests.storage of 0 would block every PVC - a confusing way to discover
+    // the field was left blank.
+    const body = file(input(), 'manifests/10-quota.yaml')!;
+    expect(body).not.toContain('requests.storage');
+    expect(body).not.toContain('persistentvolumeclaims');
+  });
+
+  it('constrains storage when some was asked for', () => {
+    const i = input({ storageGiB: 300 });
+    const body = file(i, 'manifests/10-quota.yaml')!;
+    expect(body).toContain('requests.storage: 300Gi');
+    expect(body).toContain("persistentvolumeclaims: '20'");
+  });
+
+  it('needs no StorageClass for Premium, which is the ARO default', () => {
+    // ARO ships managed-csi (Premium_LRS) and nothing else. Emitting a class
+    // for it would be noise.
+    const paths = emitBundle(input({ storageGiB: 300, storageTier: 'premium-ssd' })).files.map(f => f.path);
+    expect(paths).not.toContain('manifests/05-storageclass.yaml');
+  });
+
+  it('emits a StorageClass for Standard SSD, which ARO does not provide', () => {
+    // Without this the PVCs land on Premium via managed-csi and cost more than
+    // the estimate says - priced as Standard, provisioned as Premium.
+    const i = input({ storageGiB: 300, storageTier: 'standard-ssd' });
+    const body = file(i, 'manifests/05-storageclass.yaml')!;
+    expect(body).toContain('kind: StorageClass');
+    expect(body).toContain('name: managed-csi-standard');
+    expect(body).toContain('skuName: StandardSSD_LRS');
+    expect(body).toContain('provisioner: disk.csi.azure.com');
+    expect(body).toContain('volumeBindingMode: WaitForFirstConsumer');
+    expect(body).toMatch(/CLUSTER-SCOPED/);
+  });
+
+  it('scopes the storage quota to the class that was costed', () => {
+    const body = file(input({ storageGiB: 300, storageTier: 'standard-ssd' }), 'manifests/10-quota.yaml')!;
+    expect(body).toContain('managed-csi-standard.storageclass.storage.k8s.io/requests.storage');
+  });
+
+  it('emits no StorageClass when no storage was asked for', () => {
+    const paths = emitBundle(input({ storageTier: 'standard-ssd' })).files.map(f => f.path);
+    expect(paths).not.toContain('manifests/05-storageclass.yaml');
+  });
+
+  it('says the quota is cluster-scoped and needs an admin', () => {
+    expect(file(input(), 'manifests/10-quota.yaml')).toMatch(/CLUSTER-SCOPED/);
   });
 
   it('names the namespace after the application', () => {

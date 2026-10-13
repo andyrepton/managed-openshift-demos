@@ -8,6 +8,7 @@ import type {
 } from './types.js';
 import { DEFAULT_OVERRIDES } from './types.js';
 import { licenceMeterKey, licenceProductName } from './skus.js';
+import { STORAGE_TIER_LABEL, diskMeterKey } from './storage.js';
 
 /** Classic ARO always runs exactly three control plane nodes. */
 export const CONTROL_PLANE_NODES = 3;
@@ -184,6 +185,56 @@ export function estimateCost(
       sourceNote: `$${opts.osDiskPerGiBMonth}/GiB/month`,
       included: true,
     });
+  }
+
+  // --- Persistent volume storage -------------------------------------------
+  //
+  // PVCs, not the node OS disks above. Azure bills a managed disk at its
+  // provisioned tier, so a 300 GiB request is billed as a 512 GiB P20 - priced
+  // per disk per month, hence the division to get an hourly figure.
+  if (plan.storage) {
+    const { disk, tier, requestedGiB, wastedGiB } = plan.storage;
+    const monthly = prices.disk?.[diskMeterKey(tier, disk.name)];
+    const label = `Persistent volume storage - ${disk.name} (${STORAGE_TIER_LABEL[tier]})`;
+
+    if (monthly === undefined) {
+      lines.push({
+        label,
+        detail: `${requestedGiB} GiB requested, ${disk.gib} GiB provisioned`,
+        hourly: 0,
+        source: 'assumption',
+        sourceNote:
+          `No published ${STORAGE_TIER_LABEL[tier]} ${disk.name} meter for ` +
+          `${prices.region}; excluded from the total.`,
+        included: false,
+      });
+      assumptions.push(
+        `Persistent volume storage is not included - no managed disk price was available for ${prices.region}.`,
+      );
+    } else {
+      lines.push({
+        label,
+        detail: `${requestedGiB} GiB requested, ${disk.gib} GiB provisioned`,
+        hourly: round(monthly / opts.hoursPerMonth),
+        source: 'azure-api',
+        sourceNote: `$${monthly}/month for one ${disk.name} LRS disk in ${prices.region}`,
+        included: true,
+      });
+
+      if (wastedGiB > 0) {
+        assumptions.push(
+          `Storage is billed at the provisioned tier, not at what you use: ` +
+            `${requestedGiB} GiB lands on a ${disk.gib} GiB ${disk.name}, so ` +
+            `${wastedGiB} GiB is paid for and unusable.`,
+        );
+      }
+      assumptions.push(
+        'Storage is costed as a single disk holding the whole request. Each PVC ' +
+          'is its own managed disk billed at its own tier, so splitting the same ' +
+          'capacity across many small volumes costs more than this figure. ' +
+          'Per-IO transaction charges are not included.',
+      );
+    }
   }
 
   // --- Always-excluded ------------------------------------------------------

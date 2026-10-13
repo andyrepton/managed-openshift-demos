@@ -89,6 +89,15 @@ oc -n rhdh rollout status deployment/backstage-developer-hub --timeout=10m
 echo "https://$(oc get route backstage-developer-hub -n rhdh -o jsonpath='{.spec.host}')"
 ```
 
+Raise the Route timeout. The default is 30 seconds, which is shorter than a
+reasoning model takes to answer, so the planner's assistant returns a bare 504
+with nothing in the backend log:
+
+```bash
+oc annotate route backstage-developer-hub -n rhdh \
+  haproxy.router.openshift.io/timeout=10m --overwrite
+```
+
 Sign in with **GitHub**. Only accounts with a matching `User` entity in `catalog/org.yaml` are admitted.
 
 ### 6. Verify
@@ -125,6 +134,7 @@ Sign in with **GitHub**. Only accounts with a matching `User` entity in `catalog
 * The CR uses `rhdh.redhat.com/v1alpha5`. The 1.10.5 CRD serves `v1alpha4` and `v1alpha5`; `v1alpha5` is the storage version and the one carrying `spec.flavours`.
 * The operator enables the `lightspeed` flavour by default, adding an `init-rag-data` init container and a `lightspeed-core` sidecar. `backstage.yaml` disables it so this demo is plain RHDH.
 * `enableLocalDb: true` means the operator runs PostgreSQL. Use an external database for anything persistent.
+* **The Route's 30s default timeout is shorter than a reasoning model's reply.** Without `haproxy.router.openshift.io/timeout`, haproxy cuts the connection first and the browser gets a bare 504 with no JSON body and nothing in the backend log -- which looks like an application bug and is not. The RHDH operator does not manage Route annotations, so setting it by hand holds.
 * **`CATALOG_BRANCH` and sign-in are coupled.** The access list is read from git, so pointing `CATALOG_BRANCH` at a branch whose `org.yaml` lacks your `User` entity locks you out. Check before switching branches.
 
 ## Related Demos

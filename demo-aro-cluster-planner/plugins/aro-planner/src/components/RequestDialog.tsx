@@ -16,6 +16,8 @@ import Divider from '@mui/material/Divider';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 
+import { planStorage } from '@aro-planner/common';
+
 import { discoveryApiRef, fetchApiRef, useApi } from '@backstage/core-plugin-api';
 
 import { fetchArtifacts, type EmitBundle, type PlanInput, type PlanResponse } from '../api/client';
@@ -59,6 +61,10 @@ export interface RequestDialogProps {
 export function RequestDialog({ open, onClose, form, plan }: RequestDialogProps) {
   const chosen = plan?.comparison.find(c => c.model === form.deploymentModel);
   const onPrem = form.deploymentModel === 'on-premises';
+  const storagePlan =
+    form.storageGiB && form.storageGiB > 0
+      ? planStorage(form.storageGiB, form.storageTier ?? 'premium-ssd')
+      : null;
 
   const discoveryApi = useApi(discoveryApiRef);
   const fetchApi = useApi(fetchApiRef);
@@ -94,6 +100,19 @@ export function RequestDialog({ open, onClose, form, plan }: RequestDialogProps)
         <Row label="Application" value={form.applicationName} />
         <Row label="Deployment model" value={MODEL_LABEL[form.deploymentModel] ?? form.deploymentModel} />
         <Row label="Capacity" value={`${form.vcpu} vCPU / ${form.ramGiB} GiB allocatable`} />
+        <Row
+          label="Persistent storage"
+          value={
+            form.storageGiB && form.storageGiB > 0
+              ? `${form.storageGiB} GiB${
+                  // Show what is actually billed, not just what was asked for.
+                  storagePlan && storagePlan.wastedGiB > 0
+                    ? ` (billed as ${storagePlan.disk.name}, ${storagePlan.disk.gib} GiB)`
+                    : ''
+                }`
+              : 'None'
+          }
+        />
         {!onPrem && (
           <>
             <Row label="Architecture" value={form.flavour === 'hcp' ? 'ARO hosted control planes' : 'ARO standard'} />

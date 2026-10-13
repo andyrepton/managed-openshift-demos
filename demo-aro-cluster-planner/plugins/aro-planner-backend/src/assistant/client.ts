@@ -12,6 +12,20 @@ import type { ChatRequest, ChatResponse, FormAction, PlannerState } from './stat
  * dialect of the endpoint removes a hop and a component.
  */
 
+/**
+ * The endpoint answered, but with an error status.
+ *
+ * Distinguished from a network failure because the two need different fixes and
+ * reporting both as "could not reach the model endpoint" sends you looking at
+ * firewalls when the real answer is in the response body.
+ */
+export class ModelHttpError extends Error {
+  constructor(readonly status: number, readonly body: string) {
+    super(`Model endpoint returned ${status}`);
+    this.name = 'ModelHttpError';
+  }
+}
+
 export interface AssistantConfig {
   enabled: boolean;
   baseUrl: string;
@@ -19,9 +33,38 @@ export interface AssistantConfig {
   model: string;
   /** Why it is off, shown in the UI instead of a dead input box. */
   disabledReason?: string;
+  /** Per model request, NOT per turn. A turn makes up to maxRounds of them. */
   timeoutMs: number;
+  /** Whole-turn budget, so a turn cannot run for maxRounds x timeoutMs. */
+  turnTimeoutMs: number;
   /** Tool calls cost a round trip each; this bounds a turn. */
   maxRounds: number;
+  /**
+   * Completion budget per request. Reasoning tokens come out of this, and with
+   * ten tool schemas Qwen spends ~1100 of them before answering - at the old
+   * 1024 every turn ended `finish_reason: "length"` with no content and no tool
+   * calls, which reached the browser as a successful but completely empty reply.
+   */
+  maxTokens: number;
+  /**
+   * Qwen's reasoning budget, used only when `thinking` is on. Only `low`,
+   * `medium` and `xhigh` are accepted - `high` is rejected outright, and
+   * `xhigh` returns an empty response a fair fraction of the time.
+   */
+  reasoningEffort?: 'low' | 'medium' | 'xhigh';
+  /**
+   * Let the model think before answering. OFF by default, and the difference is
+   * not subtle: on this workload Qwen spends ~1100 tokens and 50-60s reasoning,
+   * against 2-3s with it off. The MaaS gateway cuts any request at about 60
+   * seconds - streaming does not help, nothing is sent before the cut - so
+   * thinking turns a working assistant into one that fails on anything
+   * non-trivial.
+   *
+   * The quality cost is small here because the tools do the actual reasoning:
+   * every number comes from the planner engine, and the loop can take several
+   * rounds. Turn it on only against an endpoint without a short request timeout.
+   */
+  thinking: boolean;
 }
 
 interface ToolCall {
@@ -75,6 +118,9 @@ function describeState(s: PlannerState): string {
     `deployment model: ${s.deploymentModel}`,
     `capacity: ${s.vcpu} vCPU / ${s.ramGiB} GiB allocatable (${(s.ramGiB / s.vcpu).toFixed(1)} GiB per vCPU)`,
     `workload profile: ${s.profile || '(inferred from the ratio)'}`,
+    s.storageGiB > 0
+      ? `persistent storage: ${s.storageGiB} GiB (${s.storageTier})`
+      : 'persistent storage: none',
   ];
   if (s.deploymentModel !== 'on-premises') {
     lines.push(
@@ -103,11 +149,22 @@ interface Completion {
   choices: { message: ChatMessage; finish_reason: string }[];
 }
 
+/** The model hit its token budget before saying anything usable. */
+export class TruncatedError extends Error {
+  constructor() {
+    super('The model used its whole token budget before answering');
+    this.name = 'TruncatedError';
+  }
+}
+
 async function complete(
   cfg: AssistantConfig,
   messages: ChatMessage[],
   signal: AbortSignal,
 ): Promise<ChatMessage> {
+  // Reasoning models are slow: a single Qwen call with ten tool schemas takes
+  // tens of seconds. The timeout therefore applies to each request, with the
+  // turn deadline below bounding the total.
   const res = await fetch(`${cfg.baseUrl.replace(/\/+$/, '')}/chat/completions`, {
     method: 'POST',
     headers: {
@@ -120,21 +177,33 @@ async function complete(
       tools: toolSchemas(),
       tool_choice: 'auto',
       temperature: 0.2,
-      max_tokens: 1024,
+      max_tokens: cfg.maxTokens,
+      ...(cfg.thinking
+        ? cfg.reasoningEffort
+          ? { reasoning_effort: cfg.reasoningEffort }
+          : {}
+        : // Qwen's own switch. Not `/no_think` in the prompt, which returns
+          // empty responses on Qwen3's hybrid architecture.
+          { chat_template_kwargs: { enable_thinking: false } }),
     }),
     signal,
   });
 
   if (!res.ok) {
     const body = await res.text().catch(() => '');
-    // The body can echo the Authorization header back on some gateways, so it is
-    // truncated and never logged at a level that reaches the browser verbatim.
-    throw new Error(`Model endpoint returned ${res.status}: ${body.slice(0, 200)}`);
+    throw new ModelHttpError(res.status, body.slice(0, 1000));
   }
 
   const json = (await res.json()) as Completion;
-  const message = json.choices?.[0]?.message;
-  if (!message) throw new Error('Model endpoint returned no message');
+  const choice = json.choices?.[0];
+  if (!choice?.message) throw new Error('Model endpoint returned no message');
+
+  // Truncation is reported as a perfectly ordinary 200, so it has to be caught
+  // here or it surfaces as silence.
+  const { message, finish_reason: finish } = choice;
+  if (finish === 'length' && !message.content && !(message.tool_calls ?? []).length) {
+    throw new TruncatedError();
+  }
   return message;
 }
 
@@ -152,8 +221,7 @@ export async function runChatTurn(
   overrides: Partial<PricingOverrides>,
   loadPrices: PriceLoader,
 ): Promise<ChatResponse> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), cfg.timeoutMs);
+  const deadline = Date.now() + cfg.turnTimeoutMs;
 
   try {
     const ctx: ToolContext = {
@@ -164,9 +232,14 @@ export async function runChatTurn(
       loadPrices,
     };
 
+    // ONE system message, and it must come first.
+    //
+    // Qwen's chat template rejects a system message that is not at the start -
+    // the gateway answers 400 "System message must be at the beginning." Sending
+    // the prompt and the form state as two system messages failed every turn.
+    // Concatenating them is also just more portable; nothing requires two.
     const messages: ChatMessage[] = [
-      { role: 'system', content: SYSTEM_PROMPT },
-      { role: 'system', content: describeState(req.state) },
+      { role: 'system', content: `${SYSTEM_PROMPT}\n\n${describeState(req.state)}` },
       ...req.messages.map(m => ({ role: m.role, content: m.content })),
     ];
 
@@ -174,11 +247,47 @@ export async function runChatTurn(
     const toolsUsed: string[] = [];
 
     for (let round = 0; round < cfg.maxRounds; round++) {
-      const reply = await complete(cfg, messages, controller.signal);
+      if (Date.now() >= deadline) {
+        return {
+          reply:
+            'I ran out of time before finishing. Anything already changed above ' +
+            'has been applied - ask me to carry on.',
+          actions,
+          toolsUsed,
+        };
+      }
+
+      // One controller per request. Previously a single 60s budget covered the
+      // whole turn, so a tool-using conversation - which is the normal case -
+      // aborted part way through for no visible reason.
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), cfg.timeoutMs);
+      let reply: ChatMessage;
+      try {
+        reply = await complete(cfg, messages, controller.signal);
+      } finally {
+        clearTimeout(timer);
+      }
       const calls = reply.tool_calls ?? [];
 
       if (calls.length === 0) {
-        return { reply: (reply.content ?? '').trim(), actions, toolsUsed };
+        const text = (reply.content ?? '').trim();
+        // Never hand back an empty bubble. If the model changed the form but
+        // said nothing, describe what it did; if it did neither, say so plainly
+        // rather than looking like it ignored the question.
+        if (text) return { reply: text, actions, toolsUsed };
+        return {
+          reply:
+            actions.length > 0
+              ? // Only the first character, so "64 vCPU" does not become "64 vcpu".
+                `Done: ${actions
+                  .map(a => a.describe.charAt(0).toLowerCase() + a.describe.slice(1))
+                  .join('; ')}.`
+              : 'I did not get a usable answer from the model. Try rephrasing, ' +
+                'or ask for one thing at a time.',
+          actions,
+          toolsUsed,
+        };
       }
 
       messages.push(reply);
@@ -227,6 +336,6 @@ export async function runChatTurn(
       toolsUsed,
     };
   } finally {
-    clearTimeout(timer);
+    // Nothing to clean up: each request owns and clears its own timer.
   }
 }

@@ -275,3 +275,34 @@ describe('POST /artifacts', () => {
     await post({ vcpu: 19000, ramGiB: 190000 }).expect(422);
   });
 });
+
+describe('choosing a node pool', () => {
+  const body = { vcpu: 40, ramGiB: 160, region: 'westeurope', flavour: 'hcp' };
+  const post = (over: Record<string, unknown> = {}) =>
+    request(app({ buildPrices: async () => PRICES }))
+      .post('/api/aro-planner/plan')
+      .send({ ...body, ...over });
+
+  it('defaults to the cheapest and says which it used', async () => {
+    const res = await post().expect(200);
+    expect(res.body.selectedSku).toBe(res.body.recommendations[0].sku.name);
+  });
+
+  it('re-prices against the chosen pool', async () => {
+    // The cards were read-only until this held: selecting one has to move the
+    // price, or offering the choice is worse than not offering it.
+    const first = await post().expect(200);
+    const other = first.body.recommendations[1];
+    if (!other) return;
+    const res = await post({ nodePoolSku: other.sku.name }).expect(200);
+    expect(res.body.selectedSku).toBe(other.sku.name);
+    expect(res.body.estimate.monthly).not.toBe(first.body.estimate.monthly);
+    expect(res.body.comparison.find((c: { model: string }) => c.model === 'dedicated-cluster').amount)
+      .not.toBe(first.body.comparison.find((c: { model: string }) => c.model === 'dedicated-cluster').amount);
+  });
+
+  it('falls back to the cheapest when the chosen pool is not on offer', async () => {
+    const res = await post({ nodePoolSku: 'Standard_NOT_A_REAL_SIZE' }).expect(200);
+    expect(res.body.selectedSku).toBe(res.body.recommendations[0].sku.name);
+  });
+});
