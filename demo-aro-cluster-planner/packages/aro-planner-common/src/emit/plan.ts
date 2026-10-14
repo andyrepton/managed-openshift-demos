@@ -230,7 +230,7 @@ export function renderPlanMarkdown(name: string, input: EmitInput): string {
     out.push(`1. Review \`${name}.tfvars\`, then from \`andys-demo-cluster-tf\`:`);
     out.push('');
     out.push('   ```bash');
-    out.push('   source ~/.secrets/tf-setup.sh');
+    out.push('   # with your Azure credentials exported:');
     out.push(`   terraform plan -var-file=${name}.tfvars -out=tfplan`);
     out.push('   ```');
     out.push('');

@@ -30,7 +30,7 @@ const SHARED_HEADER = (input: EmitInput, name: string) =>
     `#`,
     `# Apply against andys-demo-cluster-tf:`,
     `#`,
-    `#   source ~/.secrets/tf-setup.sh`,
+    `#   # with your Azure credentials exported:`,
     `#   terraform plan -var-file=${name}.tfvars -out=tfplan`,
     `#`,
     `# This file targets ONE module. Do not merge it with another cluster's tfvars -`,

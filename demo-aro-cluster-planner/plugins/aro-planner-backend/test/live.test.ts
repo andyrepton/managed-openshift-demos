@@ -13,9 +13,8 @@ import { buildPriceTable } from '@aro-planner/common';
  * rejected second system message, a token budget swallowed by reasoning - are
  * exactly the ones a stub cannot reproduce.
  *
- *   set -a; . ~/.secrets/maas.sh; set +a
  *   LIVE_ASSISTANT=1 \
- *   ASSISTANT_BASE_URL="$MAAS_API_URL" ASSISTANT_API_KEY="$MAAS_API_KEY" \
+ *   ASSISTANT_BASE_URL=... ASSISTANT_API_KEY=... \
  *   npx vitest run test/live.test.ts
  */
 

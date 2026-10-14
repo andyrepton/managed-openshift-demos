@@ -8,7 +8,7 @@ Devstral is Mistral's agentic coding model — 68% SWE-bench Verified, Apache 2.
 
 - [`openshift-ai/`](../openshift-ai/) demo deployed (NFD, NVIDIA GPU Operator, RHOAI)
 - GPU node available with `nvidia.com/gpu` taint
-- HuggingFace token (from `source ~/.secrets/tf-setup.sh`)
+- HuggingFace token available as `$HF_TOKEN`
 
 ## Setup
 
