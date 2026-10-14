@@ -38,7 +38,7 @@ Pods on a Cluster User-Defined Network (CUDN) get IPs that are directly routable
 From `andys-demo-cluster-tf/`:
 
 ```bash
-source ~/.secrets/tf-setup.sh
+# Export your AWS and Red Hat credentials first.
 export RHCS_TOKEN=$(ocm token)
 terraform apply -var-file=bgp_rosa.tfvars
 ```

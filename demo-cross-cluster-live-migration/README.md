@@ -61,8 +61,8 @@ migration. MTV orchestrates the disk transfer and VM recreation.
 Set up kubeconfig variables for the instructions below:
 
 ```bash
-export KUBECONFIG_HETZNER=~/.secrets/hetzner-kubeconfig
-export KUBECONFIG_ROSA=~/.secrets/rosa-kubeconfig  # or your default context
+export KUBECONFIG_HETZNER=/path/to/hetzner-kubeconfig
+export KUBECONFIG_ROSA=/path/to/rosa-kubeconfig  # or your default context
 ```
 
 ### Disable source/dest check (AWS only)
