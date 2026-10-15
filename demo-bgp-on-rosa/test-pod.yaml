@@ -1,10 +1,34 @@
+# One pod per network. These are the clients for the isolation test: curl from
+# the red pod to the blue VM's IP should hang and fail, while curl to the red
+# VM's IP succeeds. Both pods also show the two-interface layout of a primary
+# UDN — ovn-udn1 carries the routable address, eth0 is infrastructure-locked.
 apiVersion: v1
 kind: Pod
 metadata:
-  name: bgp-test
-  namespace: bgp-demo
+  name: client-red
+  namespace: vms-red
   labels:
-    app: bgp-test
+    app: client-red
+spec:
+  containers:
+    - name: test
+      image: registry.access.redhat.com/ubi9/ubi-minimal:latest
+      command: ["sleep", "infinity"]
+      securityContext:
+        allowPrivilegeEscalation: false
+        runAsNonRoot: true
+        capabilities:
+          drop: ["ALL"]
+        seccompProfile:
+          type: RuntimeDefault
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: client-blue
+  namespace: vms-blue
+  labels:
+    app: client-blue
 spec:
   containers:
     - name: test
