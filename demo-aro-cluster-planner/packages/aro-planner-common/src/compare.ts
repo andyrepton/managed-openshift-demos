@@ -187,6 +187,25 @@ export function compareModels(
 
   const dedicatedEstimate = estimateCost(dedicated.plan, prices, opts);
 
+  /*
+   * On-premises is derived from the dedicated cluster's COMPUTE cost only.
+   *
+   * Persistent volume storage is an Azure managed disk priced per provisioned
+   * tier. Multiplying that by the on-prem factor would be nonsense: an
+   * organisation buying its own storage buys arrays up front on a separate
+   * cycle, and nothing about Azure disk pricing carries over. Leaving it in
+   * meant the on-premises figure quietly contained five times a share of an
+   * Azure disk bill, while the form told the user storage was costed
+   * separately.
+   */
+  const storageHourly = dedicatedEstimate.lines
+    .filter(l => l.included && l.label.startsWith('Persistent volume storage'))
+    .reduce((sum, l) => sum + l.hourly, 0);
+  const computeOnly: CostEstimate = {
+    ...dedicatedEstimate,
+    hourly: round4(dedicatedEstimate.hourly - storageHourly),
+  };
+
   // --- Dedicated ARO cluster: the only metered price here ---------------------
   const dedicatedEntry: ModelComparison = {
     model: 'dedicated-cluster',
@@ -230,7 +249,7 @@ export function compareModels(
   const onPremEstimate = onPremRate
     ? ratedEstimate(onPremRate, req.vcpu, `On-premises capacity - ${req.vcpu} vCPU`, opts, prices.currency, prices.region)
     : derivedEstimate(
-    dedicatedEstimate,
+    computeOnly,
     dedicated.pool.allocatableVcpu,
     req.vcpu,
     DEMO_MULTIPLIERS.onPremises,
@@ -240,6 +259,14 @@ export function compareModels(
       'licences, power and the people to run it.',
     opts,
   );
+  if (storageHourly > 0) {
+    onPremEstimate.assumptions.push(
+      'Persistent volume storage is NOT included. On-premises storage is bought ' +
+        'separately, up front, on its own cycle - there is no managed disk to ' +
+        'price and the Azure figure does not carry over.',
+    );
+  }
+
   const onPremEntry: ModelComparison = {
     model: 'on-premises',
     label: LABELS['on-premises'],

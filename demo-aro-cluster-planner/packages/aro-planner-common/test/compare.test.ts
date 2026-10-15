@@ -163,3 +163,38 @@ describe('configured rates override the demo multipliers', () => {
     expect(shared.estimate!.lines[0]!.source).toBe('assumption');
   });
 });
+
+describe('on-premises and storage', () => {
+  // The form tells the user on-prem storage is costed separately. That has to be
+  // true of the number as well: on-prem was derived from the dedicated estimate,
+  // which includes an Azure managed disk priced per provisioned tier, so the
+  // figure quietly carried five times a share of an Azure disk bill.
+  const prices = { ...WESTEUROPE_PRICES, disk: { 'Premium SSD Managed Disks|P20': 80.54 } };
+  const withStorage: ClusterPlan = {
+    ...plan,
+    storage: { tier: 'premium-ssd', requestedGiB: 300, disk: { name: 'P20', gib: 512 }, wastedGiB: 212 },
+  };
+  const compare = (p: ClusterPlan) =>
+    compareModels(req, { prices, dedicated: { plan: p, pool: pool('Standard_D16s_v5', 3) } });
+
+  const onPrem = (p: ClusterPlan) => compare(p).find(c => c.model === 'on-premises')!;
+  const dedicated = (p: ClusterPlan) => compare(p).find(c => c.model === 'dedicated-cluster')!;
+
+  it('leaves storage out of the on-premises figure entirely', () => {
+    expect(onPrem(withStorage).amount).toBeCloseTo(onPrem(plan).amount!, 2);
+  });
+
+  it('still includes it in the dedicated cluster, which really does pay Azure', () => {
+    expect(dedicated(withStorage).amount).toBeGreaterThan(dedicated(plan).amount!);
+  });
+
+  it('says so, rather than silently dropping it', () => {
+    expect(onPrem(withStorage).estimate!.assumptions.join(' ')).toMatch(
+      /storage is NOT included/i,
+    );
+  });
+
+  it('adds no such note when no storage was asked for', () => {
+    expect(onPrem(plan).estimate!.assumptions.join(' ')).not.toMatch(/NOT included/);
+  });
+});

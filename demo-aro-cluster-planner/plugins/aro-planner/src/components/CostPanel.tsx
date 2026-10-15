@@ -1,6 +1,10 @@
 import React from 'react';
 
+import Accordion from '@mui/material/Accordion';
+import AccordionDetails from '@mui/material/AccordionDetails';
+import AccordionSummary from '@mui/material/AccordionSummary';
 import Alert from '@mui/material/Alert';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import Box from '@mui/material/Box';
 import Chip from '@mui/material/Chip';
 import CircularProgress from '@mui/material/CircularProgress';
@@ -130,19 +134,51 @@ export function CostPanel({
             ))}
           </Stack>
 
+          {/* Collapsed by default, and only because of height: expanded, the
+              caveats run long enough to push the panel past the viewport, and a
+              sticky element taller than the screen stops being sticky. The
+              count is in the summary so the caveats are not out of sight out of
+              mind - you can see there are things to read without reading them. */}
           {estimate.assumptions.length > 0 && (
-            <Alert severity="info" sx={{ mt: 2 }}>
-              <Typography variant="subtitle2" gutterBottom>
-                Before you quote this
-              </Typography>
-              <Box component="ul" sx={{ m: 0, pl: 2 }}>
-                {estimate.assumptions.map(a => (
-                  <Typography component="li" variant="caption" key={a}>
-                    {a}
+            <Accordion
+              variant="outlined"
+              disableGutters
+              sx={{
+                mt: 2,
+                bgcolor: 'info.main',
+                color: 'info.contrastText',
+                '&:before': { display: 'none' },
+              }}
+            >
+              <AccordionSummary
+                expandIcon={<ExpandMoreIcon fontSize="small" color="inherit" />}
+                sx={{
+                  flexDirection: 'row-reverse',
+                  gap: 1,
+                  px: 2,
+                  minHeight: 40,
+                  '& .MuiAccordionSummary-content': { my: 0.75 },
+                }}
+              >
+                <Typography variant="subtitle2">
+                  Before you quote this
+                  <Typography component="span" variant="caption">
+                    {' '}
+                    &mdash; {estimate.assumptions.length}{' '}
+                    {estimate.assumptions.length === 1 ? 'caveat' : 'caveats'}
                   </Typography>
-                ))}
-              </Box>
-            </Alert>
+                </Typography>
+              </AccordionSummary>
+              <AccordionDetails sx={{ px: 2, pt: 0 }}>
+                <Box component="ul" sx={{ m: 0, pl: 2 }}>
+                  {estimate.assumptions.map(a => (
+                    <Typography component="li" variant="caption" key={a} display="block">
+                      {a}
+                    </Typography>
+                  ))}
+                </Box>
+              </AccordionDetails>
+            </Accordion>
           )}
 
           <Typography variant="caption" color="text.secondary" display="block" mt={2}>

@@ -314,28 +314,49 @@ export function Wizard({ onPlanChange, initial }: WizardProps) {
                     inputProps={{ min: 0, max: 32767 }}
                     value={form.storageGiB ?? 0}
                     onChange={e => set('storageGiB', Math.max(0, Number(e.target.value)))}
-                    helperText="0 for none"
+                    helperText={onPrem ? 'Still sized, not costed' : '0 for none'}
                   />
                 </Grid>
-                <Grid item xs={6} sm={8}>
-                  <TextField
-                    select label="Disk tier" fullWidth size="small"
-                    SelectProps={{ native: true }}
-                    InputLabelProps={{ shrink: true }}
-                    disabled={!(form.storageGiB && form.storageGiB > 0)}
-                    value={form.storageTier ?? 'premium-ssd'}
-                    onChange={e => set('storageTier', e.target.value as PlanInput['storageTier'])}
-                  >
-                    {STORAGE_TIERS.map(t => (
-                      <option key={t.id} value={t.id}>{t.label}</option>
-                    ))}
-                  </TextField>
-                </Grid>
+
+                {/* Azure disk tiers are meaningless on-premises - there are no
+                    managed disks to choose between. The capacity is still worth
+                    capturing, because whoever owns the on-prem platform needs
+                    the number; it just is not something this tool can price. */}
+                {!onPrem && (
+                  <Grid item xs={6} sm={8}>
+                    <TextField
+                      select label="Disk tier" fullWidth size="small"
+                      SelectProps={{ native: true }}
+                      InputLabelProps={{ shrink: true }}
+                      disabled={!(form.storageGiB && form.storageGiB > 0)}
+                      value={form.storageTier ?? 'premium-ssd'}
+                      onChange={e => set('storageTier', e.target.value as PlanInput['storageTier'])}
+                    >
+                      {STORAGE_TIERS.map(t => (
+                        <option key={t.id} value={t.id}>{t.label}</option>
+                      ))}
+                    </TextField>
+                  </Grid>
+                )}
+
+                {onPrem && (form.storageGiB ?? 0) > 0 && (
+                  <Grid item xs={12} sm={8}>
+                    <Alert severity="info">
+                      <Typography variant="caption">
+                        On-premises storage is <strong>costed separately</strong> and is not
+                        included in the figure on the right. Arrays, shelves and the
+                        software to run them are bought up front, on their own cycle, and
+                        nothing about Azure managed disks applies. The capacity is recorded
+                        so whoever owns the platform has the number.
+                      </Typography>
+                    </Alert>
+                  </Grid>
+                )}
 
                 {/* Capacity is bought in whole tiers, the same as nodes, so the
                     gap between what you ask for and what you pay for is worth
                     showing at the point of asking. */}
-                {storagePlan && storagePlan.wastedGiB > 0 && (
+                {!onPrem && storagePlan && storagePlan.wastedGiB > 0 && (
                   <Grid item xs={12}>
                     <Alert severity="info">
                       <Typography variant="caption">
@@ -483,7 +504,23 @@ export function Wizard({ onPlanChange, initial }: WizardProps) {
           </Stack>
         </Grid>
 
-        <Grid item xs={12} md={5} lg={4}>
+        {/* Stays put while the form scrolls, so a change and its effect on the
+            price are visible at the same time - which is the entire argument
+            for having the panel. alignSelf stops the grid item stretching to
+            the row height, which would make sticky a no-op. */}
+        <Grid
+          item
+          xs={12}
+          md={5}
+          lg={4}
+          sx={{
+            alignSelf: 'flex-start',
+            position: { md: 'sticky' },
+            top: { md: 16 },
+            maxHeight: { md: 'calc(100vh - 32px)' },
+            overflowY: { md: 'auto' },
+          }}
+        >
           <CostPanel
             estimate={chosenEstimate}
             loading={loading}
