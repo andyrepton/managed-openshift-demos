@@ -1,9 +1,28 @@
+# One BGPRouting per network. Each one makes the operator create its own
+# ClusterUserDefinedNetwork (cluster-udn-<name>) selecting namespaces labelled
+# cluster-udn: <name>. All of them are advertised by a single shared
+# RouteAdvertisements (bgp-cc-route-advertisements), so they ride the same BGP
+# sessions to the same VPC Route Server.
+#
+# spec.network.name must be unique across all BGPRouting CRs — the operator
+# reports DuplicateNetwork otherwise. Subnets must not overlap each other or
+# the VPC CIDR; the operator does not check that for you.
 apiVersion: networking.openshift.io/v1beta1
 kind: BGPRouting
 metadata:
-  name: bgp-demo-network
+  name: red
 spec:
   network:
-    name: bgp-demo-network
+    name: red
     subnets:
       - 10.100.0.0/16
+---
+apiVersion: networking.openshift.io/v1beta1
+kind: BGPRouting
+metadata:
+  name: blue
+spec:
+  network:
+    name: blue
+    subnets:
+      - 10.101.0.0/16
