@@ -175,13 +175,19 @@ so the shared `RouteAdvertisements` picks it up.
 To test BGP routing with VMs:
 
 ```bash
-oc apply -f ../openshift-virt/operator.yaml
+oc apply -f ../openshift-virt/namespace.yaml -f ../openshift-virt/operator-group.yaml
+oc apply -f ../openshift-virt/subscription.yaml
 # Wait for CSV to succeed
 oc get csv -n openshift-cnv -w
 oc apply -f ../openshift-virt/hyperconverged.yaml
 # Wait for Available=True
 oc get hyperconverged kubevirt-hyperconverged -n openshift-cnv -w
 ```
+
+`../openshift-virt/subscription.yaml` pins `startingCSV` to a 4.16 build. On a
+newer cluster that version is not in the catalog and the subscription never
+resolves — drop the `startingCSV` line and let the `stable` channel pick the
+build matching your cluster.
 
 Then create the two test VMs:
 ```bash
