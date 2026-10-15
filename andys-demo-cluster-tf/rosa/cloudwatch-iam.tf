@@ -1,3 +1,5 @@
+data "aws_caller_identity" "current" {}
+
 data "rhcs_cluster_rosa_hcp" "cloudwatch" {
   count = var.deploy_cloudwatch_logging ? 1 : 0
   id    = module.rosa-hcp.cluster_id
