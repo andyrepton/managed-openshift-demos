@@ -7,5 +7,7 @@ spec:
   source: redhat-operators
   sourceNamespace: openshift-marketplace
   name: kubevirt-hyperconverged
-  startingCSV: kubevirt-hyperconverged-operator.v4.16.3
-  channel: "stable" 
+  # No startingCSV: the stable channel resolves to the build matching the
+  # cluster. Pinning a version the cluster's catalog no longer carries leaves
+  # the subscription unresolved and the operator never installs.
+  channel: "stable"
