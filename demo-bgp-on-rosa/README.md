@@ -36,6 +36,42 @@ The demo deploys **two** networks, `red` and `blue`, to show the second property
 Both networks share one `BGPCloudConfiguration`, one Route Server, one set of
 router nodes and one `RouteAdvertisements`. Only the `BGPRouting` CRs differ.
 
+## Reference architecture
+
+Where this leads: two isolated CUDNs carrying VMs, reachable from an
+on-premises site over Direct Connect.
+
+![Two isolated CUDNs reachable from on-premises](images/bgp-two-networks.png)
+
+**This demo builds the in-VPC portion only.** BGP gets both CUDN prefixes into
+the VPC route tables, and that is where `rosa/bgp.tf` stops. Extending to
+on-premises is additional work this repo does not do, because none of it
+follows automatically from the BGP session:
+
+| Hop | Automatic? |
+|:---|:---|
+| Cluster → VPC subnet route tables | Yes — BGP and route server propagation |
+| VPC → Transit Gateway route table | **No** — a static route per CUDN prefix |
+| Transit Gateway → on-premises | **No** — Direct Connect gateway allowed prefixes |
+| On-premises → Transit Gateway | Yes — propagated from the Direct Connect attachment |
+| Node → on-premises (return path) | **No** — a route in the VPC subnet route tables |
+
+A Transit Gateway VPC attachment propagates only the *VPC's own CIDR blocks*
+into the TGW route table; it never reads your subnet route tables. The CUDN
+prefixes live only in the subnet route tables, so the TGW cannot learn them and
+needs static routes pointing at the VPC attachment.
+
+Direct Connect must use a **Transit Gateway** association, not a virtual
+private gateway. On a TGW association the allowed-prefix list is *originated*
+by the Direct Connect gateway, so it can advertise prefixes outside the VPC
+CIDR. On a VGW association it only *filters* the VPC CIDR, and a CUDN prefix
+could never be advertised at all.
+
+One caveat on those static routes: they do not track BGP. If the cluster
+withdraws a prefix, the VPC route tables update but the TGW static route still
+points at the VPC attachment, so traffic blackholes inside the VPC rather than
+failing over.
+
 ## Prerequisites
 
 - OpenShift 4.21+ (for CUDN and RouteAdvertisements APIs)
@@ -278,7 +314,24 @@ cd andys-demo-cluster-tf && terraform destroy -var-file=bgp_rosa.tfvars
 ```
 
 Delete the `BGPRouting` CRs before the `BGPCloudConfiguration` — its finalizer
-blocks deletion while routing CRs exist (`RoutingCRsExist`).
+blocks deletion while routing CRs exist (`RoutingCRsExist`). Let the
+`BGPCloudConfiguration` finish deleting before running Terraform: its finalizer
+removes the Route Server peers and reverts the Network operator patch, and
+Terraform cannot delete a Route Server that still has peers.
+
+On ROSA, the operator's ClusterRoleBindings survive `oc delete`. They are named
+`openshift-bgp-cloud-connector-*`, and the managed-cluster admission webhook
+refuses to delete ClusterRoleBindings in the `openshift-` namespace prefix:
+
+```
+admission webhook "clusterrolebindings-validation.managed.openshift.io" denied
+the request: Deleting ClusterRoleBinding openshift-bgp-cloud-connector-manager-
+rolebinding is not allowed
+```
+
+Three are left behind. They are harmless — they reference a ServiceAccount that
+no longer exists, and a reinstall simply updates them — but they cannot be
+removed by a cluster admin.
 
 ## Notes
 
