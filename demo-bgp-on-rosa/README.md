@@ -220,10 +220,15 @@ oc apply -f ../openshift-virt/hyperconverged.yaml
 oc get hyperconverged kubevirt-hyperconverged -n openshift-cnv -w
 ```
 
-`../openshift-virt/subscription.yaml` pins `startingCSV` to a 4.16 build. On a
-newer cluster that version is not in the catalog and the subscription never
-resolves — drop the `startingCSV` line and let the `stable` channel pick the
-build matching your cluster.
+If the subscription stays in `UpgradePending` and no CSV ever appears, check
+whether `../openshift-virt/subscription.yaml` sets a `startingCSV` your
+cluster's catalog no longer carries. Remove the line and let the `stable`
+channel resolve to the build matching your cluster:
+
+```bash
+oc get packagemanifest kubevirt-hyperconverged -n openshift-marketplace \
+  -o jsonpath='{range .status.channels[*]}{.name}{" -> "}{.currentCSV}{"\n"}{end}'
+```
 
 Then create the two test VMs:
 ```bash
