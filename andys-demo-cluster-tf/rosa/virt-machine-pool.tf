@@ -12,10 +12,7 @@ module "rosa-virt-machine-pool" {
   aws_node_pool = {
     instance_type = "m5.metal"
     tags          = merge(var.default_aws_tags, var.deploy_bgp ? { bgp_router = "true" } : {})
-    additional_security_group_ids = var.deploy_bgp && var.create_vpc ? [
-      aws_security_group.bgp_rfc1918[0].id,
-      aws_security_group.bgp_allow_all[0].id,
-    ] : null
+    additional_security_group_ids = var.deploy_bgp && var.create_vpc ? module.bgp[0].security_group_ids : null
   }
 
   subnet_id = local.private_subnet_id
