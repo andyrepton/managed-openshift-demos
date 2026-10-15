@@ -19,12 +19,19 @@ resource "aws_vpc_route_server_propagation" "private" {
   count           = var.deploy_bgp && var.create_vpc ? length(module.vpc[0].private_route_table_ids) : 0
   route_server_id = aws_vpc_route_server.bgp[0].route_server_id
   route_table_id  = module.vpc[0].private_route_table_ids[count.index]
+
+  # EnableRouteServerPropagation fails with InvalidRouteServerId.NotAssociated
+  # unless the VPC association already exists. Nothing else in this resource
+  # references the association, so the edge has to be declared.
+  depends_on = [aws_vpc_route_server_vpc_association.bgp]
 }
 
 resource "aws_vpc_route_server_propagation" "public" {
   count           = var.deploy_bgp && var.create_vpc ? length(module.vpc[0].public_route_table_ids) : 0
   route_server_id = aws_vpc_route_server.bgp[0].route_server_id
   route_table_id  = module.vpc[0].public_route_table_ids[count.index]
+
+  depends_on = [aws_vpc_route_server_vpc_association.bgp]
 }
 
 resource "aws_vpc_route_server_endpoint" "bgp" {
