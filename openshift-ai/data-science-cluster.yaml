@@ -20,8 +20,12 @@ spec:
       managementState: Removed
     ray:
       managementState: Managed
+    # RHOAI 3.x dropped the embedded Kueue; the admission webhook rejects the
+    # whole DataScienceCluster with "Managed is no longer supported as a
+    # managementState". Kueue now comes from its own operator, which this demo
+    # does not install, so leave it out.
     kueue:
-      managementState: Managed
+      managementState: Removed
     workbenches:
       managementState: Managed
     dashboard:
