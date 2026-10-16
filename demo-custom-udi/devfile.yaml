@@ -1,0 +1,80 @@
+schemaVersion: 2.2.2
+metadata:
+  name: custom-udi
+  displayName: Custom UDI (Python 3.14, Node 24, .NET 10)
+  description: The custom Universal Developer Image, with the same assistants as demo-opencode-devspaces
+  tags:
+    - python
+    - nodejs
+    - dotnet
+    - ai
+components:
+  - name: dev
+    container:
+      # Built by demo-custom-udi/buildconfig.yaml. Workspaces run in per-user
+      # namespaces, so custom-udi must grant system:image-puller to
+      # system:authenticated or this pull is denied — see the README.
+      image: image-registry.openshift-image-registry.svc:5000/custom-udi/custom-udi:latest
+      memoryRequest: 2Gi
+      memoryLimit: 6Gi
+      cpuRequest: "1"
+      cpuLimit: "2"
+      mountSources: true
+      env:
+        - name: NODE_TLS_REJECT_UNAUTHORIZED
+          value: "0"
+        # che-code installs these at editor startup. postStart only downloads
+        # them: the remote-cli code-oss needs VSCODE_IPC_HOOK_CLI from a live
+        # editor terminal, so --install-extension always fails from postStart.
+        - name: DEFAULT_EXTENSIONS
+          value: "/tmp/continue.vsix;/tmp/kilocode.vsix;/tmp/opencode.vsix"
+      endpoints:
+        - name: opencode
+          targetPort: 3000
+          exposure: internal
+commands:
+  - id: install-tools
+    exec:
+      component: dev
+      commandLine: |
+        curl -fsSL -L https://open-vsx.org/api/sst-dev/opencode/0.0.13/file/sst-dev.opencode-0.0.13.vsix -o /tmp/opencode.vsix &&
+        curl -fsSL -L https://open-vsx.org/api/Continue/continue/linux-x64/2.1.0/file/Continue.continue-2.1.0@linux-x64.vsix -o /tmp/continue.vsix &&
+        curl -fsSL -L https://open-vsx.org/api/kilocode/kilo-code/linux-x64/7.8.12/file/kilocode.kilo-code-7.8.12@linux-x64.vsix -o /tmp/kilocode.vsix &&
+        curl -fsSL -L https://github.com/anomalyco/opencode/releases/latest/download/opencode-linux-x64.tar.gz | tar xz -C /tmp &&
+        mkdir -p "$HOME/.local/bin" &&
+        mv /tmp/opencode "$HOME/.local/bin/opencode" &&
+        echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc &&
+        mkdir -p "$HOME/.config/opencode" &&
+        cp /projects/managed-openshift-demos/demo-opencode-devspaces/opencode.json "$HOME/.config/opencode/opencode.jsonc" &&
+        mkdir -p "$HOME/.continue" &&
+        cp /projects/managed-openshift-demos/demo-opencode-devspaces/continue-config.json "$HOME/.continue/config.json" &&
+        mkdir -p "$HOME/.config/kilo" &&
+        cp /projects/managed-openshift-demos/demo-opencode-devspaces/kilocode-config.jsonc "$HOME/.config/kilo/kilo.jsonc"
+      workingDir: /projects
+  - id: versions
+    exec:
+      component: dev
+      label: "Show runtime versions"
+      commandLine: |
+        echo "python3 : $(python3 --version 2>&1)   (expected 3.14.x)"
+        echo "node    : $(node --version 2>&1)      (expected v24.x)"
+        echo "dotnet  : $(dotnet --version 2>&1)    (expected 10.x)"
+        echo "npm     : $(npm --version 2>&1)"
+        echo
+        echo "inherited from the base UDI:"
+        echo "java    : $(java -version 2>&1 | head -1)"
+        echo "go      : $(go version 2>&1)"
+        echo
+        echo "note: bare 'pip3' comes from the persisted home and still points"
+        echo "at the old interpreter. Use 'python3 -m pip' or pip3.14:"
+        echo "pip     : $(python3 -m pip --version 2>&1)"
+      workingDir: /projects
+  - id: start-opencode
+    exec:
+      component: dev
+      commandLine: opencode
+      workingDir: /projects/managed-openshift-demos
+events:
+  postStart:
+    - install-tools
+    - versions

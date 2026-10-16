@@ -1,0 +1,24 @@
+# Makes the custom image the default for workspaces created without a devfile
+# of their own — the dashboard's "Create Workspace" flow, and any devfile that
+# declares no components.
+#
+# It does NOT override a devfile that names its own container image. Those win,
+# by design — demo-opencode-devspaces/devfile.yaml is one such devfile and
+# keeps using the stock UDI, so that demo still works on a cluster where this
+# image was never built. Point a devfile at the image below to opt it in.
+#
+# Apply with:
+#   oc patch checluster devspaces -n openshift-operators --type=merge \
+#     --patch-file demo-custom-udi/checluster-patch.yaml
+spec:
+  devEnvironments:
+    defaultComponents:
+      - name: tooling
+        container:
+          image: image-registry.openshift-image-registry.svc:5000/custom-udi/custom-udi:latest
+          memoryRequest: 2Gi
+          memoryLimit: 6Gi
+          cpuRequest: "1"
+          cpuLimit: "2"
+          mountSources: true
+          sourceMapping: /projects
