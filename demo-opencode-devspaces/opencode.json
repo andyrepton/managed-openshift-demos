@@ -13,7 +13,7 @@
         "devstral": {
           "name": "Devstral Small 2 24B (AWQ 4-bit)",
           "limit": {
-            "context": 16384,
+            "context": 24576,
             "output": 8192
           }
         }

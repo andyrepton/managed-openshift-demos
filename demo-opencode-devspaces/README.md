@@ -36,29 +36,61 @@ the repository after a `#` fragment, with parameters appended to it — a
 https://<devspaces-url>#https://github.com/andyrepton/managed-openshift-demos?devfilePath=demo-opencode-devspaces/devfile.yaml
 ```
 
-### 2. Check the OpenCode config
+### 2. Check the configs
 
-The devfile's postStart command installs OpenCode and writes the config for
-you, so there is nothing to copy by hand. Confirm it landed:
+The devfile's postStart command installs everything and writes all three
+configs, so there is nothing to copy by hand. Each points at the Devstral
+service deployed by `demo-vllm-model-serving/`:
+
+```
+http://devstral-predictor.vllm-model-serving.svc.cluster.local:8000/v1
+```
+
+| Tool | Kind | Config |
+|:---|:---|:---|
+| OpenCode | terminal | `~/.config/opencode/opencode.jsonc` |
+| Continue | extension | `~/.continue/config.json` |
+| Kilo Code | extension | `~/.config/kilo/kilo.jsonc` |
 
 ```bash
-cat ~/.config/opencode/opencode.jsonc
+grep -h baseURL ~/.config/opencode/opencode.jsonc ~/.config/kilo/kilo.jsonc
+grep apiBase ~/.continue/config.json
 ```
 
-It should point at the Devstral service deployed by
-`demo-vllm-model-serving/`:
+The two extensions are installed by che-code from `DEFAULT_EXTENSIONS` at
+editor startup, which takes a moment after the workspace opens. They total
+about 210 MB of downloads, so the first start is slow.
 
-```
-http://devstral-predictor.vllm-model-serving.svc.cluster.local/v1
-```
+### 3. Run them
 
-### 3. Run OpenCode
+OpenCode, from the terminal:
 
 ```bash
-opencode
+opencode                                   # interactive
+opencode run "Reply with exactly: WORKING" # one-shot, useful for a smoke test
 ```
 
-OpenCode will connect to the in-cluster Devstral model and you can start coding with AI assistance.
+Continue and Kilo Code appear in the editor's left sidebar once installed.
+Both are preconfigured against Devstral — no API key or sign-in needed, since
+vLLM runs unauthenticated inside the cluster.
+
+Kilo Code is the agentic one of the three: it sends a system prompt of around
+16k tokens before you type anything, which is why the InferenceService runs
+with `--max-model-len=24576` and Kilo's `limit.output` is 4096. At the 16384
+the demo originally used, Kilo fails on its own system prompt:
+
+```
+This model's maximum context length is 16384 tokens. However, you requested
+8192 output tokens and your prompt contains 16147 input tokens, for a total
+of 24339 tokens.
+```
+
+24576 is close to the ceiling on a single A10G: the weights take 15.16 GiB of
+the 24 GiB card, leaving 3.81 GiB of KV cache, and vLLM calculates the
+maximum workable length as 24976. Going higher needs a larger GPU — the
+engine refuses to start rather than degrading. That leaves Kilo roughly 4k
+tokens of conversation after its system prompt and reserved output, which is
+fine for a demo but not for long agentic sessions.
 
 ## How it works
 

@@ -7,6 +7,12 @@ metadata:
     serving.kserve.io/deploymentMode: RawDeployment
 spec:
   predictor:
+    # There is one GPU. A rolling update asks the new pod to schedule while
+    # the old one still holds it, so the new pod sits Pending with
+    # "Insufficient nvidia.com/gpu" until the rollout hits its progress
+    # deadline. Recreate stops the old pod first.
+    deploymentStrategy:
+      type: Recreate
     model:
       modelFormat:
         name: vLLM
@@ -14,7 +20,19 @@ spec:
       storageUri: pvc://model-weights/devstral-awq
       args:
         - --model=/mnt/models
-        - --max-model-len=16384
+        # Agentic extensions send a large system prompt before the user types
+        # anything — Kilo Code's is around 16k tokens on its own, which
+        # overflows a 16384 window immediately.
+        #
+        # 24576 is near the ceiling for this model on a single A10G (24 GiB).
+        # Weights take 15.16 GiB, leaving 3.81 GiB of KV cache, and vLLM puts
+        # the maximum workable length at 24976. Asking for more makes the
+        # engine refuse to start:
+        #   ValueError: To serve at least one request with the model's max seq
+        #   len (65536), 10.0 GiB KV cache is needed, which is larger than the
+        #   available KV cache memory (3.81 GiB).
+        # A longer context needs a bigger GPU, not a config change.
+        - --max-model-len=24576
         - --quantization=compressed-tensors
         - --dtype=float16
         - --gpu-memory-utilization=0.92
