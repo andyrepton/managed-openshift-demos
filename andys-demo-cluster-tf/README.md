@@ -28,6 +28,44 @@ $TF_VAR_deploy_ai_machine_pool
 $TF_VAR_deploy_virt_machine_pool (only for ROSA)
 ```
 
+### GPU clusters: check capacity before you apply
+
+**Before setting `deploy_ai_machine_pool = true`, run the capacity scripts in
+[`scripts/`](scripts/).** A GPU instance type is not offered in every
+availability zone, and quota is not uniform across regions. Terraform does not
+discover this for you — the machine pool API rejects the pool outright rather
+than picking another zone, and the apply fails partway through with the rest
+of the resources already created:
+
+```
+Error: Cannot create machine pool
+Machine type 'g5.4xlarge' is not supported in availability zone
+'eu-west-2c' for region 'eu-west-2'
+```
+
+```bash
+cd scripts
+./test-gpu-capacity-aws.sh eu-west-2 g5.4xlarge      # AWS: launches a real instance per AZ
+./test-gpu-capacity-azure.sh westeurope Standard_NC40ads_H100_v5   # Azure: SKU/quota query
+```
+
+Feed the result back into two variables:
+
+- `ai_gpu_instance_type` — a type the region actually offers.
+- `ai_gpu_subnet_index` — the index into the VPC's private subnets, which
+  selects the AZ. In `eu-west-2` index 0 is `eu-west-2a`, 1 is `eu-west-2b`
+  and 2 is `eu-west-2c`. Confirm the mapping for your own cluster, since it
+  depends on the subnet order the VPC module produced:
+
+```bash
+terraform state show 'module.rosa[0].module.vpc[0].aws_subnet.private[1]' | grep availability_zone
+```
+
+Note that `deploy_ai_machine_pool` creates **two** pools, not one: the GPU
+pool and a separate `m5.4xlarge` RHOAI worker pool. Budget for both.
+
+See [`scripts/README.md`](scripts/README.md) for the full usage.
+
 ### GCP API prerequisites (OSD on GCP)
 
 The following APIs must be enabled in the GCP project before creating an OSD cluster:
