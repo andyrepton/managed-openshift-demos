@@ -103,6 +103,13 @@ model. Check GPU capacity before changing instance type — see
 > `~/.config/kilo/kilo.jsonc` — including its token limits. Keep OpenCode's
 > config in `~/.config/opencode/` only.
 
+> **Permissions must be granted explicitly.** Kilo defaults every tool with no
+> matching rule to `ask`, and auto-approves nothing. Without a `permission`
+> block the agent reads files but silently fails to write or run anything: it
+> waits on an approval it never receives and reports "Task completed" having
+> done nothing. `kilocode-config.jsonc` grants `read`, `edit` and `bash`,
+> which suits a throwaway workspace — tighten it for anything longer lived.
+
 ## How it works
 
 ```
