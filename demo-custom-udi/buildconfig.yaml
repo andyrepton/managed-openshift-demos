@@ -1,0 +1,41 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: custom-udi
+---
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: custom-udi
+  namespace: custom-udi
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: custom-udi
+  namespace: custom-udi
+spec:
+  output:
+    to:
+      kind: ImageStreamTag
+      name: custom-udi:latest
+  source:
+    type: Git
+    git:
+      uri: https://github.com/andyrepton/managed-openshift-demos.git
+      ref: main
+    contextDir: demo-custom-udi
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Containerfile
+      # The base image lives in registry.redhat.io. Builds do not use the
+      # cluster's global pull secret automatically, so this references a
+      # secret linked to the builder service account. See the README.
+      pullSecret:
+        name: redhat-registry
+  triggers: []
+  resources:
+    limits:
+      cpu: "2"
+      memory: 4Gi
