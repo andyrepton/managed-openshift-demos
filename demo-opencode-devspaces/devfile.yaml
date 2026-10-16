@@ -26,6 +26,13 @@ components:
       env:
         - name: NODE_TLS_REJECT_UNAUTHORIZED
           value: "0"
+        # che-code installs these at editor startup. postStart only downloads
+        # them: the remote-cli code-oss needs VSCODE_IPC_HOOK_CLI from a live
+        # editor terminal, so --install-extension always fails from postStart
+        # with "Command is only available in WSL or inside a Visual Studio
+        # Code terminal."
+        - name: DEFAULT_EXTENSIONS
+          value: "/tmp/continue.vsix;/tmp/opencode.vsix"
       endpoints:
         - name: opencode
           targetPort: 3000
@@ -37,7 +44,6 @@ commands:
       commandLine: |
         curl -fsSL -L https://open-vsx.org/api/sst-dev/opencode/0.0.13/file/sst-dev.opencode-0.0.13.vsix -o /tmp/opencode.vsix &&
         curl -fsSL -L https://open-vsx.org/api/Continue/continue/linux-x64/2.1.0/file/Continue.continue-2.1.0@linux-x64.vsix -o /tmp/continue.vsix &&
-        /checode/checode-linux-libc/ubi9/bin/remote-cli/code-oss --install-extension /tmp/continue.vsix --force 2>/dev/null || true &&
         curl -fsSL -L https://github.com/anomalyco/opencode/releases/latest/download/opencode-linux-x64.tar.gz | tar xz -C /tmp &&
         mkdir -p "$HOME/.local/bin" &&
         mv /tmp/opencode "$HOME/.local/bin/opencode" &&
