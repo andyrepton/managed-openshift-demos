@@ -32,7 +32,7 @@ components:
         # with "Command is only available in WSL or inside a Visual Studio
         # Code terminal."
         - name: DEFAULT_EXTENSIONS
-          value: "/tmp/continue.vsix;/tmp/opencode.vsix"
+          value: "/tmp/continue.vsix;/tmp/kilocode.vsix;/tmp/opencode.vsix"
       endpoints:
         - name: opencode
           targetPort: 3000
@@ -44,15 +44,17 @@ commands:
       commandLine: |
         curl -fsSL -L https://open-vsx.org/api/sst-dev/opencode/0.0.13/file/sst-dev.opencode-0.0.13.vsix -o /tmp/opencode.vsix &&
         curl -fsSL -L https://open-vsx.org/api/Continue/continue/linux-x64/2.1.0/file/Continue.continue-2.1.0@linux-x64.vsix -o /tmp/continue.vsix &&
+        curl -fsSL -L https://open-vsx.org/api/kilocode/kilo-code/linux-x64/7.8.12/file/kilocode.kilo-code-7.8.12@linux-x64.vsix -o /tmp/kilocode.vsix &&
         curl -fsSL -L https://github.com/anomalyco/opencode/releases/latest/download/opencode-linux-x64.tar.gz | tar xz -C /tmp &&
         mkdir -p "$HOME/.local/bin" &&
         mv /tmp/opencode "$HOME/.local/bin/opencode" &&
         echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc &&
         mkdir -p "$HOME/.config/opencode" &&
         cp /projects/managed-openshift-demos/demo-opencode-devspaces/opencode.json "$HOME/.config/opencode/opencode.jsonc" &&
-        cp /projects/managed-openshift-demos/demo-opencode-devspaces/opencode.json /projects/managed-openshift-demos/opencode.json &&
         mkdir -p "$HOME/.continue" &&
-        cp /projects/managed-openshift-demos/demo-opencode-devspaces/continue-config.json "$HOME/.continue/config.json"
+        cp /projects/managed-openshift-demos/demo-opencode-devspaces/continue-config.json "$HOME/.continue/config.json" &&
+        mkdir -p "$HOME/.config/kilo" &&
+        cp /projects/managed-openshift-demos/demo-opencode-devspaces/kilocode-config.jsonc "$HOME/.config/kilo/kilo.jsonc"
       workingDir: /projects
   - id: start-opencode
     exec:

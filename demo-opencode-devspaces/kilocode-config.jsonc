@@ -1,0 +1,36 @@
+// Kilo Code configuration, copied to ~/.config/kilo/kilo.jsonc by the
+// devfile's postStart command. Both the VS Code extension and the Kilo CLI
+// read this same file.
+//
+// The model key must match an id returned by GET /v1/models on the endpoint
+// below — vLLM serves it as "devstral" because the InferenceService passes
+// --served-model-name=devstral.
+//
+// context must match the InferenceService's --max-model-len (65536). Kilo
+// disables automatic context management when the limits are missing, and
+// overstating the context makes the model reject oversized requests.
+{
+  "$schema": "https://app.kilo.ai/config.json",
+  "model": "openai-compatible/devstral",
+  "provider": {
+    "openai-compatible": {
+      "options": {
+        // vLLM is deployed without authentication inside the cluster.
+        "apiKey": "not-needed",
+        "baseURL": "http://devstral-predictor.vllm-model-serving.svc.cluster.local:8000/v1"
+      },
+      "models": {
+        "devstral": {
+          "name": "Devstral Small 2 24B (AWQ 4-bit)",
+          // The InferenceService runs vLLM with --enable-auto-tool-choice and
+          // --tool-call-parser=mistral, so the agent loop can call tools.
+          "tool_call": true,
+          "limit": {
+            "context": 65536,
+            "output": 8192
+          }
+        }
+      }
+    }
+  }
+}

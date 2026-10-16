@@ -36,29 +36,72 @@ the repository after a `#` fragment, with parameters appended to it — a
 https://<devspaces-url>#https://github.com/andyrepton/managed-openshift-demos?devfilePath=demo-opencode-devspaces/devfile.yaml
 ```
 
-### 2. Check the OpenCode config
+### 2. Check the configs
 
-The devfile's postStart command installs OpenCode and writes the config for
-you, so there is nothing to copy by hand. Confirm it landed:
+The devfile's postStart command installs everything and writes all three
+configs, so there is nothing to copy by hand. Each points at the Devstral
+service deployed by `demo-vllm-model-serving/`:
+
+```
+http://devstral-predictor.vllm-model-serving.svc.cluster.local:8000/v1
+```
+
+| Tool | Kind | Config |
+|:---|:---|:---|
+| OpenCode | terminal | `~/.config/opencode/opencode.jsonc` |
+| Continue | extension | `~/.continue/config.json` |
+| Kilo Code | extension | `~/.config/kilo/kilo.jsonc` |
 
 ```bash
-cat ~/.config/opencode/opencode.jsonc
+grep -h baseURL ~/.config/opencode/opencode.jsonc ~/.config/kilo/kilo.jsonc
+grep apiBase ~/.continue/config.json
 ```
 
-It should point at the Devstral service deployed by
-`demo-vllm-model-serving/`:
+The two extensions are installed by che-code from `DEFAULT_EXTENSIONS` at
+editor startup, which takes a moment after the workspace opens. They total
+about 210 MB of downloads, so the first start is slow.
 
-```
-http://devstral-predictor.vllm-model-serving.svc.cluster.local/v1
-```
+### 3. Run them
 
-### 3. Run OpenCode
+OpenCode, from the terminal:
 
 ```bash
-opencode
+opencode                                   # interactive
+opencode run "Reply with exactly: WORKING" # one-shot, useful for a smoke test
 ```
 
-OpenCode will connect to the in-cluster Devstral model and you can start coding with AI assistance.
+Continue and Kilo Code appear in the editor's left sidebar once installed.
+Both are preconfigured against Devstral — no API key or sign-in needed, since
+vLLM runs unauthenticated inside the cluster.
+
+Kilo Code is the agentic one of the three: it sends a system prompt of about
+20.6k tokens before you type anything (the Kilo CLI's is about 16.1k). The
+InferenceService runs with `--max-model-len=65536`, leaving roughly 45k
+tokens for the actual conversation.
+
+**This needs a 48 GiB GPU.** On a 24 GiB A10G (`g5.4xlarge`) the 15.16 GiB of
+weights leave only 3.81 GiB of KV cache, which vLLM caps at 24976 tokens.
+That suits the Kilo CLI but not the extension, which fails on its own system
+prompt and then gives up:
+
+```
+This model's maximum context length is 24576 tokens. However, you requested
+8192 output tokens and your prompt contains 20660 input tokens, for a total
+of 28852 tokens.
+...
+Compaction exhausted: context still exceeds model limits after 3 attempts.
+```
+
+vLLM refuses to start rather than degrading when the KV cache cannot hold
+`max-model-len`, so too large a value is a crash loop rather than a slow
+model. Check GPU capacity before changing instance type — see
+[`andys-demo-cluster-tf/scripts/`](../andys-demo-cluster-tf/scripts/).
+
+> **Config precedence trap.** Kilo reads legacy `opencode.json` files as well
+> as its own, and a *project-level* config overrides the global one. An
+> `opencode.json` in the repository root therefore silently overrides
+> `~/.config/kilo/kilo.jsonc` — including its token limits. Keep OpenCode's
+> config in `~/.config/opencode/` only.
 
 ## How it works
 
