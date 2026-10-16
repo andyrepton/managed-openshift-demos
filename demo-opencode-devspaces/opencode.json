@@ -1,19 +1,19 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "model": "vllm/qwen3-8-27b",
+  "model": "vllm/devstral",
   "provider": {
     "vllm": {
       "npm": "@ai-sdk/openai-compatible",
       "name": "vLLM on OpenShift",
       "options": {
-        "baseURL": "https://qwen3-8-27b-kserve-workload-svc.claude-code-demo.svc.cluster.local:8000/v1",
+        "baseURL": "http://devstral-predictor.vllm-model-serving.svc.cluster.local:8000/v1",
         "apiKey": "not-needed"
       },
       "models": {
-        "qwen3-8-27b": {
-          "name": "Qwen 3.8 27B INT4",
+        "devstral": {
+          "name": "Devstral Small 2 24B (AWQ 4-bit)",
           "limit": {
-            "context": 262144,
+            "context": 16384,
             "output": 8192
           }
         }

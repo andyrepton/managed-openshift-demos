@@ -4,32 +4,52 @@ Run [OpenCode](https://github.com/opencode-ai/opencode), an AI-powered coding as
 
 ## Prerequisites
 
-- `openshift-devspaces/` demo deployed (Dev Spaces operator + CheCluster)
-- `demo-vllm-model-serving/` demo deployed (Devstral model serving via vLLM)
+Deploy these in order — each one depends on the one above it:
+
+1. [`openshift-ai/`](../openshift-ai/) — NFD, NVIDIA GPU Operator and RHOAI.
+   Needs a GPU machine pool (`deploy_ai_machine_pool = true` in terraform).
+2. [`demo-vllm-model-serving/`](../demo-vllm-model-serving/) — Devstral served
+   by vLLM. Needs `$HUGGING_FACE_HUB_TOKEN`.
+3. [`openshift-devspaces/`](../openshift-devspaces/) — Dev Spaces operator and
+   CheCluster.
+
+On AWS, pick a GPU instance type your region actually offers in the subnet
+terraform selects: `g5.4xlarge` is absent from `eu-west-2c`, and the machine
+pool API rejects the pool outright rather than falling back to another zone.
 
 ## Setup
 
 ### 1. Open a workspace
 
-Get your Dev Spaces dashboard URL:
+Get your Dev Spaces dashboard URL. The CheCluster lives in
+`openshift-operators`, not `openshift-devspaces`:
 
 ```bash
-oc get checluster devspaces -n openshift-devspaces -o jsonpath='{.status.cheURL}'
+oc get checluster devspaces -n openshift-operators -o jsonpath='{.status.cheURL}'
 ```
 
-Open the factory URL to launch a workspace with this devfile:
+Open the factory URL to launch a workspace with this devfile. Dev Spaces takes
+the repository after a `#` fragment, with parameters appended to it — a
+`/f?url=` query string does not work:
 
 ```
-https://<devspaces-url>/f?url=https://github.com/andyrepton/managed-openshift-demos&devfilePath=demo-opencode-devspaces/devfile.yaml
+https://<devspaces-url>#https://github.com/andyrepton/managed-openshift-demos?devfilePath=demo-opencode-devspaces/devfile.yaml
 ```
 
-### 2. Configure OpenCode
+### 2. Check the OpenCode config
 
-Once the workspace starts, OpenCode installs automatically via the postStart command. Copy the config file into place:
+The devfile's postStart command installs OpenCode and writes the config for
+you, so there is nothing to copy by hand. Confirm it landed:
 
 ```bash
-mkdir -p ~/.config/opencode
-cp /projects/managed-openshift-demos/demo-opencode-devspaces/opencode.json ~/.config/opencode/config.json
+cat ~/.config/opencode/opencode.jsonc
+```
+
+It should point at the Devstral service deployed by
+`demo-vllm-model-serving/`:
+
+```
+http://devstral-predictor.vllm-model-serving.svc.cluster.local/v1
 ```
 
 ### 3. Run OpenCode
@@ -61,14 +81,24 @@ OpenCode will connect to the in-cluster Devstral model and you can start coding 
 
 ## Verify
 
+KServe creates `devstral-predictor` as a **headless** service, so its DNS name
+resolves straight to the pod and the service's 80 → 8000 port mapping never
+applies. Address port 8000 explicitly; port 80 just times out.
+
 ```bash
 # Check the model is reachable from the workspace
-curl -s http://devstral-predictor.vllm-model-serving.svc.cluster.local/v1/models
+curl -s http://devstral-predictor.vllm-model-serving.svc.cluster.local:8000/v1/models
 
 # Test a completion
-curl -s http://devstral-predictor.vllm-model-serving.svc.cluster.local/v1/chat/completions \
+curl -s http://devstral-predictor.vllm-model-serving.svc.cluster.local:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{"model":"devstral","messages":[{"role":"user","content":"Hello"}],"max_tokens":64}'
+```
+
+Then from the workspace terminal, non-interactively:
+
+```bash
+opencode run "Reply with exactly the word: WORKING"
 ```
 
 ## Cleanup
