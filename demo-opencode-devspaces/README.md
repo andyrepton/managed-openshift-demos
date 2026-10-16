@@ -74,28 +74,28 @@ Continue and Kilo Code appear in the editor's left sidebar once installed.
 Both are preconfigured against Devstral — no API key or sign-in needed, since
 vLLM runs unauthenticated inside the cluster.
 
-Kilo Code is the agentic one of the three: it sends a system prompt of around
-16k tokens before you type anything, which is why the InferenceService runs
-with `--max-model-len=24576` and Kilo's `limit.output` is 4096. At the 16384
-the demo originally used, Kilo fails on its own system prompt:
+Kilo Code is the agentic one of the three: it sends a system prompt of about
+20.6k tokens before you type anything (the Kilo CLI's is about 16.1k). The
+InferenceService runs with `--max-model-len=65536`, leaving roughly 45k
+tokens for the actual conversation.
+
+**This needs a 48 GiB GPU.** On a 24 GiB A10G (`g5.4xlarge`) the 15.16 GiB of
+weights leave only 3.81 GiB of KV cache, which vLLM caps at 24976 tokens.
+That suits the Kilo CLI but not the extension, which fails on its own system
+prompt and then gives up:
 
 ```
-This model's maximum context length is 16384 tokens. However, you requested
-8192 output tokens and your prompt contains 16147 input tokens, for a total
-of 24339 tokens.
+This model's maximum context length is 24576 tokens. However, you requested
+8192 output tokens and your prompt contains 20660 input tokens, for a total
+of 28852 tokens.
+...
+Compaction exhausted: context still exceeds model limits after 3 attempts.
 ```
 
-24576 is close to the ceiling on a single A10G: the weights take 15.16 GiB of
-the 24 GiB card, leaving 3.81 GiB of KV cache, and vLLM calculates the
-maximum workable length as 24976. Going higher needs a larger GPU — the
-engine refuses to start rather than degrading.
-
-**The Kilo Code extension does not usefully fit on an A10G.** Its system
-prompt is about 20,660 tokens — larger than the CLI's ~16,100 — which leaves
-under 4,000 tokens for the reply and the entire conversation, and it hits
-"Compaction exhausted" almost immediately. The CLI is usable; the extension
-needs a bigger card. On a `g7e.2xlarge` (L40S, 48 GiB) there is room for a
-65536 context and the extension behaves normally.
+vLLM refuses to start rather than degrading when the KV cache cannot hold
+`max-model-len`, so too large a value is a crash loop rather than a slow
+model. Check GPU capacity before changing instance type — see
+[`andys-demo-cluster-tf/scripts/`](../andys-demo-cluster-tf/scripts/).
 
 > **Config precedence trap.** Kilo reads legacy `opencode.json` files as well
 > as its own, and a *project-level* config overrides the global one. An

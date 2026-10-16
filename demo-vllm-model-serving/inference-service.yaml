@@ -21,18 +21,21 @@ spec:
       args:
         - --model=/mnt/models
         # Agentic extensions send a large system prompt before the user types
-        # anything — Kilo Code's is around 16k tokens on its own, which
-        # overflows a 16384 window immediately.
+        # anything: Kilo Code's CLI is about 16.1k tokens and its VS Code
+        # extension about 20.6k, before any user content.
         #
-        # 24576 is near the ceiling for this model on a single A10G (24 GiB).
-        # Weights take 15.16 GiB, leaving 3.81 GiB of KV cache, and vLLM puts
-        # the maximum workable length at 24976. Asking for more makes the
-        # engine refuse to start:
+        # This needs a 48 GiB card. On a 24 GiB A10G (g5.4xlarge) the 15.16
+        # GiB of weights leave only 3.81 GiB of KV cache, which vLLM caps at
+        # 24976 tokens — enough for the Kilo CLI but not the extension, which
+        # has under 4k tokens left for the conversation. On an L40S
+        # (g7e.2xlarge) there is room for 65536.
+        #
+        # vLLM refuses to start rather than degrading if the KV cache cannot
+        # hold max-model-len:
         #   ValueError: To serve at least one request with the model's max seq
         #   len (65536), 10.0 GiB KV cache is needed, which is larger than the
         #   available KV cache memory (3.81 GiB).
-        # A longer context needs a bigger GPU, not a config change.
-        - --max-model-len=24576
+        - --max-model-len=65536
         - --quantization=compressed-tensors
         - --dtype=float16
         - --gpu-memory-utilization=0.92
