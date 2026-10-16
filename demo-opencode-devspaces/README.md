@@ -88,9 +88,20 @@ of 24339 tokens.
 24576 is close to the ceiling on a single A10G: the weights take 15.16 GiB of
 the 24 GiB card, leaving 3.81 GiB of KV cache, and vLLM calculates the
 maximum workable length as 24976. Going higher needs a larger GPU — the
-engine refuses to start rather than degrading. That leaves Kilo roughly 4k
-tokens of conversation after its system prompt and reserved output, which is
-fine for a demo but not for long agentic sessions.
+engine refuses to start rather than degrading.
+
+**The Kilo Code extension does not usefully fit on an A10G.** Its system
+prompt is about 20,660 tokens — larger than the CLI's ~16,100 — which leaves
+under 4,000 tokens for the reply and the entire conversation, and it hits
+"Compaction exhausted" almost immediately. The CLI is usable; the extension
+needs a bigger card. On a `g7e.2xlarge` (L40S, 48 GiB) there is room for a
+65536 context and the extension behaves normally.
+
+> **Config precedence trap.** Kilo reads legacy `opencode.json` files as well
+> as its own, and a *project-level* config overrides the global one. An
+> `opencode.json` in the repository root therefore silently overrides
+> `~/.config/kilo/kilo.jsonc` — including its token limits. Keep OpenCode's
+> config in `~/.config/opencode/` only.
 
 ## How it works
 
