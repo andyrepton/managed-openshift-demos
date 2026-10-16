@@ -74,13 +74,24 @@ devfile you want on the new image.
 
 ### 4. Verify
 
-Start a **new** workspace, then in its terminal:
+Either start a workspace from this demo's devfile, which prints the versions
+on start:
+
+```
+https://<devspaces-url>#https://github.com/andyrepton/managed-openshift-demos?devfilePath=demo-custom-udi/devfile.yaml
+```
+
+Or create a workspace with no devfile at all, which is what exercises the
+`defaultComponents` setting from step 3. Then in its terminal:
 
 ```bash
 python3 --version   # 3.14.8
 node --version      # v24.22.0
 dotnet --version    # 10.0.112
 ```
+
+Workspaces must be **new**. Reopening a stopped workspace keeps the old
+image and the old `/projects` volume.
 
 ## Writing a custom UDI: what actually matters
 

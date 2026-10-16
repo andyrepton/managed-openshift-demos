@@ -1,0 +1,48 @@
+schemaVersion: 2.2.2
+metadata:
+  name: custom-udi
+  displayName: Custom UDI (Python 3.14, Node 24, .NET 10)
+  description: Workspace on the custom Universal Developer Image, for checking the upgraded runtimes
+  tags:
+    - python
+    - nodejs
+    - dotnet
+components:
+  - name: tooling
+    container:
+      # Built by demo-custom-udi/buildconfig.yaml. Workspaces run in per-user
+      # namespaces, so custom-udi must grant system:image-puller to
+      # system:authenticated or this pull is denied — see the README.
+      image: image-registry.openshift-image-registry.svc:5000/custom-udi/custom-udi:latest
+      memoryRequest: 2Gi
+      memoryLimit: 6Gi
+      cpuRequest: "1"
+      cpuLimit: "2"
+      mountSources: true
+      sourceMapping: /projects
+commands:
+  - id: versions
+    exec:
+      component: tooling
+      label: "Show runtime versions"
+      commandLine: |
+        echo "python3 : $(python3 --version 2>&1)   (expected 3.14.x)"
+        echo "node    : $(node --version 2>&1)      (expected v24.x)"
+        echo "dotnet  : $(dotnet --version 2>&1)    (expected 10.x)"
+        echo "npm     : $(npm --version 2>&1)"
+        echo
+        echo "inherited from the base UDI:"
+        echo "java    : $(java -version 2>&1 | head -1)"
+        echo "go      : $(go version 2>&1)"
+        echo "maven   : $(mvn --version 2>&1 | head -1)"
+        echo
+        echo "note: bare 'pip3' comes from the persisted home and still"
+        echo "points at the old interpreter. Use 'python3 -m pip' or pip3.14:"
+        echo "pip     : $(python3 -m pip --version 2>&1)"
+      workingDir: /projects
+      group:
+        kind: run
+        isDefault: true
+events:
+  postStart:
+    - versions
