@@ -32,5 +32,22 @@
         }
       }
     }
+  },
+  // Kilo defaults every tool it has no rule for to "ask", and nothing is
+  // auto-approved out of the box. Without this block the agent reads files
+  // happily but cannot write or run anything: it stalls on the approval it
+  // never gets and reports "Task completed" having done nothing.
+  //
+  // These are scoped to a throwaway workspace running as a non-root user in
+  // its own namespace. Tighten them for anything longer lived — the values
+  // are "allow", "ask" or "deny", and bash accepts per-command patterns, e.g.
+  //   "bash": { "*": "ask", "git *": "allow", "rm *": "deny" }
+  //
+  // Kilo denies writes to .git and its own config whatever this says, and
+  // always prompts before reading .env.
+  "permission": {
+    "read": "allow",
+    "edit": "allow",
+    "bash": "allow"
   }
 }
