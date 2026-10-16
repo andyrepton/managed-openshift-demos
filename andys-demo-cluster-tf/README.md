@@ -66,6 +66,46 @@ pool and a separate `m5.4xlarge` RHOAI worker pool. Budget for both.
 
 See [`scripts/README.md`](scripts/README.md) for the full usage.
 
+### Changing a GPU machine pool's instance type or subnet
+
+Both `instance_type` and `subnet_id` are **immutable** on a ROSA HCP machine
+pool, but the RHCS provider does not mark them as requiring replacement. It
+plans an in-place update that the API then rejects:
+
+```
+Error: Attribute value cannot be changed
+Attribute aws_node_pool.subnet_id, cannot be changed from
+"subnet-0f09..." to "subnet-0275..."
+```
+
+Force the replacement instead:
+
+```bash
+terraform apply -var-file=<your>.tfvars \
+  -replace='module.rosa[0].module.rosa-rhoai-machine-pool[0].module.rosa-ai-machine-pool-gpu-pool.rhcs_hcp_machine_pool.machine_pool'
+```
+
+That still fails on the first attempt. ROSA will not reuse a node pool name
+until the old node has drained **and** its EC2 instance has terminated, even
+though the node pool already returns 404 from the API:
+
+```
+A NodePool with name 'poc-andyr1-gpu' is being deleted from cluster '...'.
+Please retry the operation again later.
+```
+
+Wait for the node to disappear from `oc get nodes` and the instance to reach
+`terminated`, then apply again. It took about 15 minutes.
+
+Two things to settle **before** starting, because the destroy happens first
+and is not reversible if the old type has no capacity:
+
+- Check capacity for the *new* type with `scripts/test-gpu-capacity-aws.sh`,
+  and check it for the old type too if you might want to go back.
+- A GPU instance is not offered in every AZ, and EBS is zone-bound. Moving
+  the pool to another AZ strands any PVC in the old one — model weights have
+  to be downloaded again into a new volume.
+
 ### GCP API prerequisites (OSD on GCP)
 
 The following APIs must be enabled in the GCP project before creating an OSD cluster:
