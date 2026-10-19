@@ -48,7 +48,7 @@ Register a **GitHub App** at <https://github.com/settings/apps/new>. Red Hat rec
 | Authorization callback URL | `https://<your-rhdh-host>/api/auth/github/handler/frame` |
 | Webhook | clear **Active** -- no webhook is used |
 | Organization permissions | Members: `Read-only` |
-| Where can this be installed | Only on this account |
+| Where can this GitHub App be installed | `Any account` -- see below if only you will ever sign in |
 
 Generate a client secret, then install the app on your account.
 
@@ -155,11 +155,18 @@ same name.
      | grep -i 'unable to resolve user identity'
    ```
 
-They do not need to install the GitHub App. Signing in authorises it against
-their account, which is a separate flow from installation -- so **Only on this
-account** under *Where can this be installed* does not block them. If their
-sign-in fails at GitHub rather than at RHDH, that setting is the first thing to
-check.
+They do not need to install the GitHub App, but the App must be set to **Any
+account** under *Where can this GitHub App be installed?*. That radio is the
+App's public/private switch: left on **Only on this account** the App is private,
+and everyone except its owner gets a bare **404** at
+`github.com/login/oauth/authorize` -- GitHub answers 404 rather than 403 so the
+App's existence is not disclosed. Nothing appears in the RHDH logs, because the
+request never reaches RHDH.
+
+Making the App public does not widen who can use this instance. It lets anyone
+*start* the OAuth flow; `catalog/org.yaml` still decides who finishes it. The two
+settings do different jobs and both are needed -- GitHub for authentication, the
+catalog for authorisation.
 
 ## What gets created
 
@@ -178,6 +185,7 @@ check.
 * **`catalog/org.yaml` is the access list, and nothing else is.** GitHub will authenticate anyone on the internet with an account; `usernameMatchingUserEntityName` is what turns that into a closed list. Adding a person is one `User` entity. Never set `dangerouslyAllowSignInWithoutUserInCatalog` with a public identity provider -- behind a corporate IdP that flag is defensible, here it would make the instance world-open.
 * **`User` must be in the catalog `rules` allow list.** It is easy to miss, and the failure is quiet: `org.yaml` also contains Groups, so with `User` omitted the Groups load, the file looks fine, and the only thing dropped is the entity that gates access. Sign-in then fails with `unable to resolve user identity` and nothing appears in the logs.
 * **`auth.session.secret` is mandatory for GitHub auth.** Without it sign-in fails *after* the GitHub callback, which reads like a bad callback URL and is not.
+* **A private GitHub App 404s for everyone but its owner.** *Where can this GitHub App be installed?* is the public/private switch, and on **Only on this account** a second person gets a 404 at `github.com/login/oauth/authorize` -- not a permission error, and nothing in the RHDH logs, because the request never reaches RHDH. It reads like a dead callback URL. The owner's own sign-in keeps working throughout, so this only ever surfaces when someone else tries. Set it to **Any account**; `catalog/org.yaml` is still what decides who gets in.
 * **There is no OpenShift auth provider in RHDH 1.10.** The upstream Backstage one needs `@backstage/backend-plugin-api` `^1.10.1`; RHDH 1.10 ships 1.8.0 and 2.1 ships 1.10.0. The cluster's own OAuth server is not OIDC either -- its `scopes_supported` has no `openid` -- so the `oidc` provider cannot stand in. Revisit when a release bundles it.
 * **The GitHub Scaffolder module is enabled but unused.** RHDH preinstalls `backstage-plugin-scaffolder-backend-module-github` disabled; without the `disabled: false` entry in `dynamic-plugins.yaml`, a template that publishes fails with `Template action with ID 'publish:github:pull-request' is not registered`. Enabling it takes the registered action count from 17 to 30. It is on here so the publishing path works the moment auth is in place.
 * **Do not use a `/` in a branch name set as `CATALOG_BRANCH`.** Backstage parses the ref in `/blob/<ref>/<path>` as a single path segment, so `feat/my-branch` resolves as ref `feat` with the remainder read as a directory. Use `feat-my-branch`. `main` is unaffected.
