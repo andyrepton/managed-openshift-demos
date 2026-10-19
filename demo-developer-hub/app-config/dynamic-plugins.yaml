@@ -46,10 +46,10 @@ data:
       #
       # The key under dynamicPlugins.frontend MUST equal `scalprum.name` from the
       # plugin's package.json, or the plugin is discovered but never loaded.
-      - package: 'oci://quay.io/andyrepton/aro-planner:1.5.8!aro-planner-backstage-plugin-aro-planner-backend'
+      - package: 'oci://quay.io/andyrepton/rhdh-plugins:aro-planner-1.5.8!aro-planner-backstage-plugin-aro-planner-backend'
         disabled: false
 
-      - package: 'oci://quay.io/andyrepton/aro-planner:1.5.8!aro-planner-backstage-plugin-aro-planner'
+      - package: 'oci://quay.io/andyrepton/rhdh-plugins:aro-planner-1.5.8!aro-planner-backstage-plugin-aro-planner'
         disabled: false
         pluginConfig:
           dynamicPlugins:
@@ -66,3 +66,30 @@ data:
                       text: Deployment Planner
                 scaffolderFieldExtensions:
                   - importName: AroClusterPlannerFieldExtension
+
+      # Dev Spaces self-service, from ../demo-rhdh-devspaces-self-service.
+      #
+      # Unlike the planner, the backend here WRITES to the cluster: it creates
+      # a namespace, a quota and a limit range for the signed-in user. That
+      # needs a ServiceAccount with those permissions, which is not the one
+      # RHDH runs as by default - apply
+      # ../demo-rhdh-devspaces-self-service/rbac/provisioner.yaml first.
+      #
+      # It refuses guest and anonymous callers outright rather than relying on
+      # auth.environment staying as it is, since guest sign-in is an
+      # installation-wide switch another demo could flip.
+      - package: 'oci://quay.io/andyrepton/rhdh-plugins:devspaces-self-service-0.1.2!devspaces-backstage-plugin-devspaces-self-service-backend'
+        disabled: false
+
+      - package: 'oci://quay.io/andyrepton/rhdh-plugins:devspaces-self-service-0.1.2!devspaces-backstage-plugin-devspaces-self-service'
+        disabled: false
+        pluginConfig:
+          dynamicPlugins:
+            frontend:
+              devspaces-self-service.backstage-plugin-devspaces-self-service:
+                dynamicRoutes:
+                  - path: /devspaces-self-service
+                    importName: DevSpacesSelfServicePage
+                    menuItem:
+                      icon: code
+                      text: Request a Dev Space

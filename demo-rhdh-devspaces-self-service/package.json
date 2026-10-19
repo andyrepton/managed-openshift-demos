@@ -1,0 +1,25 @@
+{
+  "name": "demo-rhdh-devspaces-self-service",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Self-service OpenShift Dev Spaces requests for Red Hat Developer Hub",
+  "workspaces": [
+    "plugins/*"
+  ],
+  "packageManager": "yarn@4.17.1",
+  "engines": {
+    "node": "24"
+  },
+  "scripts": {
+    "test": "yarn workspaces foreach --all --topological run test",
+    "build": "yarn workspaces foreach --all --topological run build",
+    "typecheck": "yarn workspaces foreach --all --topological run typecheck"
+  },
+  "resolutions": {
+    "got": "^11.8.5",
+    "adm-zip": "^0.6.1"
+  },
+  "devDependencies": {
+    "@backstage/cli-defaults": "^0.1.0"
+  }
+}

@@ -123,3 +123,21 @@ data:
         # Must support tool calling - the assistant is useless without it, since
         # every number it quotes comes from a tool rather than from the model.
         model: qwen38-27b
+
+    # Dev Spaces self-service (../demo-rhdh-devspaces-self-service).
+    #
+    # This plugin creates namespaces, quotas and limit ranges for the
+    # signed-in user. The credential it uses is NOT the pod's own
+    # ServiceAccount - RHDH runs as `default`, shared by every plugin here -
+    # but a dedicated one mounted at the path below. Without this key the
+    # plugin falls back to `default`, which cannot create namespaces, and
+    # says so at startup rather than failing on first submit.
+    devspacesSelfService:
+      credentialDir: /var/run/secrets/devspaces-provisioner
+
+      # The in-cluster model endpoint, from demo-vllm-model-serving. Left
+      # unset deliberately: that demo is not deployed on this cluster and
+      # there is no GPU node for it, so the option is hidden rather than
+      # offered and broken. Set it to the KServe predictor to enable it:
+      #   http://devstral-predictor.vllm-model-serving.svc.cluster.local:8000/v1
+      # inClusterAiBaseUrl: ''

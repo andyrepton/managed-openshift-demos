@@ -14,6 +14,21 @@ The UDI tracks RHEL 9, so its runtimes lag:
 
 Java 17, Go, Maven, Git, podman and the rest are inherited unchanged.
 
+It also carries the approved AI coding assistants, pinned and digest-verified:
+
+| Tool | Version | Where |
+|:---|:---|:---|
+| Kilo Code | 7.8.14 | `/opt/extensions/kilocode.vsix` |
+| OpenCode (editor shim) | 1.0.0 | `/opt/extensions/opencode.vsix` |
+| OpenCode CLI | 1.19.3 | `/usr/bin/opencode` |
+
+**One image serves every combination.** The `.vsix` files are inert until a
+path is listed in `DEFAULT_EXTENSIONS`, which che-code reads at editor startup,
+so no agent / Kilo / OpenCode / both is a devfile string rather than four
+images. Baking them in also means nothing is downloaded when a workspace
+starts: ~190 MB per start otherwise, and a hard failure on a disconnected
+cluster.
+
 ## Prerequisites
 
 - [`openshift-devspaces/`](../openshift-devspaces/) deployed (operator + CheCluster)
@@ -93,9 +108,41 @@ dotnet --version    # 10.0.112
 Workspaces must be **new**. Reopening a stopped workspace keeps the old
 image and the old `/projects` volume.
 
+## Tracking what is in the image
+
+[`extensions.json`](extensions.json) is the single source of truth. The
+Containerfile reads it at build time and **fails the build on a digest
+mismatch**; nothing is pulled from `latest`, because an image whose contents
+depend on the day it was built cannot be reasoned about.
+
+```bash
+python3 -I scripts/check-extensions.py           # report drift
+python3 -I scripts/check-extensions.py --check   # exit 1 if a pin is stale
+```
+
+It never edits the manifest. Bumping a version means changing the version
+**and** the sha256 together, and a script that rewrote both from whatever
+upstream served today would defeat the point of pinning them.
+
+Publish what the built image contains, so a self-service form can offer
+exactly that rather than a hardcoded list that drifts:
+
+```bash
+python3 -I scripts/publish-capabilities.py --apply
+```
+
+That writes a `udi-capabilities` ConfigMap read by
+[demo-rhdh-devspaces-self-service](../demo-rhdh-devspaces-self-service).
+
 ## Writing a custom UDI: what actually matters
 
 Most of this is not obvious, and getting it wrong fails quietly.
+
+### Extensions go in `/opt`, like everything else
+
+`/opt/extensions`, outside the persisted home, group-0 readable for the
+arbitrary UID. A `.vsix` under `/home/user` would vanish on first start when
+the PVC mounts over it — the same trap as any other tool.
 
 ### Never install into `/home/user`
 

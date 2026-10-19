@@ -1,0 +1,10 @@
+{
+  "extends": "@backstage/cli/config/tsconfig.json",
+  "include": ["src"],
+  "exclude": ["node_modules", "dist", "dist-dynamic", "dist-scalprum"],
+  "compilerOptions": {
+    "outDir": "../../dist-types/plugins/devspaces-self-service",
+    "rootDir": ".",
+    "types": ["node"]
+  }
+}

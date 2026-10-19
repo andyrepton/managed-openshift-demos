@@ -1,0 +1,142 @@
+# Permissions for the Dev Spaces self-service plugin.
+#
+# This is the only thing in this repo that lets RHDH create a namespace, so
+# the scoping is the point and is worth reading before applying.
+#
+# What it can do:
+#   * create and read namespaces, resource quotas, limit ranges and secrets
+#   * read the CheCluster, for the dashboard URL
+#   * read one ConfigMap, for the list of tools baked into the UDI
+#
+# What it deliberately cannot do:
+#   * DELETE anything. Removing a namespace is a human decision; the plugin
+#     has no verb for it, so a bug in it cannot take one away.
+#   * touch pods, deployments, nodes, RBAC or anything in another namespace's
+#     workloads.
+#   * escalate: no bind, no escalate, no impersonate. Without those a
+#     ServiceAccount cannot grant itself more than it already has.
+#
+# Namespace creation cannot be restricted by name in RBAC - there is no
+# resourceName matching on create, because the object does not exist yet. The
+# plugin enforces the `<username>-devspaces` pattern itself, from the signed-in
+# caller's identity rather than from the request body. Treat that as the
+# control and this as the backstop.
+#
+# Everything the plugin creates is labelled
+# app.kubernetes.io/managed-by=devspaces-self-service, so the whole blast
+# radius is one selector away:
+#
+#   oc get ns -l app.kubernetes.io/managed-by=devspaces-self-service
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: devspaces-provisioner
+  namespace: rhdh
+  labels:
+    app.kubernetes.io/managed-by: devspaces-self-service
+---
+# A token for that ServiceAccount, mounted into the RHDH pod at its own path.
+#
+# RHDH runs as the `default` ServiceAccount, shared by every plugin in the
+# pod. Granting `default` the right to create namespaces would grant it to all
+# of them, so instead this token is mounted alongside and named in app-config
+# under devspacesSelfService.credentialDir.
+#
+# This is a long-lived token rather than a projected one, because a projected
+# `serviceAccountToken` volume can only project the pod's OWN ServiceAccount -
+# there is no way to project a second one. The trade is a credential that does
+# not rotate; it is bound to a ServiceAccount that can do four things in one
+# namespace shape, and `oc delete secret` revokes it immediately.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: devspaces-provisioner-token
+  namespace: rhdh
+  labels:
+    app.kubernetes.io/managed-by: devspaces-self-service
+  annotations:
+    kubernetes.io/service-account.name: devspaces-provisioner
+type: kubernetes.io/service-account-token
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: devspaces-self-service-provisioner
+  labels:
+    app.kubernetes.io/managed-by: devspaces-self-service
+rules:
+  # Namespaces. No delete: see the note above.
+  - apiGroups: ['']
+    resources: ['namespaces']
+    verbs: ['get', 'list', 'create', 'patch', 'update']
+
+  # The objects that make a namespace a bounded one. Without the quota and
+  # the limit range this plugin would hand out unbounded namespaces, which is
+  # the opposite of its purpose.
+  - apiGroups: ['']
+    resources: ['resourcequotas', 'limitranges']
+    verbs: ['get', 'list', 'create', 'patch', 'update']
+
+  # The AI credential, mounted into workspaces by Dev Spaces.
+  #
+  # `get` is included because server-side apply needs to read what is there.
+  # This does mean the token can read Secrets in any namespace, which is the
+  # sharpest edge in this file. Scoping it per-namespace is not possible for
+  # namespaces that do not exist yet; if that trade is unacceptable, drop the
+  # third-party AI option and this rule with it.
+  - apiGroups: ['']
+    resources: ['secrets']
+    verbs: ['get', 'create', 'patch', 'update']
+
+  # Read-only, for the dashboard URL shown in the factory link.
+  - apiGroups: ['org.eclipse.che']
+    resources: ['checlusters']
+    verbs: ['get', 'list']
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: devspaces-self-service-provisioner
+  labels:
+    app.kubernetes.io/managed-by: devspaces-self-service
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: devspaces-self-service-provisioner
+subjects:
+  - kind: ServiceAccount
+    name: devspaces-provisioner
+    namespace: rhdh
+---
+# Reading the UDI's published tool list. A Role rather than part of the
+# ClusterRole above, because it is one ConfigMap in one namespace and there is
+# no reason for the token to read ConfigMaps anywhere else.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: devspaces-self-service-udi-reader
+  namespace: custom-udi
+  labels:
+    app.kubernetes.io/managed-by: devspaces-self-service
+rules:
+  - apiGroups: ['']
+    resources: ['configmaps']
+    resourceNames: ['udi-capabilities']
+    verbs: ['get']
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: devspaces-self-service-udi-reader
+  namespace: custom-udi
+  labels:
+    app.kubernetes.io/managed-by: devspaces-self-service
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: devspaces-self-service-udi-reader
+subjects:
+  - kind: ServiceAccount
+    name: devspaces-provisioner
+    namespace: rhdh
