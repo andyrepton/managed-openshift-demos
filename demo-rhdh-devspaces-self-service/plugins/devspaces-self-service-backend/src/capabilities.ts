@@ -35,6 +35,12 @@ export interface Capabilities {
   cheUrl?: string;
   /** In-cluster model endpoint, when one is configured and reachable. */
   inClusterAi?: { baseUrl: string; available: boolean; reason?: string };
+  /**
+   * The che-code editor definition, verbatim from the editors-definitions
+   * ConfigMap. Needed to build the DevWorkspaceTemplate, because nothing
+   * supplies an editor to a DevWorkspace automatically.
+   */
+  editorDefinition?: string;
   /** Why something above is missing. Shown to the user, not swallowed. */
   problems: string[];
 }
@@ -47,6 +53,8 @@ export interface CapabilitiesOptions {
   /** CheCluster to read the dashboard URL from. */
   cheNamespace?: string;
   cheName?: string;
+  /** Key in the editors-definitions ConfigMap. */
+  editorKey?: string;
   /** Configured in app-config; absent means the option is not offered. */
   inClusterAiBaseUrl?: string;
 }
@@ -117,6 +125,7 @@ export async function readCapabilities(opts: CapabilitiesOptions): Promise<Capab
     udiConfigMap = 'udi-capabilities',
     cheNamespace = 'openshift-operators',
     cheName = 'devspaces',
+    editorKey = 'che-code.yaml',
     inClusterAiBaseUrl,
   } = opts;
 
@@ -174,6 +183,29 @@ export async function readCapabilities(opts: CapabilitiesOptions): Promise<Capab
       err instanceof NoCredentialError
         ? 'No cluster credential, so the Dev Spaces URL could not be read.'
         : `Could not read the CheCluster: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
+  try {
+    const res = await kube.get(
+      `/api/v1/namespaces/${cheNamespace}/configmaps/editors-definitions`,
+    );
+    if (res.status === 200) {
+      const data = (res.body as { data?: Record<string, string> }).data ?? {};
+      const definition = data[editorKey];
+      if (definition) result.editorDefinition = definition;
+      else problems.push(`editors-definitions has no ${editorKey} entry.`);
+    } else {
+      problems.push(
+        `Could not read the editor definitions: HTTP ${res.status}. Workspaces ` +
+          'cannot be created without one, though the namespace and quota still can.',
+      );
+    }
+  } catch (err) {
+    problems.push(
+      err instanceof NoCredentialError
+        ? 'No cluster credential, so the editor definition could not be read.'
+        : `Could not read the editor definitions: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
 

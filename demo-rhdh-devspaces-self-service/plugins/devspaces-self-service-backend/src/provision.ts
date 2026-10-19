@@ -18,10 +18,13 @@
  */
 
 import type { Capabilities } from './capabilities';
+import { buildDevfile } from './devfile';
 import { assertOk, KubeClient, KubeError } from './kube';
 import { MANAGED_BY, namespaceFor } from './manifests';
-import { manifestsToApply } from './plan';
+import { manifestsToApply, STOCK_UDI } from './plan';
+import { computeSizing } from './sizing';
 import type { DevSpaceRequest, ProvisionResult } from './types';
+import { devWorkspaceManifest, editorTemplateYaml, workspaceUrl } from './workspace';
 
 export class RefusedError extends Error {}
 
@@ -123,8 +126,102 @@ export async function provision(opts: ProvisionOptions): Promise<ProvisionResult
     applied.push({ kind: m.kind, name: m.name, created: !existedBefore });
   }
 
-  const result: ProvisionResult = { namespace, applied, ...openWhere(opts) };
-  return result;
+  // --- The workspace itself --------------------------------------------
+  //
+  // Everything above is the container the workspace runs in. This is the
+  // workspace, and it is what makes the assistant selection real: the
+  // generated devfile's components - including DEFAULT_EXTENSIONS - become
+  // the DevWorkspace template, so che-code installs exactly what was ticked.
+  //
+  // It is best-effort on purpose. A namespace with a quota is a useful
+  // outcome on its own, and failing the whole request because an editor
+  // definition could not be read would throw away work already done.
+  const workspace = await createWorkspace(opts, namespace, applied);
+
+  return { namespace, applied, ...openWhere(opts, workspace), ...workspace };
+}
+
+interface WorkspaceOutcome {
+  workspaceName?: string;
+  workspaceError?: string;
+}
+
+async function createWorkspace(
+  opts: ProvisionOptions,
+  namespace: string,
+  applied: ProvisionResult['applied'],
+): Promise<WorkspaceOutcome> {
+  const { kube, request, capabilities, userEntityRef } = opts;
+
+  if (!capabilities.editorDefinition) {
+    return {
+      workspaceError:
+        'The namespace and quota were created, but no workspace: the che-code editor ' +
+        'definition could not be read from the editors-definitions ConfigMap. Grant the ' +
+        'provisioner read access to it, then submit again.',
+    };
+  }
+
+  const name = `${request.username}-devspace`;
+  const editorTemplateName = `che-code-${name}`;
+
+  try {
+    const templateYaml = editorTemplateYaml(
+      capabilities.editorDefinition,
+      editorTemplateName,
+      namespace,
+      request.username,
+    );
+    const templatePath =
+      `/apis/workspace.devfile.io/v1alpha2/namespaces/${namespace}` +
+      `/devworkspacetemplates/${editorTemplateName}`;
+    assertOk(await kube.apply(templatePath, templateYaml), 'applying the editor template');
+    applied.push({ kind: 'DevWorkspaceTemplate', name: editorTemplateName, created: true });
+
+    const devfile = buildDevfileFor(opts);
+    const dwPath =
+      `/apis/workspace.devfile.io/v1alpha2/namespaces/${namespace}/devworkspaces/${name}`;
+    const manifest = devWorkspaceManifest({
+      name,
+      namespace,
+      username: request.username,
+      editorTemplateName,
+      devfile,
+      started: true,
+      userEntityRef,
+    });
+    assertOk(await kube.apply(dwPath, manifest), 'applying the DevWorkspace');
+    applied.push({ kind: 'DevWorkspace', name, created: true });
+
+    return { workspaceName: name };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return {
+      workspaceError:
+        `The namespace and quota were created, but the workspace was not: ${message}. ` +
+        'The generated devfile in the preview can still be used by hand.',
+    };
+  }
+}
+
+/** The components the devfile would carry, for the DevWorkspace template. */
+function buildDevfileFor(opts: ProvisionOptions): {
+  components?: unknown[];
+  projects?: unknown[];
+} {
+  const devfile = buildDevfile({
+    request: opts.request,
+    sizing: computeSizing(opts.request),
+    available: opts.capabilities.agents,
+    image: opts.capabilities.image ?? STOCK_UDI,
+    ...(opts.capabilities.inClusterAi
+      ? { inClusterBaseUrl: opts.capabilities.inClusterAi.baseUrl }
+      : {}),
+  }) as { components?: unknown[]; projects?: unknown[] };
+  return {
+    ...(devfile.components ? { components: devfile.components } : {}),
+    ...(devfile.projects ? { projects: devfile.projects } : {}),
+  };
 }
 
 /**
@@ -147,15 +244,26 @@ export async function provision(opts: ProvisionOptions): Promise<ProvisionResult
  * whether following this link reproduces what was requested, so the UI can
  * say so rather than implying a fidelity it does not have.
  */
-function openWhere(opts: ProvisionOptions): {
-  openUrl?: string;
-  openLabel?: string;
-  exact?: boolean;
-} {
+function openWhere(
+  opts: ProvisionOptions,
+  workspace: WorkspaceOutcome,
+): { openUrl?: string; openLabel?: string; exact?: boolean } {
   const cheUrl = opts.capabilities.cheUrl;
   if (!cheUrl) return {};
-
   const base = cheUrl.replace(/\/+$/, '');
+
+  // The workspace we just made, carrying the image and the assistants that
+  // were ticked. `exact` says this is the thing that was asked for.
+  if (workspace.workspaceName) {
+    return {
+      openUrl: workspaceUrl(base, namespaceFor(opts.request.username), workspace.workspaceName),
+      openLabel: 'Open your Dev Space',
+      exact: true,
+    };
+  }
+
+  // Fallbacks for when the workspace could not be created. These do NOT
+  // carry the selection, and the UI says so.
   if (opts.request.repoUrl) {
     return {
       openUrl: `${base}#${opts.request.repoUrl}`,

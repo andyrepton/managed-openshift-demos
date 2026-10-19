@@ -148,6 +148,37 @@ The namespace is always `<caller>-devspaces`, derived from the signed-in
 identity. A username in the request body would be a way to provision in
 someone else's name, so the body's is ignored.
 
+## How the assistant selection reaches the workspace
+
+Ticking Kilo or OpenCode puts a `DEFAULT_EXTENSIONS` entry in the workspace's
+container, and che-code installs from those paths at editor startup. Nothing is
+downloaded; the `.vsix` files are already in the image.
+
+For that to mean anything, **this plugin creates the workspace** rather than
+leaving a devfile for someone to apply. Earlier it did the latter, and the
+effect was that the checkboxes changed a file nobody used: Dev Spaces creates
+workspaces from whichever devfile it is handed, so one started from the
+dashboard got the cluster default image and no extensions.
+
+Creating a workspace by hand means doing what the dashboard does:
+
+* **A `DevWorkspaceTemplate` for the editor.** Verified on Dev Spaces 3.30 -- a
+  `DevWorkspace` with no `contributions` gets no editor injected and no template
+  created for it. The che-code definition is copied verbatim out of the
+  `editors-definitions` ConfigMap; its `commands`, `components` and `events`
+  become the template's `spec`, which is exactly what a dashboard-made template
+  contains.
+* **A `DevWorkspace`** referencing that template, with the generated components
+  as its own. This is where `DEFAULT_EXTENSIONS` lands.
+
+The editor definition is copied as YAML rather than parsed and re-emitted.
+Server-side apply accepts YAML, so a document we do not own goes through
+untouched and the backend needs no YAML parser.
+
+Workspace creation is **best-effort**. A namespace with a quota is useful on its
+own, so if the editor definition cannot be read the request still succeeds and
+says what was and was not created, rather than discarding the work.
+
 ## Sizing
 
 Totals divide evenly across the workspaces requested, then:

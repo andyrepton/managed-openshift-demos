@@ -77,6 +77,8 @@ export interface ProvisionResult {
   openUrl?: string;
   openLabel?: string;
   exact?: boolean;
+  workspaceName?: string;
+  workspaceError?: string;
 }
 
 async function fail(res: Response, fallback: string): Promise<never> {

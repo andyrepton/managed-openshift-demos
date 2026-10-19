@@ -65,4 +65,8 @@ export interface ProvisionResult {
    * the assistant selection. The UI says so rather than implying otherwise.
    */
   exact?: boolean;
+  /** The DevWorkspace created, when one was. */
+  workspaceName?: string;
+  /** Why no workspace was created, when the namespace still was. */
+  workspaceError?: string;
 }
