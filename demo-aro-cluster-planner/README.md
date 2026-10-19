@@ -242,6 +242,72 @@ This is the only part of the planner that talks to Kubernetes, which is why it
 lives in the backend plugin and not in `@aro-planner/common`: common is bundled
 wholesale into the browser, and a cluster token has no business there.
 
+## Storage: two kinds, three backends
+
+The form asks for two capacities, because they are different things bought
+differently.
+
+| Capacity | Default backend | Alternative |
+| --- | --- | --- |
+| **Block** (GiB) — PVCs | Azure managed disks | ODF |
+| **Object** (GiB) — buckets | Azure Blob, Hot LRS, live-priced | ODF |
+
+Azure Blob comes from the Retail Prices API like everything else, and the meter
+is **graduated**: $0.0196/GB/month for the first 50 TB, then $0.018816, then
+$0.018032. Those are bands, not cliffs — 100 TB is the first 50 TB at one rate
+and the rest at another. Picking a single band and multiplying is wrong in one
+direction or the other depending on which you pick, so the bands are applied
+cumulatively.
+
+Blob is also matched on `productName eq 'General Block Blob v2'`, not on the
+meter name alone. The legacy `Blob Storage` product publishes a meter with an
+identical name at different prices, so the meter name by itself returns both and
+the answer depends on arrival order.
+
+### What selecting ODF does
+
+Three things, all of them consequences of running Ceph yourself rather than
+buying storage as a service:
+
+1. **Three dedicated nodes**, at ODF's documented minimum of 16 vCPU / 64 GiB
+   each ([infrastructure requirements](https://docs.redhat.com/en/documentation/red_hat_openshift_data_foundation/4.20/html/planning_your_deployment/infrastructure-requirements_rhodf)).
+   They run no application workload, and their cores are licensed like any other
+   worker. They are a separate pool from the worker sizing, not folded into it.
+2. **3x replication.** 1000 GiB usable is 3000 GiB provisioned and paid for.
+3. **A dedicated cluster becomes mandatory.** ODF labels nodes, claims raw block
+   devices and runs cluster-scoped privileged daemons; a tenant namespace on a
+   shared cluster can provide none of that. The shared-namespace option is
+   disabled with that reason, and the wizard moves the selection rather than
+   leaving an impossible combination on screen.
+
+The wizard shows a large, non-dismissible warning pointing at Azure Blob, and
+the cost panel keeps the Blob figure visible as an **excluded** line whenever ODF
+is serving the buckets. A comparison you have to toggle back and forth to see is
+not a comparison.
+
+For 1 TiB of object storage in `westeurope`, measured against the live API:
+
+```
+objectBackend=azure-blob     total $3,522.62/mo
+  IN   Object storage - Azure Blob (Hot LRS)              $    20.07/mo
+
+objectBackend=odf            total $7,367.67/mo
+  IN   ODF nodes - Standard_D16as_v5 x3                   $ 1,822.08/mo
+  IN   ARO licence - ODF nodes x3                         $ 1,497.96/mo
+  IN   ODF backing disks - P50 (Premium SSD)              $   545.09/mo
+  OUT  Object storage - same capacity on Azure Blob       $    20.07/mo
+```
+
+**That is the point of the feature**: $20 against $3,865, about 190x, and most
+of it is nodes and licensing rather than disk.
+
+None of which means never use ODF. ReadWriteMany volumes, an S3 endpoint inside
+the cluster, one storage layer across clouds, or data that must not cross the
+cluster boundary are all real reasons, and the warning says "investigate the
+alternative", not "do not do this". It exists because choosing Ceph *to avoid
+using a cloud storage service* is how teams end up paying far more for less
+durability.
+
 ## Generated artifacts
 
 `emitBundle()` turns a finished plan into the files a request needs. Pure, so the same
@@ -311,6 +377,8 @@ packages/aro-planner-common/     Pure TypeScript. No React, no cluster.
   src/compare.ts                 Deployment model comparison
   src/netpol.ts                  NetworkPolicy generation
   src/operators.ts               Approved operators and their capacity
+  src/odf.ts                     ODF node minimums, replication, the warning
+  src/objectStorage.ts           Azure Blob graduated bands
   src/azurePrices.ts             Retail Prices API client (server-side only)
   src/emit/                      plan.md, tfvars and manifests from a finished plan
   src/cli.ts                     yarn estimate
@@ -336,6 +404,9 @@ All pure logic lives in `aro-planner-common` so the wizard, the backend and the 
 * **A VM SKU query returns six rows, not one** -- Linux and Windows, each in standard, Spot and Low Priority. Spot is $0.085/hr against $0.46 on-demand, so taking the wrong row understates a cluster fivefold.
 * The OData filter fails between 15 and 18 `armSkuName` clauses, and the endpoint rate-limits with 429. Requests are chunked at 12 and retried; a 400 is never retried.
 * The Retail Prices API sends **no CORS headers**, so pricing must run server-side.
+* **The Blob "Data Stored" meter is graduated, and the API returns one row per band.** Three rows come back with the same `meterId`, distinguished only by `tierMinimumUnits` (0, 51200, 512000). Taking the first row overcharges above 50 TB; taking the last undercharges below it. Both are wrong and neither looks wrong.
+* **`General Block Blob v2` and the legacy `Blob Storage` publish identically named meters** at slightly different prices, so matching on `meterName` alone returns both and the result depends on arrival order. The same trap as the disk meters and Spot VM pricing - several plausible rows, one correct.
+* **ODF node candidates have to be priced separately from the workload profile.** They are sized by ODF's own 16 vCPU / 64 GiB minimum, not by the profile, so a memory-heavy request would otherwise filter the general-purpose sizes out of the price query and ODF would silently cost nothing - the worst possible failure for a comparison about cost.
 * **A PackageManifest cannot tell you what an operator costs in capacity.** `currentCSVDesc` carries `annotations`, `description`, `installModes`, CRDs, `version` and little else — no deployment spec, no resource requests. The operand is worse: three Kafka brokers exist only in a CR nobody has created yet. So the live catalog answers "is this installable here", and the footprints stay curated. The half that most needs to be accurate is exactly the half the API cannot supply.
 * **RHDH mounts no ServiceAccount token by default**, and the Deployment is operator-managed, so `automountServiceAccountToken` has to go through `spec.deployment.patch` on the `Backstage` CR. Editing the Deployment directly is reverted.
 * **`oc get packagemanifest -o json` shows channels in catalog order, not preference order.** Reading `channels[0]` returned RHBK 22.0.13 while the default channel was on 26.6.7. Match on `status.defaultChannel`.
