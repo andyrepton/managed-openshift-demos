@@ -189,6 +189,7 @@ operator runs pods like anything else.
 | Red Hat build of Keycloak | `rhbk-operator` | `redhat-operators` | 6.1 vCPU / 4.0 GiB |
 | Streams for Apache Kafka | `amq-streams` | `redhat-operators` | 4.7 vCPU / 9.4 GiB |
 | Apache Flink | `flink-kubernetes-operator` | `community-operators` | 2.25 vCPU / 4.5 GiB |
+| OpenShift Data Foundation | `odf-operator` | `redhat-operators` | 3 dedicated nodes — see below |
 
 **The two halves of that table have different provenance, and the UI keeps them
 apart.** Availability is live: the backend lists PackageManifests from this
@@ -221,6 +222,15 @@ of CPU would be theatre.
 Flink is from **community-operators**: there is no Red Hat-supported Flink in the
 catalog. It installs, it carries no support, and the wizard and the plan document
 both say so rather than letting it sit unmarked next to two supported products.
+
+**ODF is in the list but behaves differently.** Its capacity is three dedicated
+nodes costed as their own pool, so its worker-pod footprint is deliberately
+**zero** — a figure there would be added to the worker sizing as well and bill
+the same hardware twice. It is also the one entry whose checkbox has no state of
+its own: it reflects the storage backends, and ticking it writes there. The
+backend derives it from those backends rather than trusting the client, and
+strips it when no backend uses it, so the cost panel and the plan document
+cannot disagree about whether ODF was requested.
 
 ### Letting the backend see OperatorHub
 

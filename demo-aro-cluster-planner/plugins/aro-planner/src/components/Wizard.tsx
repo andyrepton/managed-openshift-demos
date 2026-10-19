@@ -593,6 +593,18 @@ export function Wizard({ onPlanChange, initial }: WizardProps) {
             <OperatorSection
               selected={form.operators ?? []}
               onChange={(ids: OperatorId[]) => set('operators', ids)}
+              odfSelected={odfOn}
+              // Ticking ODF here moves both storage backends, because that is
+              // where ODF actually lives. Setting both keeps one meaning for
+              // "ODF is on"; a user who wants it for only one kind changes
+              // the other selector back, and the checkbox stays ticked.
+              onOdfChange={(on: boolean) =>
+                setForm(f => ({
+                  ...f,
+                  blockBackend: on ? 'odf' : 'azure-disk',
+                  objectBackend: on ? 'odf' : 'azure-blob',
+                }))
+              }
             />
 
             <NetworkSection

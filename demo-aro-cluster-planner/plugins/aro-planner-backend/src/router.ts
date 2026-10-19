@@ -132,6 +132,7 @@ function parsePlanRequest(body: unknown): SizingRequest {
   const blockBackend = b.blockBackend === 'odf' ? 'odf' : 'azure-disk';
   const objectBackend = b.objectBackend === 'odf' ? 'odf' : 'azure-blob';
 
+
   // Unknown ids are rejected rather than dropped. Silently ignoring one would
   // size and price a cluster for fewer operators than the caller asked for,
   // and the response looks identical to a correct one.
@@ -148,6 +149,14 @@ function parsePlanRequest(body: unknown): SizingRequest {
     }
     operators = [...new Set(b.operators as OperatorId[])];
   }
+
+  // ODF's presence in the operator list follows from the storage backends, not
+  // from a checkbox, and it is derived here rather than trusted from the client
+  // so the plan document and the cost panel cannot disagree about whether it
+  // was requested. Stripped first, so a stale client cannot leave it selected
+  // with no ODF storage behind it.
+  operators = operators.filter(id => id !== 'odf');
+  if (blockBackend === 'odf' || objectBackend === 'odf') operators.push('odf');
 
   return {
     flavour,
