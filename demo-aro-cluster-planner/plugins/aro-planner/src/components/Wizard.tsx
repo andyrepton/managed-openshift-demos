@@ -59,7 +59,11 @@ const INITIAL: PlanInput = {
   flavour: 'hcp',
   highAvailability: true,
   dayTwo: false,
-  deploymentModel: 'dedicated-cluster',
+  // The cheapest option a team is likely to need, and the one that should have
+  // to be argued out of rather than into. Note the first price the panel shows
+  // is therefore a DEMO_MULTIPLIERS figure, not an Azure meter - it is marked
+  // "~" and carries the warning, which is the point.
+  deploymentModel: 'shared-namespace',
   endpoints: [],
 };
 
