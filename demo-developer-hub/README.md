@@ -141,10 +141,23 @@ same name.
    oc -n rhdh get secret rhdh-secrets -o jsonpath='{.data.CATALOG_BRANCH}' | base64 -d
    ```
 
-4. Either wait for the next catalog refresh or force one:
+4. Wait for the next catalog refresh, or force one.
+
+   **Restarting the deployment does not do this.** The catalog lives in
+   PostgreSQL and survives the pod, so a restart changes nothing. Neither does
+   refreshing the `Location` entity: `org.yaml` is pulled in as a *target* of
+   `all.yaml` rather than being a `Location` of its own, so the refresh stops at
+   the parent and never re-reads the file your user is in.
+
+   What works is refreshing an entity that `org.yaml` already manages, which
+   re-reads the file it came from and picks up its new siblings. In the UI, open
+   any existing user (for example **andyrepton**) and use the refresh button. Or
+   over the API, with a token:
 
    ```bash
-   oc -n rhdh rollout restart deployment/backstage-developer-hub
+   curl -X POST -H "Authorization: Bearer <token>" -H 'Content-Type: application/json' \
+     -d '{"entityRef":"user:default/andyrepton"}' \
+     "https://<your-rhdh-host>/api/catalog/refresh"
    ```
 
 5. Confirm the entity landed before they try to sign in. A missing `User` and a
@@ -195,6 +208,7 @@ invite-one-person mode.
 * **`catalog/org.yaml` is the access list, and nothing else is.** GitHub will authenticate anyone on the internet with an account; `usernameMatchingUserEntityName` is what turns that into a closed list. Adding a person is one `User` entity. Never set `dangerouslyAllowSignInWithoutUserInCatalog` with a public identity provider -- behind a corporate IdP that flag is defensible, here it would make the instance world-open.
 * **`User` must be in the catalog `rules` allow list.** It is easy to miss, and the failure is quiet: `org.yaml` also contains Groups, so with `User` omitted the Groups load, the file looks fine, and the only thing dropped is the entity that gates access. Sign-in then fails with `unable to resolve user identity` and nothing appears in the logs.
 * **`auth.session.secret` is mandatory for GitHub auth.** Without it sign-in fails *after* the GitHub callback, which reads like a bad callback URL and is not.
+* **A rollout restart does not refresh the catalog.** Entities live in PostgreSQL and outlive the pod, so a restart re-reads nothing. `POST /api/catalog/refresh` on the `Location` does not reach `org.yaml` either, because that file is a *target* of `all.yaml` rather than a `Location` in its own right - the refresh stops at the parent and the new `User` never appears. Refresh an entity the file already manages instead, such as an existing user, and the whole file is re-read. Everything returns 200 throughout, so the only symptom is that the person still cannot sign in.
 * **A private GitHub App 404s for everyone but its owner.** Only the owning account can authorize a private App, so a second person gets a 404 at `github.com/login/oauth/authorize` -- not a permission error, and nothing in the RHDH logs, because the request never reaches RHDH. It reads like a dead callback URL. The owner's own sign-in keeps working throughout, so this only ever surfaces when someone else tries.
 * **The visibility switch moves once the App exists.** *Where can this GitHub App be installed?* is on the registration form and nowhere else; afterwards it is **Advanced -> Danger zone -> Make public**, which is not where you go looking for an install setting. Making the App public does not widen who can use this instance -- it lets anyone *start* the OAuth flow, and `catalog/org.yaml` still decides who finishes it.
 * **An org-owned App can stay private and still admit other people**, because members of the owning organization may authorize it. A personal-account App has no such middle ground: it is you, or it is public. Transferring the App to an organization and adding the person there is the alternative if public is unacceptable.
