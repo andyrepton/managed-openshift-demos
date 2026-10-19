@@ -50,4 +50,14 @@ spec:
         template:
           spec:
             serviceAccountName: default
+            # The deployment planner reads this cluster's OperatorHub to show
+            # whether a requested operator is actually installable here. RHDH
+            # mounts no token by default, so without this the plugin reports
+            # every operator as "not checked" and says why.
+            #
+            # The token is only as useful as the SA's permissions, which are
+            # get/list on packagemanifests in one namespace - see
+            # ../demo-aro-cluster-planner/rbac/operator-catalog-reader.yaml.
+            # Without that RoleBinding this line grants nothing.
+            automountServiceAccountToken: true
 

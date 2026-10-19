@@ -7,9 +7,13 @@ import {
   type PriceTable,
   type PricingOverrides,
   type EndpointRequest,
+  type OperatorId,
   type SizingRequest,
   type Sku,
   type WorkloadProfile,
+  OPERATOR_CATALOG,
+  OPERATOR_IDS,
+  isOperatorId,
   buildPriceTable,
   cheapestPriced,
   compareModels,
@@ -25,6 +29,7 @@ import {
 } from '@aro-planner/common';
 
 import { TtlCache } from './cache';
+import { OperatorHubClient } from './operatorHub';
 import { endpointsSchema } from './schema';
 import { mcpRouter } from './mcp';
 import { assistantRouter, type AssistantLogger } from './assistant/router';
@@ -42,6 +47,8 @@ export interface RouterOptions {
   assistant?: AssistantConfig;
   /** Backstage's logger, so a failed assistant turn leaves a trace. */
   logger?: AssistantLogger;
+  /** Injectable for tests. Defaults to the in-cluster OperatorHub. */
+  operatorHub?: OperatorHubClient;
 }
 
 /** The assistant is off unless a model endpoint has been configured for it. */
@@ -103,6 +110,23 @@ function parsePlanRequest(body: unknown): SizingRequest {
   }
   const tier = b.storageTier === 'standard-ssd' ? 'standard-ssd' : 'premium-ssd';
 
+  // Unknown ids are rejected rather than dropped. Silently ignoring one would
+  // size and price a cluster for fewer operators than the caller asked for,
+  // and the response looks identical to a correct one.
+  let operators: OperatorId[] = [];
+  if (b.operators !== undefined) {
+    if (!Array.isArray(b.operators)) throw new BadRequest('operators must be an array');
+    if (b.operators.length > OPERATOR_IDS.length) {
+      throw new BadRequest('operators contains more entries than there are operators');
+    }
+    for (const id of b.operators) {
+      if (!isOperatorId(id)) {
+        throw new BadRequest(`unknown operator "${String(id)}" - expected one of: ${OPERATOR_IDS.join(', ')}`);
+      }
+    }
+    operators = [...new Set(b.operators as OperatorId[])];
+  }
+
   return {
     flavour,
     region,
@@ -119,6 +143,7 @@ function parsePlanRequest(body: unknown): SizingRequest {
       : {}),
     ...(version ? { openshiftVersion: version } : {}),
     ...(storageGiB > 0 ? { storageGiB, storageTier: tier } : {}),
+    ...(operators.length > 0 ? { operators } : {}),
   };
 }
 
@@ -131,6 +156,7 @@ export function createRouter(options: RouterOptions = {}): Router {
     logger,
   } = options;
   const cache = new TtlCache<PriceTable>(ttlMs);
+  const operatorHub = options.operatorHub ?? new OperatorHubClient();
   const router = express.Router();
   router.use(express.json({ limit: '64kb' }));
 
@@ -180,6 +206,29 @@ export function createRouter(options: RouterOptions = {}): Router {
         allowDay2Only: req.query.dayTwo === 'true',
         ...(typeof version === 'string' && version ? { openshiftVersion: version } : {}),
       }),
+    });
+  });
+
+  /**
+   * The approved operators, with live availability from this cluster's OperatorHub.
+   *
+   * The footprints are curated constants; only `status` is live. A
+   * PackageManifest cannot tell us what a Kafka cluster will cost in vCPU, so
+   * the two halves of this response have genuinely different provenance and
+   * the UI labels them that way.
+   */
+  router.get('/operators', async (_req, res) => {
+    const statuses = await operatorHub.statuses();
+    res.json({
+      operators: OPERATOR_CATALOG.map(o => ({
+        ...o,
+        status: statuses.find(s => s.id === o.id) ?? {
+          id: o.id,
+          packageName: o.packageName,
+          availability: 'unknown',
+          reason: 'no status was returned for this operator',
+        },
+      })),
     });
   });
 

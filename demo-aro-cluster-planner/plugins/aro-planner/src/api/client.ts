@@ -4,6 +4,8 @@ import type {
   EndpointRequest,
   ModelComparison,
   NetworkPlan,
+  OperatorId,
+  OperatorOption,
   Recommendation,
   SizingRequest,
 } from '@aro-planner/common';
@@ -17,7 +19,56 @@ import type {
  * serialises these exact shapes, so there is nothing for a parallel definition to
  * add except an opportunity to disagree.
  */
-export type { CostEstimate, DeploymentModel, ModelComparison, NetworkPlan, Recommendation };
+export type {
+  CostEstimate,
+  DeploymentModel,
+  ModelComparison,
+  NetworkPlan,
+  OperatorId,
+  OperatorOption,
+  Recommendation,
+};
+
+/** Live availability of one operator, from `GET /operators`. */
+export interface OperatorStatus {
+  id: OperatorId;
+  packageName: string;
+  availability: 'available' | 'missing' | 'unknown';
+  catalog?: string;
+  version?: string;
+  reason?: string;
+}
+
+/**
+ * An approved operator: curated footprint, live availability.
+ *
+ * The two halves have different provenance and the UI must not blur them. The
+ * vCPU and RAM are constants someone wrote down from vendor docs; `status`
+ * came from this cluster's OperatorHub a moment ago.
+ */
+export interface OperatorEntry extends OperatorOption {
+  status: OperatorStatus;
+}
+
+/**
+ * The approved operator list.
+ *
+ * Fetched once when the wizard mounts rather than per keystroke: the catalog
+ * is cached for fifteen minutes server-side and nothing in the form changes it.
+ */
+export async function fetchOperators(
+  baseUrl: string,
+  fetchFn: typeof fetch,
+  signal?: AbortSignal,
+): Promise<OperatorEntry[]> {
+  const res = await fetchFn(`${baseUrl}/operators`, { ...(signal ? { signal } : {}) });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(body.error ?? `Could not load the operator list: ${res.status}`);
+  }
+  const body = (await res.json()) as { operators?: OperatorEntry[] };
+  return body.operators ?? [];
+}
 
 /**
  * An endpoint while the user is still typing it.
