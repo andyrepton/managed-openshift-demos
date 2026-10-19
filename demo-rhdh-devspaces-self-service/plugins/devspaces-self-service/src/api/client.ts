@@ -74,6 +74,9 @@ export interface PlanResponse {
 export interface ProvisionResult {
   namespace: string;
   applied: { kind: string; name: string; created: boolean }[];
+  openUrl?: string;
+  openLabel?: string;
+  exact?: boolean;
 }
 
 async function fail(res: Response, fallback: string): Promise<never> {

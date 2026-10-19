@@ -7,6 +7,7 @@ import Button from '@mui/material/Button';
 import Checkbox from '@mui/material/Checkbox';
 import Chip from '@mui/material/Chip';
 import CircularProgress from '@mui/material/CircularProgress';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Grid from '@mui/material/Grid';
 import Paper from '@mui/material/Paper';
@@ -28,6 +29,16 @@ import {
 import { PlanPanel } from './PlanPanel';
 
 const DEBOUNCE_MS = 400;
+
+/**
+ * GiB of memory per vCPU when the two are kept in step.
+ *
+ * Two is the ratio that keeps a request valid by construction: a workspace
+ * needs 500m and 2 GiB to run the editor, so memory is what binds, and at 2
+ * GiB per vCPU "at least one vCPU per workspace" is the only rule left. Before
+ * this, raising vCPU against a memory shortfall could never clear the error.
+ */
+const GIB_PER_VCPU = 2;
 
 const INITIAL: DevSpaceRequestInput = {
   workspaceCount: 1,
@@ -53,8 +64,27 @@ export function RequestForm() {
   const [result, setResult] = useState<ProvisionResult | null>(null);
   const [submitError, setSubmitError] = useState<string | undefined>();
 
+  // UI-only state. The backend takes totals and has no opinion about how the
+  // two fields were arrived at.
+  const [syncRam, setSyncRam] = useState(true);
+
   const set = <K extends keyof DevSpaceRequestInput>(k: K, v: DevSpaceRequestInput[K]) =>
     setForm(f => ({ ...f, [k]: v }));
+
+  /** Changing vCPU drags memory with it while the two are linked. */
+  const setVcpu = (vcpu: number) =>
+    setForm(f => ({
+      ...f,
+      totalVcpu: vcpu,
+      ...(syncRam ? { totalRamGiB: vcpu * GIB_PER_VCPU } : {}),
+    }));
+
+  const toggleSync = (on: boolean) => {
+    setSyncRam(on);
+    // Snap to the ratio immediately rather than waiting for the next vCPU
+    // edit, so ticking the box has a visible effect.
+    if (on) set('totalRamGiB', form.totalVcpu * GIB_PER_VCPU);
+  };
 
   useEffect(() => {
     const ac = new AbortController();
@@ -166,7 +196,10 @@ export function RequestForm() {
                   size="small"
                   inputProps={{ min: 1, step: 1 }}
                   value={form.totalVcpu}
-                  onChange={e => set('totalVcpu', Number(e.target.value))}
+                  onChange={e => setVcpu(Number(e.target.value))}
+                  helperText={
+                    syncRam ? `Memory follows at ${GIB_PER_VCPU} GiB each` : undefined
+                  }
                 />
               </Grid>
               <Grid item xs={6} sm={4}>
@@ -175,9 +208,23 @@ export function RequestForm() {
                   type="number"
                   fullWidth
                   size="small"
+                  disabled={syncRam}
                   inputProps={{ min: 1, step: 1 }}
                   value={form.totalRamGiB}
                   onChange={e => set('totalRamGiB', Number(e.target.value))}
+                  helperText={syncRam ? 'Linked to vCPU' : 'Set independently'}
+                />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <FormControlLabel
+                  control={
+                    <Checkbox checked={syncRam} onChange={e => toggleSync(e.target.checked)} />
+                  }
+                  label={
+                    <Typography variant="body2">
+                      Keep memory in step with vCPU
+                    </Typography>
+                  }
                 />
               </Grid>
 
@@ -232,8 +279,10 @@ export function RequestForm() {
               AI assistant
             </Typography>
             <Typography variant="body2" color="text.secondary" paragraph>
-              Already in the workspace image, so nothing is downloaded when a
-              workspace starts.
+              These ship <strong>inside</strong> the workspace image, so nothing is
+              downloaded when a workspace starts. Ticking one tells the editor to
+              load it; an unticked assistant stays an unopened file on disk and
+              costs nothing. You are choosing what runs, not what gets installed.
             </Typography>
 
             {caps?.agents.length === 0 && (
@@ -355,13 +404,44 @@ export function RequestForm() {
           {result && (
             <Alert severity="success">
               <AlertTitle>Namespace {result.namespace} is ready</AlertTitle>
-              <Box component="ul" sx={{ m: 0, pl: 2 }}>
+              <Box component="ul" sx={{ m: 0, pl: 2, mb: 1 }}>
                 {result.applied.map(a => (
                   <Typography component="li" variant="caption" key={`${a.kind}-${a.name}`}>
                     {a.created ? 'Created' : 'Updated'} {a.kind} {a.name}
                   </Typography>
                 ))}
               </Box>
+
+              {result.openUrl && (
+                <>
+                  <Button
+                    variant="contained"
+                    size="small"
+                    color="success"
+                    href={result.openUrl}
+                    target="_blank"
+                    rel="noopener"
+                    endIcon={<OpenInNewIcon />}
+                  >
+                    {result.openLabel ?? 'Open Dev Spaces'}
+                  </Button>
+                  {/* Saying what the button does not do.
+                      This creates the namespace; Dev Spaces creates the
+                      workspace, from a devfile. The generated devfile is what
+                      carries the image and the assistants, so a workspace
+                      started any other way will not have them - and a button
+                      that implied otherwise would be worse than no button. */}
+                  {result.exact === false && (
+                    <Typography variant="caption" display="block" mt={1}>
+                      This opens Dev Spaces, where the quota above now applies. To
+                      get the image and assistants you chose, start the workspace
+                      from the generated <strong>devfile.yaml</strong> in the panel
+                      on the right &mdash; a workspace started from a repository
+                      uses that repository&apos;s devfile, or the cluster default.
+                    </Typography>
+                  )}
+                </>
+              )}
             </Alert>
           )}
         </Stack>

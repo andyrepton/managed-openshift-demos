@@ -35,61 +35,20 @@ data:
                     timeout: { minutes: 3 }
                     initialDelay: { seconds: 15 }
 
-      # ARO cluster planner, from ../demo-aro-cluster-planner. Two plugins ship in
-      # one registry image: the backend serves /api/aro-planner (the Azure Retail
-      # Prices API sends no CORS headers, so pricing must happen server-side), and
-      # the frontend provides the wizard page and the Scaffolder field.
-      #
-      # The `!<plugin-path>` suffix names the plugin inside the image explicitly.
-      # Without it RHDH auto-detects the path from the `io.backstage.dynamic-packages`
-      # OCI manifest annotation, which an ordinary OpenShift build cannot set.
-      #
-      # The key under dynamicPlugins.frontend MUST equal `scalprum.name` from the
-      # plugin's package.json, or the plugin is discovered but never loaded.
-      - package: 'oci://quay.io/andyrepton/rhdh-plugins:aro-planner-1.5.8!aro-planner-backstage-plugin-aro-planner-backend'
-        disabled: false
-
-      - package: 'oci://quay.io/andyrepton/rhdh-plugins:aro-planner-1.5.8!aro-planner-backstage-plugin-aro-planner'
-        disabled: false
-        pluginConfig:
-          dynamicPlugins:
-            frontend:
-              aro-planner.backstage-plugin-aro-planner:
-                # No appIcons entry. `importName` under appIcons must name an icon
-                # component; pointing it at AroPlannerPage makes RHDH render the
-                # whole wizard inside the sidebar. `icon` below names a built-in.
-                dynamicRoutes:
-                  - path: /deployment-planner
-                    importName: AroPlannerPage
-                    menuItem:
-                      icon: category
-                      text: Deployment Planner
-                scaffolderFieldExtensions:
-                  - importName: AroClusterPlannerFieldExtension
-
-      # Dev Spaces self-service, from ../demo-rhdh-devspaces-self-service.
-      #
-      # Unlike the planner, the backend here WRITES to the cluster: it creates
-      # a namespace, a quota and a limit range for the signed-in user. That
-      # needs a ServiceAccount with those permissions, which is not the one
-      # RHDH runs as by default - apply
-      # ../demo-rhdh-devspaces-self-service/rbac/provisioner.yaml first.
-      #
-      # It refuses guest and anonymous callers outright rather than relying on
-      # auth.environment staying as it is, since guest sign-in is an
-      # installation-wide switch another demo could flip.
-      - package: 'oci://quay.io/andyrepton/rhdh-plugins:devspaces-self-service-0.1.2!devspaces-backstage-plugin-devspaces-self-service-backend'
-        disabled: false
-
-      - package: 'oci://quay.io/andyrepton/rhdh-plugins:devspaces-self-service-0.1.2!devspaces-backstage-plugin-devspaces-self-service'
-        disabled: false
-        pluginConfig:
-          dynamicPlugins:
-            frontend:
-              devspaces-self-service.backstage-plugin-devspaces-self-service:
-                dynamicRoutes:
-                  - path: /devspaces-self-service
-                    importName: DevSpacesSelfServicePage
-                    menuItem:
-                      icon: code
-                      text: Request a Dev Space
+    # Plugins from other demos are NOT listed here.
+    #
+    # They used to be, and it made this demo undeployable on its own: the
+    # installer runs as an init container with no top-level exception handler,
+    # so an image it cannot pull is not a missing plugin, it is a pod stuck in
+    # Init:Error. Anyone deploying just this demo got a Developer Hub that
+    # never started, because of two plugins they had never built.
+    #
+    # Each plugin demo now owns its own entry and composes it in:
+    #
+    #   python3 -I scripts/compose-dynamic-plugins.py \
+    #     ../demo-aro-cluster-planner/rhdh/dynamic-plugins-entry.yaml \
+    #     ../demo-rhdh-devspaces-self-service/rhdh/dynamic-plugins-entry.yaml \
+    #     --apply
+    #
+    # With no arguments that script reproduces exactly this file, so deploying
+    # the base demo alone needs nothing extra.

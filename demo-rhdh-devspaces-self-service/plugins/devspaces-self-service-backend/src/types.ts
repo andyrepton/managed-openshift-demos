@@ -54,4 +54,15 @@ export interface ProvisionResult {
   /** What was created or updated, in the order it was applied. */
   applied: { kind: string; name: string; created: boolean }[];
   factoryUrl?: string;
+  /** Where to send the user to actually start a workspace. */
+  openUrl?: string;
+  openLabel?: string;
+  /**
+   * Whether following `openUrl` reproduces exactly what was requested.
+   *
+   * False today in every case: this creates the namespace, Dev Spaces creates
+   * the workspace, and the generated devfile is what carries the image and
+   * the assistant selection. The UI says so rather than implying otherwise.
+   */
+  exact?: boolean;
 }

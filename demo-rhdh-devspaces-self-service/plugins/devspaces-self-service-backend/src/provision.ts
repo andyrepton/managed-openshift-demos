@@ -123,8 +123,47 @@ export async function provision(opts: ProvisionOptions): Promise<ProvisionResult
     applied.push({ kind: m.kind, name: m.name, created: !existedBefore });
   }
 
-  const result: ProvisionResult = { namespace, applied };
+  const result: ProvisionResult = { namespace, applied, ...openWhere(opts) };
   return result;
+}
+
+/**
+ * Where to send the user next, and how honest to be about it.
+ *
+ * This plugin creates the namespace a workspace will live in; it does not
+ * create the workspace. Dev Spaces does that, from a devfile, when someone
+ * opens a factory URL.
+ *
+ * So there are two cases and they differ in an important way:
+ *
+ *   * A repository was given - the factory URL opens a workspace from it.
+ *     If that repository contains its own devfile, THAT devfile wins, and the
+ *     assistants chosen here do not apply. Most do not, in which case the
+ *     cluster default image is used - also not the one generated here.
+ *   * No repository - there is nowhere to send them but the dashboard.
+ *
+ * Either way the generated devfile is the thing that carries the image and
+ * the assistant selection, and using it is a deliberate act. `exact` says
+ * whether following this link reproduces what was requested, so the UI can
+ * say so rather than implying a fidelity it does not have.
+ */
+function openWhere(opts: ProvisionOptions): {
+  openUrl?: string;
+  openLabel?: string;
+  exact?: boolean;
+} {
+  const cheUrl = opts.capabilities.cheUrl;
+  if (!cheUrl) return {};
+
+  const base = cheUrl.replace(/\/+$/, '');
+  if (opts.request.repoUrl) {
+    return {
+      openUrl: `${base}#${opts.request.repoUrl}`,
+      openLabel: 'Open a workspace from your repository',
+      exact: false,
+    };
+  }
+  return { openUrl: base, openLabel: 'Open Dev Spaces', exact: false };
 }
 
 async function exists(kube: KubeClient, path: string): Promise<boolean> {

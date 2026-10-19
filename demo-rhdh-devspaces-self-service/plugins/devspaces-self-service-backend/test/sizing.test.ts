@@ -45,18 +45,48 @@ describe('computeSizing', () => {
     expect(() => computeSizing({ ...base, workspaceCount: 4, totalVcpu: 1 })).toThrow(
       SizingError,
     );
-    try {
-      computeSizing({ ...base, workspaceCount: 4, totalVcpu: 1 });
-    } catch (err) {
-      expect((err as Error).message).toMatch(/below the 500m/);
-      expect((err as Error).message).toMatch(/more vCPU or fewer workspaces/);
-    }
   });
 
   it('refuses memory too small to run the editor', () => {
     expect(() => computeSizing({ ...base, workspaceCount: 8, totalRamGiB: 8 })).toThrow(
-      /below the 2048Mi/,
+      SizingError,
     );
+  });
+
+  it('names BOTH shortfalls at once, not whichever is checked first', () => {
+    // The bug this guards: reporting CPU first meant raising vCPU made the
+    // message switch to memory, which reads as the same error refusing to
+    // clear. Someone raised vCPU to 64 against a memory limit no amount of
+    // vCPU could satisfy.
+    try {
+      computeSizing({ ...base, workspaceCount: 4, totalVcpu: 1, totalRamGiB: 4 });
+      throw new Error('should have thrown');
+    } catch (err) {
+      const m = (err as Error).message;
+      expect(m).toMatch(/vCPU/);
+      expect(m).toMatch(/memory/);
+    }
+  });
+
+  it('states the minimum totals needed, so the fix is one read away', () => {
+    try {
+      computeSizing({ ...base, workspaceCount: 4, totalVcpu: 64, totalRamGiB: 4 });
+      throw new Error('should have thrown');
+    } catch (err) {
+      const m = (err as Error).message;
+      // 4 workspaces x 2048Mi = 8 GiB.
+      expect(m).toMatch(/at least 2 vCPU and 8 GiB in total/);
+      expect(m).toMatch(/You asked for 64 vCPU and 4 GiB/);
+    }
+  });
+
+  it('does not mention vCPU when only memory is short', () => {
+    try {
+      computeSizing({ ...base, workspaceCount: 4, totalVcpu: 64, totalRamGiB: 4 });
+      throw new Error('should have thrown');
+    } catch (err) {
+      expect((err as Error).message).not.toMatch(/of vCPU each|m of vCPU/);
+    }
   });
 
   it('accepts exactly the minimum', () => {

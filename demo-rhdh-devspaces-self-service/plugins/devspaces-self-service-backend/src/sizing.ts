@@ -119,18 +119,35 @@ export function computeSizing(input: SizingInput): Sizing {
   const cpuLimitMilli = Math.floor((totalVcpu * 1000) / workspaceCount);
   const ramLimitMiB = Math.floor(mib(totalRamGiB) / workspaceCount);
 
+  /*
+   * Both dimensions are checked together, and the message states the minimum
+   * totals outright.
+   *
+   * Reporting them one at a time was actively misleading: too little of both
+   * showed the vCPU message, so you raised vCPU, the message switched to
+   * memory, and at a glance it looked like the same error refusing to clear.
+   * Someone raised vCPU to 64 against a memory limit that no amount of vCPU
+   * could satisfy.
+   */
+  const shortfalls: string[] = [];
   if (cpuLimitMilli < MIN_WORKSPACE_CPU_MILLI) {
-    throw new SizingError(
-      `${totalVcpu} vCPU across ${workspaceCount} workspaces is ${cpuLimitMilli}m each, ` +
-        `below the ${MIN_WORKSPACE_CPU_MILLI}m a workspace needs to run the editor. ` +
-        'Ask for more vCPU or fewer workspaces.',
-    );
+    shortfalls.push(`${cpuLimitMilli}m of vCPU`);
   }
   if (ramLimitMiB < MIN_WORKSPACE_RAM_MIB) {
+    shortfalls.push(`${ramLimitMiB}Mi of memory`);
+  }
+
+  if (shortfalls.length > 0) {
+    const needVcpu = (MIN_WORKSPACE_CPU_MILLI * workspaceCount) / 1000;
+    const needRam = (MIN_WORKSPACE_RAM_MIB * workspaceCount) / 1024;
     throw new SizingError(
-      `${totalRamGiB} GiB across ${workspaceCount} workspaces is ${ramLimitMiB}Mi each, ` +
-        `below the ${MIN_WORKSPACE_RAM_MIB}Mi a workspace needs to run the editor. ` +
-        'Ask for more memory or fewer workspaces.',
+      `${workspaceCount} workspace${workspaceCount === 1 ? '' : 's'} would get ` +
+        `${shortfalls.join(' and ')} each, below what one needs to run the editor ` +
+        `(${MIN_WORKSPACE_CPU_MILLI}m and ${MIN_WORKSPACE_RAM_MIB}Mi). ` +
+        `For ${workspaceCount} workspace${workspaceCount === 1 ? '' : 's'} ask for at ` +
+        `least ${needVcpu} vCPU and ${needRam} GiB in total` +
+        `, or reduce the number of workspaces. ` +
+        `You asked for ${totalVcpu} vCPU and ${totalRamGiB} GiB.`,
     );
   }
 

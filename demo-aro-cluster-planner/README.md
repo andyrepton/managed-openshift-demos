@@ -89,6 +89,14 @@ done
 # Collect both into a registry directory
 npx @red-hat-developer-hub/cli@release-1.10 plugin package --export-to ./plugin-registry
 printf 'FROM scratch\nCOPY . /\n' > plugin-registry/Containerfile
+
+# Strip node_modules/.bin before building the image.
+#
+# Those entries are relative symlinks in dist-dynamic, but `plugin package`
+# resolves them to absolute paths when it copies, so the tarball ends up
+# containing links to the build machine's home directory - published in a
+# public image. The installer skips them anyway, so nothing is lost.
+find plugin-registry -name .bin -type d -prune -exec rm -rf {} +
 ```
 
 Build the image on the cluster -- no local container tooling needed:
@@ -118,24 +126,20 @@ oc start-build aro-planner -n rhdh --from-dir=plugin-registry --follow
 
 ### 4. Load them into RHDH
 
-Add both to `dynamic-plugins.yaml` in [demo-developer-hub](../demo-developer-hub). The `!<plugin-path>` suffix is required -- see Notes.
+This demo owns its entry in RHDH's plugin config, in
+[`rhdh/dynamic-plugins-entry.yaml`](rhdh/dynamic-plugins-entry.yaml). Compose it
+into [demo-developer-hub](../demo-developer-hub) and apply:
 
-```yaml
-- package: 'oci://quay.io/<you>/aro-planner:0.1.0!aro-planner-backstage-plugin-aro-planner-backend'
-  disabled: false
-- package: 'oci://quay.io/<you>/aro-planner:0.1.0!aro-planner-backstage-plugin-aro-planner'
-  disabled: false
-  pluginConfig:
-    dynamicPlugins:
-      frontend:
-        aro-planner.backstage-plugin-aro-planner:
-          dynamicRoutes:
-            - path: /aro-planner
-              importName: AroPlannerPage
-              menuItem: { icon: category, text: ARO Planner }
-          scaffolderFieldExtensions:
-            - importName: AroClusterPlannerFieldExtension
+```bash
+cd ../demo-developer-hub
+python3 -I scripts/compose-dynamic-plugins.py \
+  ../demo-aro-cluster-planner/rhdh/dynamic-plugins-entry.yaml --apply
 ```
+
+It lives here rather than in that demo so the base deploys on its own: the
+plugin installer runs as an init container and raises on an image it cannot
+pull, so listing this plugin there left Developer Hub stuck in `Init:Error`
+for anyone who had not built it. The `!<plugin-path>` suffix is required -- see Notes.
 
 Then `oc -n rhdh rollout restart deployment/backstage-developer-hub` and open **ARO Planner** in the sidebar.
 

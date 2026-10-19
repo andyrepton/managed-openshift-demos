@@ -88,6 +88,14 @@ done
 npx @red-hat-developer-hub/cli@release-1.10 plugin package --export-to ./plugin-registry
 printf 'FROM scratch\nCOPY . /\n' > plugin-registry/Containerfile
 
+# Strip node_modules/.bin before building the image.
+#
+# Those entries are relative symlinks in dist-dynamic, but `plugin package`
+# resolves them to absolute paths when it copies, so the tarball ends up
+# containing links to the build machine's home directory - published in a
+# public image. The installer skips them anyway, so nothing is lost.
+find plugin-registry -name .bin -type d -prune -exec rm -rf {} +
+
 oc start-build devspaces-self-service -n rhdh --from-dir=plugin-registry --follow
 ```
 
@@ -95,6 +103,23 @@ Both plugins ship in one image, pushed to `quay.io/<you>/rhdh-plugins` with a
 `<plugin>-<version>` tag so several demos' plugins can share one repository.
 See [demo-aro-cluster-planner](../demo-aro-cluster-planner) for the
 `FROM scratch` and `!<plugin-path>` requirements, which apply here too.
+
+Then compose this demo's entry into RHDH's plugin config and apply it:
+
+```bash
+cd ../demo-developer-hub
+python3 -I scripts/compose-dynamic-plugins.py \
+  ../demo-rhdh-devspaces-self-service/rhdh/dynamic-plugins-entry.yaml --apply
+
+oc -n rhdh rollout restart deployment/backstage-developer-hub
+```
+
+The entry lives in [`rhdh/dynamic-plugins-entry.yaml`](rhdh/dynamic-plugins-entry.yaml)
+rather than in demo-developer-hub so that the base demo deploys on its own. The
+plugin installer runs as an **init container** with no top-level exception
+handler, so an image it cannot pull is not a missing plugin -- it is a pod stuck
+in `Init:Error`. Listing this plugin there meant anyone deploying just Developer
+Hub got one that never started, because of a plugin they had never built.
 
 ### 4. Verify
 
