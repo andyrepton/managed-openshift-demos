@@ -35,7 +35,17 @@ spec:
       pullSecret:
         name: redhat-registry
   triggers: []
+  # Requests below limits, explicitly.
+  #
+  # With only limits set the scheduler reserves the full 2 CPU, and on a busy
+  # cluster the build simply never starts: the pod sits unschedulable with
+  # "Insufficient cpu" and the build is eventually cancelled, which reads like
+  # a broken BuildConfig rather than a full cluster. A build is bursty and does
+  # not need its ceiling reserved for the whole run.
   resources:
+    requests:
+      cpu: "1"
+      memory: 2Gi
     limits:
       cpu: "2"
       memory: 4Gi
