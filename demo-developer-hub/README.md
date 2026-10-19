@@ -105,6 +105,62 @@ Sign in with **GitHub**. Only accounts with a matching `User` entity in `catalog
 1. Open **Catalog**. You should see `payments-api`, the `payments` system and two groups.
 2. Open **Deployment Planner** in the sidebar, if you have also installed [demo-aro-cluster-planner](../demo-aro-cluster-planner).
 
+## Granting someone else access
+
+`catalog/org.yaml` is the access list and nothing else is. GitHub will
+authenticate anyone with an account; `usernameMatchingUserEntityName` is the only
+resolver configured, so a login becomes a session only if a `User` entity has the
+same name.
+
+1. Add a `User` to `catalog/org.yaml` whose `metadata.name` is their **GitHub
+   login** -- the last segment of their profile URL, spelled exactly as GitHub
+   spells it, not their display name or email:
+
+   ```yaml
+   ---
+   apiVersion: backstage.io/v1alpha1
+   kind: User
+   metadata:
+     name: <github-login>
+   spec:
+     profile:
+       displayName: <Their Name>
+     memberOf: [platform-team]
+   ```
+
+2. Add the same login to that Group's `members:` list. The membership relation
+   is emitted from either side, so this is redundant -- but `org.yaml` states
+   both for `andyrepton`, and a file where only one person appears in both
+   places reads like a mistake.
+
+3. Push the commit to the branch RHDH is reading. The catalog is fetched over
+   HTTPS from GitHub, not from your checkout, so until the commit is on that
+   branch nothing changes:
+
+   ```bash
+   oc -n rhdh get secret rhdh-secrets -o jsonpath='{.data.CATALOG_BRANCH}' | base64 -d
+   ```
+
+4. Either wait for the next catalog refresh or force one:
+
+   ```bash
+   oc -n rhdh rollout restart deployment/backstage-developer-hub
+   ```
+
+5. Confirm the entity landed before they try to sign in. A missing `User` and a
+   broken GitHub App look identical from the login page:
+
+   ```bash
+   oc -n rhdh logs deployment/backstage-developer-hub -c backstage-backend \
+     | grep -i 'unable to resolve user identity'
+   ```
+
+They do not need to install the GitHub App. Signing in authorises it against
+their account, which is a separate flow from installation -- so **Only on this
+account** under *Where can this be installed* does not block them. If their
+sign-in fails at GitHub rather than at RHDH, that setting is the first thing to
+check.
+
 ## What gets created
 
 | Path | Purpose |

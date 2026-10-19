@@ -14,6 +14,15 @@ spec:
   memberOf: [platform-team]
 ---
 apiVersion: backstage.io/v1alpha1
+kind: User
+metadata:
+  name: devoops0
+spec:
+  profile:
+    displayName: Philipp
+  memberOf: [platform-team]
+---
+apiVersion: backstage.io/v1alpha1
 kind: Group
 metadata:
   name: platform-team
@@ -21,7 +30,7 @@ metadata:
 spec:
   type: team
   children: []
-  members: [andyrepton]
+  members: [andyrepton, devoops0]
 ---
 apiVersion: backstage.io/v1alpha1
 kind: Group
