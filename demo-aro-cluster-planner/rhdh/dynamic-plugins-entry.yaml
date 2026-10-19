@@ -1,0 +1,48 @@
+# This demo's entry in RHDH's dynamic-plugins ConfigMap.
+#
+# It lives here rather than in demo-developer-hub so that the base demo
+# deploys on its own. The plugin installer runs as an init container and
+# raises on an image it cannot pull, so listing this plugin there made
+# Developer Hub fail to start for anyone who had not built it.
+#
+# Compose it in, from demo-developer-hub:
+#
+#   python3 -I scripts/compose-dynamic-plugins.py \
+#     ../demo-aro-cluster-planner/rhdh/dynamic-plugins-entry.yaml --apply
+#
+# Indentation is deliberate: these are list items under `plugins:` inside
+# the ConfigMap's literal block, so they sit at six spaces. The compose
+# script appends them verbatim.
+---
+
+      # ARO cluster planner, from ../demo-aro-cluster-planner. Two plugins ship in
+      # one registry image: the backend serves /api/aro-planner (the Azure Retail
+      # Prices API sends no CORS headers, so pricing must happen server-side), and
+      # the frontend provides the wizard page and the Scaffolder field.
+      #
+      # The `!<plugin-path>` suffix names the plugin inside the image explicitly.
+      # Without it RHDH auto-detects the path from the `io.backstage.dynamic-packages`
+      # OCI manifest annotation, which an ordinary OpenShift build cannot set.
+      #
+      # The key under dynamicPlugins.frontend MUST equal `scalprum.name` from the
+      # plugin's package.json, or the plugin is discovered but never loaded.
+      - package: 'oci://quay.io/andyrepton/rhdh-plugins:aro-planner-1.5.9!aro-planner-backstage-plugin-aro-planner-backend'
+        disabled: false
+
+      - package: 'oci://quay.io/andyrepton/rhdh-plugins:aro-planner-1.5.9!aro-planner-backstage-plugin-aro-planner'
+        disabled: false
+        pluginConfig:
+          dynamicPlugins:
+            frontend:
+              aro-planner.backstage-plugin-aro-planner:
+                # No appIcons entry. `importName` under appIcons must name an icon
+                # component; pointing it at AroPlannerPage makes RHDH render the
+                # whole wizard inside the sidebar. `icon` below names a built-in.
+                dynamicRoutes:
+                  - path: /deployment-planner
+                    importName: AroPlannerPage
+                    menuItem:
+                      icon: category
+                      text: Deployment Planner
+                scaffolderFieldExtensions:
+                  - importName: AroClusterPlannerFieldExtension

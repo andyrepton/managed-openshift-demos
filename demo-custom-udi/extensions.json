@@ -1,0 +1,81 @@
+{
+  "_comment": [
+    "Approved developer tooling baked into the custom UDI.",
+    "",
+    "This file is the single source of truth. The Containerfile reads it at",
+    "build time, scripts/check-extensions.sh checks the pins against upstream,",
+    "and capabilities-configmap.yaml publishes it to the cluster so a self-service",
+    "form can offer exactly what the image actually contains rather than a",
+    "hardcoded list that drifts.",
+    "",
+    "Pinned versions, not 'latest'. An image whose contents depend on the day it",
+    "was built cannot be reasoned about, and the whole argument for baking tools",
+    "in rather than downloading them at workspace start is a supply chain you",
+    "can point at. sha256 is verified during the build; a mismatch fails it.",
+    "",
+    "kind: 'vscode-extension' is a .vsix installed by che-code via",
+    "DEFAULT_EXTENSIONS. kind: 'binary' is a tarball on PATH, which works in any",
+    "editor and in a plain terminal."
+  ],
+
+  "extensionDir": "/opt/extensions",
+
+  "tools": [
+    {
+      "id": "kilo-code",
+      "kind": "vscode-extension",
+      "displayName": "Kilo Code",
+      "description": "Agentic coding assistant. Reads, edits and runs commands in the workspace.",
+      "extensionId": "kilocode.kilo-code",
+      "version": "7.8.14",
+      "file": "kilocode.vsix",
+      "url": "https://open-vsx.org/api/kilocode/kilo-code/linux-x64/7.8.14/file/kilocode.kilo-code-7.8.14@linux-x64.vsix",
+      "sha256": "457bc18f6d64bea9df53cb3aba2dea29ebaa73e1ee187c725222aedf0eda9306",
+      "sizeBytes": 133804909,
+      "openVsx": { "namespace": "kilocode", "name": "kilo-code", "target": "linux-x64" },
+      "notes": [
+        "Needs an explicit permission block or it silently does nothing - it waits",
+        "on an approval that never arrives and then reports success having made no",
+        "changes. See demo-opencode-devspaces/kilocode-config.jsonc.",
+        "Sends a ~20.6k token system prompt before the user types anything, so a",
+        "small context window makes it unusable rather than merely slow."
+      ]
+    },
+    {
+      "id": "opencode-extension",
+      "kind": "vscode-extension",
+      "displayName": "OpenCode (editor button)",
+      "description": "Thin shim that opens the OpenCode CLI in a terminal.",
+      "extensionId": "sst-dev.opencode",
+      "version": "1.0.0",
+      "file": "opencode.vsix",
+      "url": "https://open-vsx.org/api/sst-dev/opencode/1.0.0/file/sst-dev.opencode-1.0.0.vsix",
+      "sha256": "ddec815ab9a4a481b351e1ea297996688a443d9ac02cb21b7d9b423ce315e0c4",
+      "sizeBytes": 5308,
+      "openVsx": { "namespace": "sst-dev", "name": "opencode" },
+      "requires": ["opencode-cli"],
+      "notes": [
+        "About 2 KB of JavaScript. It launches the CLI and nothing else, so it is",
+        "useless without opencode-cli and pointless outside che-code."
+      ]
+    },
+    {
+      "id": "opencode-cli",
+      "kind": "binary",
+      "displayName": "OpenCode CLI",
+      "description": "Terminal coding agent. The substantive half of OpenCode.",
+      "version": "1.19.3",
+      "url": "https://github.com/anomalyco/opencode/releases/download/v1.19.3/opencode-linux-x64.tar.gz",
+      "sha256": "13a8fb2978302071b86f9d7e00da9c8895f9cd846978379c3bdc6a5333536c9b",
+      "sizeBytes": 60716380,
+      "binary": "opencode",
+      "installTo": "/opt/opencode/bin",
+      "github": { "repo": "anomalyco/opencode", "assetPattern": "opencode-linux-x64.tar.gz" },
+      "notes": [
+        "Previously pulled from /releases/latest/download, which made every image",
+        "build a different image. Pinned here.",
+        "Runs in a terminal, so unlike the extensions it works under any editor."
+      ]
+    }
+  ]
+}

@@ -60,4 +60,20 @@ spec:
             # ../demo-aro-cluster-planner/rbac/operator-catalog-reader.yaml.
             # Without that RoleBinding this line grants nothing.
             automountServiceAccountToken: true
+            # The Dev Spaces self-service plugin's own credential, from
+            # ../demo-rhdh-devspaces-self-service/rbac/provisioner.yaml.
+            #
+            # Mounted separately rather than granting the pod's `default`
+            # ServiceAccount the right to create namespaces, which would give
+            # that right to every other plugin sharing this pod.
+            volumes:
+              - name: devspaces-provisioner-token
+                secret:
+                  secretName: devspaces-provisioner-token
+            containers:
+              - name: backstage-backend
+                volumeMounts:
+                  - name: devspaces-provisioner-token
+                    mountPath: /var/run/secrets/devspaces-provisioner
+                    readOnly: true
 

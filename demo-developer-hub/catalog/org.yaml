@@ -32,6 +32,13 @@ spec:
   memberOf: [platform-team]
 ---
 apiVersion: backstage.io/v1alpha1
+kind: User
+metadata:
+  name: lbac-redhat
+spec:
+  memberOf: [platform-team]
+---
+apiVersion: backstage.io/v1alpha1
 kind: Group
 metadata:
   name: platform-team
@@ -39,7 +46,7 @@ metadata:
 spec:
   type: team
   children: []
-  members: [andyrepton, devoops0, mmusaji]
+  members: [andyrepton, devoops0, mmusaji, lbac-redhat]
 ---
 apiVersion: backstage.io/v1alpha1
 kind: Group

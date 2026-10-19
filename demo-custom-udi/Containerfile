@@ -52,11 +52,60 @@ RUN ln -sf python3.14 /usr/bin/python3 \
  && ln -sf /opt/node/bin/npm  /usr/bin/npm \
  && ln -sf /opt/node/bin/npx  /usr/bin/npx
 
+# Approved developer tooling, from extensions.json.
+#
+# Baked in rather than downloaded at workspace start. The alternative - the
+# postStart curl in demo-opencode-devspaces - pulls ~190 MB on every start,
+# fails outright on a disconnected cluster, and gives whoever runs the platform
+# no say in what version runs. This costs an image rebuild per version bump and
+# buys a supply chain: pinned versions, verified digests, one place to patch.
+#
+# The .vsix files are inert on disk. che-code installs only what DEFAULT_EXTENSIONS
+# names, so ONE image serves every combination - no agent, Kilo, OpenCode, or
+# both - and the choice is a devfile string rather than a separate build.
+COPY extensions.json /opt/extensions.json
+RUN set -eux; \
+    mkdir -p /opt/extensions /opt/opencode/bin; \
+    python3 - <<'PY'
+import hashlib, json, os, subprocess, tarfile, tempfile
+
+manifest = json.load(open('/opt/extensions.json'))
+ext_dir = manifest['extensionDir']
+
+for tool in manifest['tools']:
+    url, want = tool['url'], tool['sha256']
+    with tempfile.NamedTemporaryFile(delete=False) as tmp:
+        path = tmp.name
+    subprocess.run(['curl', '-fsSL', url, '-o', path], check=True)
+
+    got = hashlib.sha256(open(path, 'rb').read()).hexdigest()
+    if got != want:
+        raise SystemExit(
+            f"sha256 mismatch for {tool['id']}\n  expected {want}\n  got      {got}\n"
+            "Upstream changed under a pinned version, or the download was tampered\n"
+            "with. Do not 'fix' this by pasting in the new digest without finding\n"
+            "out which."
+        )
+
+    if tool['kind'] == 'vscode-extension':
+        os.replace(path, os.path.join(ext_dir, tool['file']))
+    else:
+        with tarfile.open(path) as tar:
+            tar.extractall(tool['installTo'])
+        os.unlink(path)
+        os.chmod(os.path.join(tool['installTo'], tool['binary']), 0o755)
+    print(f"ok {tool['id']} {tool['version']}")
+PY
+
+# opencode on PATH. /usr/local/bin is NOT on the UDI's PATH and a shell profile
+# would live in the persisted home, so /usr/bin is the only reliable place.
+RUN ln -sf /opt/opencode/bin/opencode /usr/bin/opencode
+
 # OpenShift runs the workspace with an arbitrary UID in group 0. Anything not
 # group-writable becomes read-only, and a workspace user cannot chgrp it
 # themselves, so the permissions have to be baked in here.
-RUN chgrp -R 0 /home /opt/node \
- && chmod -R g=u /home /opt/node
+RUN chgrp -R 0 /home /opt/node /opt/extensions /opt/opencode \
+ && chmod -R g=u /home /opt/node /opt/extensions /opt/opencode
 
 USER 10001
 ENV HOME=/home/user

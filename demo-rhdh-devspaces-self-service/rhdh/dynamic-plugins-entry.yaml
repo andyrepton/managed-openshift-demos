@@ -1,0 +1,55 @@
+# This demo's entry in RHDH's dynamic-plugins ConfigMap.
+#
+# It lives here rather than in demo-developer-hub so that the base demo
+# deploys on its own. The plugin installer runs as an init container and
+# raises on an image it cannot pull, so listing this plugin there made
+# Developer Hub fail to start for anyone who had not built it.
+#
+# Compose it in, from demo-developer-hub:
+#
+#   python3 -I scripts/compose-dynamic-plugins.py \
+#     ../demo-rhdh-devspaces-self-service/rhdh/dynamic-plugins-entry.yaml --apply
+#
+# Indentation is deliberate: these are list items under `plugins:` inside
+# the ConfigMap's literal block, so they sit at six spaces. The compose
+# script appends them verbatim.
+---
+
+      # Dev Spaces self-service, from ../demo-rhdh-devspaces-self-service.
+      #
+      # Unlike the planner, the backend here WRITES to the cluster: it creates
+      # a namespace, a quota and a limit range for the signed-in user. That
+      # needs a ServiceAccount with those permissions, which is not the one
+      # RHDH runs as by default - apply
+      # ../demo-rhdh-devspaces-self-service/rbac/provisioner.yaml first.
+      #
+      # It refuses guest and anonymous callers outright rather than relying on
+      # auth.environment staying as it is, since guest sign-in is an
+      # installation-wide switch another demo could flip.
+      - package: 'oci://quay.io/andyrepton/rhdh-plugins:devspaces-self-service-0.1.5!devspaces-backstage-plugin-devspaces-self-service-backend'
+        disabled: false
+
+      - package: 'oci://quay.io/andyrepton/rhdh-plugins:devspaces-self-service-0.1.5!devspaces-backstage-plugin-devspaces-self-service'
+        disabled: false
+        pluginConfig:
+          dynamicPlugins:
+            frontend:
+              devspaces-self-service.backstage-plugin-devspaces-self-service:
+                # `menuItem.icon` names an entry in RHDH's internal icon
+                # catalog - Backstage's system icons plus whatever plugins
+                # register here. An unregistered name such as `code` renders a
+                # broken icon rather than falling back to a default, so the
+                # plugin exports one and registers it by name.
+                #
+                # `importName` must be an ICON component. Pointing it at the
+                # page renders the whole page inside the sidebar.
+                appIcons:
+                  - name: devSpacesIcon
+                    module: PluginRoot
+                    importName: DevSpacesIcon
+                dynamicRoutes:
+                  - path: /devspaces-self-service
+                    importName: DevSpacesSelfServicePage
+                    menuItem:
+                      icon: devSpacesIcon
+                      text: Request a Dev Space
