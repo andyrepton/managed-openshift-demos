@@ -1,4 +1,5 @@
 import type { NodePoolPlan, PriceTable, SizingRequest, Sku } from './types.js';
+import { operatorFootprint, withOperatorCapacity } from './operators.js';
 import {
   MAX_WORKER_NODES,
   MIN_WORKER_NODES,
@@ -75,6 +76,16 @@ function buildPlan(sku: Sku, nodes: number, req: SizingRequest): NodePoolPlan {
       `${req.vcpu} vCPU / ${req.ramGiB} GiB requested.`,
   );
 
+  // Say so when the figures above are bigger than what the user typed, or the
+  // node count looks wrong against their own request.
+  const operators = operatorFootprint(req.operators);
+  if (operators.items.length > 0) {
+    rationale.push(
+      `Includes ${operators.vcpu} vCPU and ${operators.ramGiB} GiB for ` +
+        `${operators.items.map(o => o.label).join(', ')}, on top of the workload itself.`,
+    );
+  }
+
   const byVcpu = Math.ceil(req.vcpu / allocatableVcpu(sku));
   const byRam = Math.ceil(req.ramGiB / allocatableRamGiB(sku));
   if (byRam > byVcpu) {
@@ -120,10 +131,15 @@ function buildPlan(sku: Sku, nodes: number, req: SizingRequest): NodePoolPlan {
  * capacity, which is the best proxy available offline.
  */
 export function recommendNodePools(
-  req: SizingRequest,
+  request: SizingRequest,
   options: RecommendOptions = {},
 ): Recommendation[] {
   const { prices, limit = 3 } = options;
+
+  // Selected operators are capacity like any other. Folding them in here rather
+  // than at each call site is what stops the wizard, the MCP tools and the CLI
+  // from disagreeing about whether Kafka was counted.
+  const req = withOperatorCapacity(request);
 
   if (req.vcpu <= 0 || req.ramGiB <= 0) return [];
 

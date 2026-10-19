@@ -1,4 +1,5 @@
 import type { CostEstimate, ModelComparison, PriceSource } from '../types.js';
+import { operatorFootprint } from '../operators.js';
 import { STORAGE_TIER_LABEL, storageClassFor } from '../storage.js';
 import type { EmitInput } from './types.js';
 
@@ -78,6 +79,13 @@ export function renderPlanMarkdown(name: string, input: EmitInput): string {
   out.push(`| Application | ${cell(request.applicationName ?? name)} |`);
   out.push(`| Where it runs | ${cell(chosen?.label ?? model)} |`);
   out.push(`| Capacity | ${request.vcpu} vCPU / ${request.ramGiB} GiB **allocatable** |`);
+  const operators = operatorFootprint(request.operators);
+  if (operators.items.length > 0) {
+    out.push(
+      `| Operators | ${cell(operators.items.map(o => o.label).join(', '))} ` +
+        `(+${operators.vcpu} vCPU / ${operators.ramGiB} GiB) |`,
+    );
+  }
   if (input.plan?.storage) {
     const st = input.plan.storage;
     const sc = storageClassFor(st.tier);
@@ -104,6 +112,33 @@ export function renderPlanMarkdown(name: string, input: EmitInput): string {
       'on top before sizing. Sizing against raw VM specs under-provisions by roughly 15%.',
   );
   out.push('');
+
+  if (operators.items.length > 0) {
+    out.push('### Operators requested');
+    out.push('');
+    out.push('| Operator | Package | Catalog | Adds | Basis |');
+    out.push('| --- | --- | --- | --- | --- |');
+    for (const o of operators.items) {
+      out.push(
+        `| ${cell(o.label)}${o.supported ? '' : ' **(community)**'} | \`${o.packageName}\` | ` +
+          `${o.catalog} | ${o.vcpu} vCPU / ${o.ramGiB} GiB | ${cell(o.breakdown)} ${cell(o.sourceNote)} |`,
+      );
+    }
+    out.push('');
+    out.push(
+      'Operator capacity is included in the sizing above. The figures are documented ' +
+        'vendor defaults, not measurements of this workload.',
+    );
+    if (operators.hasUnsupported) {
+      out.push('');
+      out.push(
+        '**This request includes a community operator.** It installs from OperatorHub ' +
+          'but carries no Red Hat support, which on a managed cluster is a decision ' +
+          'someone has to own before it is approved.',
+      );
+    }
+    out.push('');
+  }
 
   // --- The comparison -------------------------------------------------------
   out.push('## Where it could run');

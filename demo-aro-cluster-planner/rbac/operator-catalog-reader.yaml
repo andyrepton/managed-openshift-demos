@@ -1,0 +1,45 @@
+# Lets the planner backend read this cluster's OperatorHub.
+#
+# The planner shows, per approved operator, whether the package is actually in a
+# catalog here and at what version. That is the only thing it asks Kubernetes
+# for - the CPU/RAM figures are curated constants, because a PackageManifest
+# carries no deployment spec and the operand footprint lives in a CR that does
+# not exist until someone creates it.
+#
+# Scope notes, since this is the one cluster credential the plugin holds:
+#
+#   * A Role in openshift-marketplace, not a ClusterRole. PackageManifests are
+#     namespaced and this is the only namespace worth reading.
+#   * `get` and `list` only. Nothing here can install an operator; approving a
+#     plan is still a human action elsewhere.
+#   * PackageManifest content is the public catalog - names, versions,
+#     descriptions. There is nothing in it that is not already visible to
+#     anyone who can open OperatorHub in the console.
+#
+# Bound to the `default` ServiceAccount because backstage.yaml deliberately pins
+# the Deployment to it; see the comment there about the operator not reverting
+# serviceAccountName. A dedicated SA would be tidier, and is a one-line change
+# in both files if you want it.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: aro-planner-operator-catalog-reader
+  namespace: openshift-marketplace
+rules:
+  - apiGroups: ['packages.operators.coreos.com']
+    resources: ['packagemanifests']
+    verbs: ['get', 'list']
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: aro-planner-operator-catalog-reader
+  namespace: openshift-marketplace
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: aro-planner-operator-catalog-reader
+subjects:
+  - kind: ServiceAccount
+    name: default
+    namespace: rhdh

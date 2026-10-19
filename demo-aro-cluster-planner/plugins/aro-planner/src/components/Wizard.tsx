@@ -21,10 +21,17 @@ import { discoveryApiRef, fetchApiRef, useApi } from '@backstage/core-plugin-api
 
 import { planStorage } from '@aro-planner/common';
 
-import { fetchPlan, type EndpointInput, type PlanInput, type PlanResponse } from '../api/client';
+import {
+  fetchPlan,
+  type EndpointInput,
+  type OperatorId,
+  type PlanInput,
+  type PlanResponse,
+} from '../api/client';
 import { AssistantPanel } from './AssistantPanel';
 import { CostPanel } from './CostPanel';
 import { NetworkSection } from './NetworkSection';
+import { OperatorSection } from './OperatorSection';
 import { RequestDialog } from './RequestDialog';
 
 const REGIONS = [
@@ -64,6 +71,7 @@ const INITIAL: PlanInput = {
   // is therefore a DEMO_MULTIPLIERS figure, not an Azure meter - it is marked
   // "~" and carries the warning, which is the point.
   deploymentModel: 'shared-namespace',
+  operators: [],
   endpoints: [],
 };
 
@@ -425,6 +433,11 @@ export function Wizard({ onPlanChange, initial }: WizardProps) {
                 />
               </Paper>
             )}
+
+            <OperatorSection
+              selected={form.operators ?? []}
+              onChange={(ids: OperatorId[]) => set('operators', ids)}
+            />
 
             <NetworkSection
               endpoints={form.endpoints ?? []}

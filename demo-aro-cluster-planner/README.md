@@ -178,6 +178,70 @@ To enable, under `aroPlanner.assistant` in app-config:
 All three of `baseUrl`, `apiKey` and `model` are required; any missing and the assistant
 reports itself unavailable. The model must support tool calling.
 
+## Requesting operators
+
+A short approved list of platform services a team can ask for, alongside its own
+workload. Selecting one adds its capacity to the cluster being sized, because an
+operator runs pods like anything else.
+
+| Operator | Package | Catalog | Adds |
+| --- | --- | --- | --- |
+| Red Hat build of Keycloak | `rhbk-operator` | `redhat-operators` | 6.1 vCPU / 4.0 GiB |
+| Streams for Apache Kafka | `amq-streams` | `redhat-operators` | 4.7 vCPU / 9.4 GiB |
+| Apache Flink | `flink-kubernetes-operator` | `community-operators` | 2.25 vCPU / 4.5 GiB |
+
+**The two halves of that table have different provenance, and the UI keeps them
+apart.** Availability is live: the backend lists PackageManifests from this
+cluster's OperatorHub, so each row shows whether the package is really
+installable here and at what version. The footprints are curated constants from
+vendor documentation.
+
+They have to be. A `PackageManifest`'s `currentCSVDesc` carries no deployment
+spec, and the part that dominates — three Kafka brokers, three Keycloak pods —
+lives in a CR that does not exist until someone creates it. No API can answer
+"what will this cost me in vCPU", so the figures are written down with their
+source and marked as what they are.
+
+Each figure covers **the operator and one default instance of what it manages**.
+A controller pod on its own is a rounding error, and sizing a cluster for 200m
+of CPU would be theatre.
+
+* **Keycloak** — three pods at 2 vCPU / 1250 MB, from the example CR in the
+  [RHBK High Availability Guide](https://docs.redhat.com/en/documentation/red_hat_build_of_keycloak/26.2/html/high_availability_guide/concepts-memory-and-cpu-sizing-).
+  That guide sizes CPU by login rate, so a quiet realm needs far less.
+* **Streams for Apache Kafka** — three brokers and three KRaft controllers, from
+  [Red Hat solution 4205851](https://access.redhat.com/solutions/4205851), which
+  is explicitly a **development** starting point and not suitable for
+  production. Streams for Apache Kafka sets no default requests or limits on its
+  operands at all, so there is no vendor production default to quote.
+* **Flink** — one JobManager and one TaskManager, from the upstream
+  [`examples/basic.yaml`](https://github.com/apache/flink-kubernetes-operator/blob/main/examples/basic.yaml).
+  A real job sets its own parallelism and needs more TaskManagers.
+
+Flink is from **community-operators**: there is no Red Hat-supported Flink in the
+catalog. It installs, it carries no support, and the wizard and the plan document
+both say so rather than letting it sit unmarked next to two supported products.
+
+### Letting the backend see OperatorHub
+
+```bash
+oc apply -f rbac/operator-catalog-reader.yaml
+```
+
+That is a `Role` in `openshift-marketplace` granting `get` and `list` on
+`packagemanifests`, bound to the ServiceAccount RHDH runs as. RHDH mounts no
+ServiceAccount token by default, so `demo-developer-hub/backstage.yaml` also sets
+`automountServiceAccountToken: true`.
+
+Without either, nothing breaks: every operator reports **not checked** with the
+reason, and the footprints and sizing still work. "Not in this cluster's catalog"
+and "we could not check" are different answers and get different chips — a plan
+that asks for something uninstallable must not look fine doing it.
+
+This is the only part of the planner that talks to Kubernetes, which is why it
+lives in the backend plugin and not in `@aro-planner/common`: common is bundled
+wholesale into the browser, and a cluster token has no business there.
+
 ## Generated artifacts
 
 `emitBundle()` turns a finished plan into the files a request needs. Pure, so the same
@@ -246,11 +310,13 @@ packages/aro-planner-common/     Pure TypeScript. No React, no cluster.
   src/cost.ts                    Pure cost model over a PriceTable
   src/compare.ts                 Deployment model comparison
   src/netpol.ts                  NetworkPolicy generation
+  src/operators.ts               Approved operators and their capacity
   src/azurePrices.ts             Retail Prices API client (server-side only)
   src/emit/                      plan.md, tfvars and manifests from a finished plan
   src/cli.ts                     yarn estimate
 plugins/aro-planner-backend/     Backstage backend plugin
-  src/router.ts                  /plan, /skus, shared price cache
+  src/router.ts                  /plan, /skus, /operators, shared price cache
+  src/operatorHub.ts             Live OperatorHub lookup, the only kube call
   src/mcp.ts                     MCP tools, in-pod callers only
   src/assistant/                 In-page assistant: tool loop and form actions
 plugins/aro-planner/             Backstage frontend plugin: the wizard
@@ -270,6 +336,9 @@ All pure logic lives in `aro-planner-common` so the wizard, the backend and the 
 * **A VM SKU query returns six rows, not one** -- Linux and Windows, each in standard, Spot and Low Priority. Spot is $0.085/hr against $0.46 on-demand, so taking the wrong row understates a cluster fivefold.
 * The OData filter fails between 15 and 18 `armSkuName` clauses, and the endpoint rate-limits with 429. Requests are chunked at 12 and retried; a 400 is never retried.
 * The Retail Prices API sends **no CORS headers**, so pricing must run server-side.
+* **A PackageManifest cannot tell you what an operator costs in capacity.** `currentCSVDesc` carries `annotations`, `description`, `installModes`, CRDs, `version` and little else — no deployment spec, no resource requests. The operand is worse: three Kafka brokers exist only in a CR nobody has created yet. So the live catalog answers "is this installable here", and the footprints stay curated. The half that most needs to be accurate is exactly the half the API cannot supply.
+* **RHDH mounts no ServiceAccount token by default**, and the Deployment is operator-managed, so `automountServiceAccountToken` has to go through `spec.deployment.patch` on the `Backstage` CR. Editing the Deployment directly is reverted.
+* **`oc get packagemanifest -o json` shows channels in catalog order, not preference order.** Reading `channels[0]` returned RHBK 22.0.13 while the default channel was on 26.6.7. Match on `status.defaultChannel`.
 * The MCP endpoint only accepts in-pod callers, checked on the TCP peer address. The assistant sidecar shares the pod; an `Origin` header would be forgeable. It refuses to serve at all if Express `trust proxy` is ever enabled, since that would make `X-Forwarded-For` -- and therefore the peer address -- caller-controlled.
 * **The in-page assistant endpoint is the opposite case.** It is called by a browser, so it must be reachable through the Route. That is why it is off unless configured, rather than restricted by address.
 * `@aro-planner/common` has no runtime dependencies, because it is embedded wholesale into the frontend bundle. That is why the YAML emitter is 120 lines of our own rather than `js-yaml`.

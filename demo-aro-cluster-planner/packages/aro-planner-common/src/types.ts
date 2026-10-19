@@ -1,5 +1,6 @@
 /** Domain model shared by the wizard UI, the backend price proxy and the MCP server. */
 
+import type { OperatorId } from './operators.js';
 import type { StoragePlan, StorageTier } from './storage.js';
 
 export type SkuCategory =
@@ -67,6 +68,14 @@ export interface SizingRequest {
   deploymentModel?: DeploymentModel;
   /** The application this is for. Used to name the namespace and the artifacts. */
   applicationName?: string;
+  /**
+   * Operators the team asked for, from the approved list in `operators.ts`.
+   *
+   * These add to `vcpu` and `ramGiB` before sizing - see `withOperatorCapacity`.
+   * The fields above stay as the user typed them, so the plan can show the
+   * workload and the platform separately rather than one inflated number.
+   */
+  operators?: OperatorId[];
 }
 
 /** A concrete worker pool: one SKU, a node count, and what that actually yields. */
