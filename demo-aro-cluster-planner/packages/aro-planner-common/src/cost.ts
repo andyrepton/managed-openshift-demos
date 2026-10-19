@@ -8,7 +8,9 @@ import type {
 } from './types.js';
 import { DEFAULT_OVERRIDES } from './types.js';
 import { licenceMeterKey, licenceProductName } from './skus.js';
-import { STORAGE_TIER_LABEL, diskMeterKey } from './storage.js';
+import { ODF_NODES, ODF_NODE_RAM_GIB, ODF_NODE_VCPU } from './odf.js';
+import { BLOB_PRODUCT, BLOB_SKU } from './objectStorage.js';
+import { STORAGE_TIER_LABEL, diskFor, diskMeterKey } from './storage.js';
 
 /** Classic ARO always runs exactly three control plane nodes. */
 export const CONTROL_PLANE_NODES = 3;
@@ -234,6 +236,136 @@ export function estimateCost(
           'capacity across many small volumes costs more than this figure. ' +
           'Per-IO transaction charges are not included.',
       );
+    }
+  }
+
+  // --- OpenShift Data Foundation -------------------------------------------
+  //
+  // Three things, all of which people forget when they compare ODF to a cloud
+  // storage service: dedicated nodes that run no application workload, the ARO
+  // licence on those nodes' cores, and three copies of every byte on managed
+  // disks you also pay for.
+  if (plan.odf) {
+    const odf = plan.odf;
+    const each = vmHourly(prices, odf.sku);
+
+    lines.push({
+      label: `ODF nodes - ${odf.sku.name} x${odf.nodes}`,
+      detail: `${odf.nodes * odf.sku.vcpu} vCPU / ${odf.nodes * odf.sku.ramGiB} GiB, dedicated to storage`,
+      hourly: round(each * odf.nodes),
+      source: 'azure-api',
+      sourceNote:
+        `Linux on-demand at $${each}/hr per VM. ODF requires ${ODF_NODES} nodes of at ` +
+        `least ${ODF_NODE_VCPU} vCPU / ${ODF_NODE_RAM_GIB} GiB. No application workload ` +
+        `runs on them.`,
+      included: true,
+    });
+
+    const odfLicence = licenceForPool(prices, odf.sku, odf.nodes, plan.flavour);
+    lines.push({
+      label: `ARO licence - ODF nodes x${odf.nodes}`,
+      detail: `${odf.nodes * odf.sku.vcpu} vCPU`,
+      hourly: round(odfLicence.hourly),
+      source: odfLicence.source,
+      sourceNote: `${odfLicence.note}. ODF nodes are workers and are licensed as such.`,
+      included: true,
+    });
+
+    assumptions.push(
+      `ODF adds ${odf.nodes} dedicated storage nodes that carry no application ` +
+        `workload, and their cores are licensed. Azure Blob and managed disks are ` +
+        `services with no nodes to run.`,
+    );
+
+    // The replicated capacity, costed on the same disk ladder as a PVC.
+    if (odf.rawGiB > 0) {
+      const tier = plan.storage?.tier ?? 'premium-ssd';
+      const backing = diskFor(odf.rawGiB, tier);
+      const monthly = backing ? prices.disk?.[diskMeterKey(tier, backing.name)] : undefined;
+
+      if (backing === null || monthly === undefined) {
+        lines.push({
+          label: 'ODF backing disks',
+          detail: `${odf.usableGiB} GiB usable, ${odf.rawGiB} GiB raw at ${odf.replication}x replication`,
+          hourly: 0,
+          source: 'assumption',
+          sourceNote:
+            `No published ${STORAGE_TIER_LABEL[tier]} meter covering ${odf.rawGiB} GiB in ` +
+            `${prices.region}; excluded from the total.`,
+          included: false,
+        });
+        assumptions.push(
+          'ODF backing disk cost is not included - no managed disk price covered the replicated capacity.',
+        );
+      } else {
+        lines.push({
+          label: `ODF backing disks - ${backing.name} (${STORAGE_TIER_LABEL[tier]})`,
+          detail: `${odf.usableGiB} GiB usable, ${odf.rawGiB} GiB raw at ${odf.replication}x replication`,
+          hourly: round(monthly / opts.hoursPerMonth),
+          source: 'azure-api',
+          sourceNote:
+            `$${monthly}/month for one ${backing.name} LRS disk in ${prices.region}. ` +
+            `Ceph stores ${odf.replication} copies, so ${odf.usableGiB} GiB usable costs ` +
+            `${odf.rawGiB} GiB of provisioned disk.`,
+          included: true,
+        });
+        assumptions.push(
+          `ODF capacity is replicated ${odf.replication}x: you provision and pay for ` +
+            `${odf.rawGiB} GiB to offer ${odf.usableGiB} GiB. The figure assumes one disk ` +
+            `holding the whole raw capacity; a real deployment spreads it over several ` +
+            `devices per node, which costs more.`,
+        );
+      }
+    }
+  }
+
+  // --- Object storage -------------------------------------------------------
+  //
+  // Blob is costed whichever backend was chosen. When ODF is serving the
+  // buckets the Blob figure is still shown, excluded, because the gap between
+  // the two is the entire reason both are offered.
+  if (plan.objectStorage) {
+    const obj = plan.objectStorage;
+    const servedByOdf = obj.backend === 'odf';
+
+    if (obj.blobMonthly === null) {
+      lines.push({
+        label: 'Object storage - Azure Blob (Hot LRS)',
+        detail: `${obj.gib} GiB`,
+        hourly: 0,
+        source: 'assumption',
+        sourceNote: `No published Blob meter for ${prices.region}; excluded from the total.`,
+        included: false,
+      });
+      assumptions.push(
+        `Object storage is not included - no Azure Blob price was available for ${prices.region}.`,
+      );
+    } else {
+      const rate = obj.blobMarginalRate;
+      lines.push({
+        label: servedByOdf
+          ? 'Object storage - the same capacity on Azure Blob'
+          : 'Object storage - Azure Blob (Hot LRS)',
+        detail: `${obj.gib} GiB${servedByOdf ? ', NOT selected - served by ODF above' : ''}`,
+        hourly: round(obj.blobMonthly / opts.hoursPerMonth),
+        source: 'azure-api',
+        sourceNote:
+          `${BLOB_PRODUCT} / ${BLOB_SKU} at $${rate}/GB/month in ${prices.region}, ` +
+          `applied across the published bands. Billed on what is stored, with nothing ` +
+          `to provision.` +
+          (servedByOdf
+            ? ' Shown for comparison only and excluded from the total.'
+            : ''),
+        included: !servedByOdf,
+      });
+
+      if (servedByOdf) {
+        assumptions.push(
+          `The same ${obj.gib} GiB of object storage would cost ` +
+            `$${(obj.blobMonthly).toFixed(2)}/month on Azure Blob, against the ODF nodes ` +
+            `and replicated disks above. Compare the two before committing to ODF.`,
+        );
+      }
     }
   }
 

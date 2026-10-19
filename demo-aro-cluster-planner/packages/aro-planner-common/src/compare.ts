@@ -1,4 +1,5 @@
 import { estimateCost } from './cost.js';
+import { ODF_FORCES_DEDICATED_REASON, odfSelected } from './odf.js';
 import { DEFAULT_OVERRIDES } from './types.js';
 import type {
   ClusterPlan,
@@ -242,6 +243,13 @@ export function compareModels(
     estimate: sharedEstimate,
     summary: `A ${req.vcpu} vCPU / ${req.ramGiB} GiB slice of a cluster that already exists.`,
     tradeoffs: TRADEOFFS['shared-namespace'],
+    // ODF is not a workload a tenant can bring. It labels nodes, claims raw
+    // devices and runs privileged daemons, none of which a namespace on
+    // someone else's cluster can offer - so this stops being a choice. It is
+    // still costed, so the user can see what they are giving up.
+    ...(odfSelected(req)
+      ? { unavailable: true, unavailableReason: ODF_FORCES_DEDICATED_REASON }
+      : {}),
   };
 
   // --- On-premises: five times, monthly ---------------------------------------

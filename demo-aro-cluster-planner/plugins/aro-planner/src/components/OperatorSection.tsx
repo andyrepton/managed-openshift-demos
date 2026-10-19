@@ -51,9 +51,18 @@ function AvailabilityChip({ entry }: { entry: OperatorEntry }) {
 export interface OperatorSectionProps {
   selected: OperatorId[];
   onChange: (ids: OperatorId[]) => void;
+  /** True when a storage backend is ODF. Drives the ODF row's checkbox. */
+  odfSelected: boolean;
+  /** Turn ODF on or off by moving the storage backends, not this list. */
+  onOdfChange: (on: boolean) => void;
 }
 
-export function OperatorSection({ selected, onChange }: OperatorSectionProps) {
+export function OperatorSection({
+  selected,
+  onChange,
+  odfSelected,
+  onOdfChange,
+}: OperatorSectionProps) {
   const discoveryApi = useApi(discoveryApiRef);
   const fetchApi = useApi(fetchApiRef);
 
@@ -79,12 +88,29 @@ export function OperatorSection({ selected, onChange }: OperatorSectionProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const toggle = (id: OperatorId, checked: boolean) =>
-    onChange(checked ? [...selected, id] : selected.filter(s => s !== id));
+  /*
+   * ODF has no state of its own here.
+   *
+   * Its checkbox is a view of the storage backends, and ticking it writes
+   * there. Giving it an independent boolean would allow "ODF operator
+   * selected, no ODF storage", which is not a thing that can be true.
+   */
+  const isChecked = (entry: OperatorEntry) =>
+    entry.derivedFromStorage ? odfSelected : selected.includes(entry.id);
+
+  const toggle = (entry: OperatorEntry, checked: boolean) => {
+    if (entry.derivedFromStorage) {
+      onOdfChange(checked);
+      return;
+    }
+    onChange(checked ? [...selected, entry.id] : selected.filter(s => s !== entry.id));
+  };
 
   // Computed from the same function the backend sizes with, so the figure the
   // user reads here and the capacity they are charged for cannot diverge.
-  const footprint = operatorFootprint(selected);
+  const footprint = operatorFootprint(
+    odfSelected ? [...selected.filter(s => s !== 'odf'), 'odf'] : selected.filter(s => s !== 'odf'),
+  );
 
   return (
     <Paper variant="outlined" sx={{ p: 2 }}>
@@ -114,21 +140,32 @@ export function OperatorSection({ selected, onChange }: OperatorSectionProps) {
                 sx={{ mr: 0 }}
                 control={
                   <Checkbox
-                    checked={selected.includes(entry.id)}
+                    checked={isChecked(entry)}
                     // A missing package is still selectable. The platform team
                     // may be about to add the catalog, and a plan that records
                     // the need is more useful than a disabled checkbox that
                     // records nothing.
-                    onChange={e => toggle(entry.id, e.target.checked)}
+                    onChange={e => toggle(entry, e.target.checked)}
                   />
                 }
                 label={<Typography variant="body2">{entry.label}</Typography>}
               />
-              <Chip
-                size="small"
-                variant="outlined"
-                label={`${entry.vcpu} vCPU / ${entry.ramGiB} GiB`}
-              />
+              {entry.costedSeparately ? (
+                <Tooltip title="Costed as its own node pool, not added to the worker sizing">
+                  <Chip
+                    size="small"
+                    variant="outlined"
+                    color="warning"
+                    label={`${entry.dedicatedNodes ?? 0} dedicated nodes`}
+                  />
+                </Tooltip>
+              ) : (
+                <Chip
+                  size="small"
+                  variant="outlined"
+                  label={`${entry.vcpu} vCPU / ${entry.ramGiB} GiB`}
+                />
+              )}
               <AvailabilityChip entry={entry} />
               {!entry.supported && (
                 <Tooltip title={`From ${entry.catalog}, which Red Hat does not support`}>
@@ -138,7 +175,7 @@ export function OperatorSection({ selected, onChange }: OperatorSectionProps) {
             </Stack>
             <Typography
               variant="caption"
-              color="text.secondary"
+              color={entry.costedSeparately && isChecked(entry) ? 'warning.main' : 'text.secondary'}
               display="block"
               sx={{ pl: 4, pb: 0.5 }}
             >

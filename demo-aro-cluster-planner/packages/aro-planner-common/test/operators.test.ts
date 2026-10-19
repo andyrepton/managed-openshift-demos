@@ -37,8 +37,16 @@ describe('the approved catalog', () => {
 
   it('states a footprint and where it came from for every entry', () => {
     for (const o of OPERATOR_CATALOG) {
-      expect(o.vcpu).toBeGreaterThan(0);
-      expect(o.ramGiB).toBeGreaterThan(0);
+      if (o.costedSeparately) {
+        // Its capacity is dedicated nodes, costed as their own pool. A nonzero
+        // figure here would be added to the worker sizing as well.
+        expect(o.vcpu).toBe(0);
+        expect(o.ramGiB).toBe(0);
+        expect(o.dedicatedNodes).toBeGreaterThan(0);
+      } else {
+        expect(o.vcpu).toBeGreaterThan(0);
+        expect(o.ramGiB).toBeGreaterThan(0);
+      }
       expect(o.sourceNote.length).toBeGreaterThan(20);
     }
   });
@@ -91,6 +99,32 @@ describe('operatorFootprint', () => {
     const f = operatorFootprint(OPERATOR_IDS);
     expect(f.vcpu.toString()).not.toMatch(/\d{6,}/);
     expect(f.ramGiB.toString()).not.toMatch(/\d{6,}/);
+  });
+
+  it('leaves ODF out of the worker totals - its nodes are costed separately', () => {
+    // The double-count guard. ODF's three dedicated nodes are a pool in
+    // cost.ts; adding capacity for them here would bill the same hardware
+    // twice, and the total would look merely high rather than wrong.
+    const withoutOdf = operatorFootprint(['rhbk']);
+    const withOdf = operatorFootprint(['rhbk', 'odf']);
+    expect(withOdf.vcpu).toBe(withoutOdf.vcpu);
+    expect(withOdf.ramGiB).toBe(withoutOdf.ramGiB);
+  });
+
+  it('still lists ODF, so the plan records that it was asked for', () => {
+    const f = operatorFootprint(['odf']);
+    expect(f.items.map(o => o.id)).toEqual(['odf']);
+    expect(f.vcpu).toBe(0);
+  });
+
+  it('does not change the recommended pool when ODF is added', () => {
+    const base = recommendNodePools({ ...baseRequest, operators: ['rhbk'] }, { limit: 1 })[0]!;
+    const odf = recommendNodePools(
+      { ...baseRequest, operators: ['rhbk', 'odf'] },
+      { limit: 1 },
+    )[0]!;
+    expect(odf.nodes).toBe(base.nodes);
+    expect(odf.sku.name).toBe(base.sku.name);
   });
 
   it('flags a community selection', () => {

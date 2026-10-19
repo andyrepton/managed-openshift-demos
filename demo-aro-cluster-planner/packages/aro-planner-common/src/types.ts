@@ -1,7 +1,17 @@
 /** Domain model shared by the wizard UI, the backend price proxy and the MCP server. */
 
+import type { OdfPlan } from './odf.js';
+import type { BlobTier, ObjectBackend, ObjectStoragePlan } from './objectStorage.js';
 import type { OperatorId } from './operators.js';
 import type { StoragePlan, StorageTier } from './storage.js';
+
+/**
+ * How block storage is served.
+ *
+ * `azure-disk` is a managed disk per PVC, which is what ARO does out of the
+ * box. `odf` serves the same capacity from Ceph on dedicated nodes.
+ */
+export type BlockBackend = 'azure-disk' | 'odf';
 
 export type SkuCategory =
   | 'general-purpose'
@@ -64,6 +74,15 @@ export interface SizingRequest {
   storageGiB?: number;
   /** Managed disk tier backing those PVCs. Defaults to Premium SSD, as ARO does. */
   storageTier?: StorageTier;
+  /** How `storageGiB` is served. Defaults to managed disks, as ARO does. */
+  blockBackend?: BlockBackend;
+  /**
+   * Object storage in GiB - buckets, not volumes. Served by Azure Blob unless
+   * ODF is selected, in which case it comes from ODF's own gateway.
+   */
+  objectStorageGiB?: number;
+  /** How `objectStorageGiB` is served. Defaults to Azure Blob. */
+  objectBackend?: ObjectBackend;
   /** Which model the user has chosen. Drives what the UI shows and what is emitted. */
   deploymentModel?: DeploymentModel;
   /** The application this is for. Used to name the namespace and the artifacts. */
@@ -141,6 +160,13 @@ export interface PriceTable {
    * Monthly, not hourly: Azure bills managed disks per provisioned disk per month.
    */
   disk?: Record<string, number>;
+  /**
+   * Azure Blob Hot LRS "Data Stored" bands, cheapest band first.
+   *
+   * An array rather than one rate because the meter is graduated: Azure bills
+   * the first 50 TB at one price and the remainder at another.
+   */
+  blob?: BlobTier[];
   /** `<productName>|<vcpu>` -> $/hr, from the `Virtual Machines Licenses` meters. */
   aroLicence: Record<string, number>;
   /**
@@ -208,6 +234,16 @@ export interface ClusterPlan {
   workerPools: NodePoolPlan[];
   /** PVC-backed managed disks. Absent means no storage was asked for. */
   storage?: StoragePlan;
+  /**
+   * ODF, when it is serving either kind of storage.
+   *
+   * Its nodes are a separate pool from `workerPools` on purpose: they are
+   * dedicated to storage and nothing the application asked for runs on them,
+   * so folding them into the worker count would overstate usable capacity.
+   */
+  odf?: OdfPlan;
+  /** Object storage, whichever backend serves it. */
+  objectStorage?: ObjectStoragePlan;
 }
 
 /** How a model's cost lands: a recurring bill, or a single capital outlay. */
@@ -227,6 +263,15 @@ export interface ModelComparison {
   summary: string;
   /** Shown when `estimate` is null, explaining what is needed to price it. */
   unpricedReason?: string;
+  /**
+   * True when this model cannot host the request at all.
+   *
+   * Distinct from unpriced. Unpriced means "we do not know the number";
+   * unavailable means "this is not a choice you have", and a UI that greys the
+   * option out owes the user the reason below.
+   */
+  unavailable?: boolean;
+  unavailableReason?: string;
   /** Operational differences that cost alone does not capture. */
   tradeoffs: string[];
 }

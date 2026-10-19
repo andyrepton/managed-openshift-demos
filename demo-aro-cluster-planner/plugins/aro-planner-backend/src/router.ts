@@ -7,13 +7,22 @@ import {
   type PriceTable,
   type PricingOverrides,
   type EndpointRequest,
+  type OdfPlan,
   type OperatorId,
   type SizingRequest,
   type Sku,
   type WorkloadProfile,
+  ODF_NODES,
+  ODF_NODE_RAM_GIB,
+  ODF_NODE_VCPU,
+  ODF_REPLICATION,
   OPERATOR_CATALOG,
   OPERATOR_IDS,
   isOperatorId,
+  odfNodeSku,
+  odfRawGiB,
+  odfSelected,
+  planObjectStorage,
   buildPriceTable,
   cheapestPriced,
   compareModels,
@@ -110,6 +119,20 @@ function parsePlanRequest(body: unknown): SizingRequest {
   }
   const tier = b.storageTier === 'standard-ssd' ? 'standard-ssd' : 'premium-ssd';
 
+  const objectStorageGiB = b.objectStorageGiB === undefined ? 0 : Number(b.objectStorageGiB);
+  if (!Number.isFinite(objectStorageGiB) || objectStorageGiB < 0) {
+    throw new BadRequest('objectStorageGiB must be zero or a positive number');
+  }
+  // Blob has no hard ceiling worth enforcing, but a typo should not quietly
+  // produce a six-figure monthly estimate.
+  if (objectStorageGiB > 10_000_000) {
+    throw new BadRequest('objectStorageGiB is implausibly large');
+  }
+
+  const blockBackend = b.blockBackend === 'odf' ? 'odf' : 'azure-disk';
+  const objectBackend = b.objectBackend === 'odf' ? 'odf' : 'azure-blob';
+
+
   // Unknown ids are rejected rather than dropped. Silently ignoring one would
   // size and price a cluster for fewer operators than the caller asked for,
   // and the response looks identical to a correct one.
@@ -126,6 +149,14 @@ function parsePlanRequest(body: unknown): SizingRequest {
     }
     operators = [...new Set(b.operators as OperatorId[])];
   }
+
+  // ODF's presence in the operator list follows from the storage backends, not
+  // from a checkbox, and it is derived here rather than trusted from the client
+  // so the plan document and the cost panel cannot disagree about whether it
+  // was requested. Stripped first, so a stale client cannot leave it selected
+  // with no ODF storage behind it.
+  operators = operators.filter(id => id !== 'odf');
+  if (blockBackend === 'odf' || objectBackend === 'odf') operators.push('odf');
 
   return {
     flavour,
@@ -144,6 +175,9 @@ function parsePlanRequest(body: unknown): SizingRequest {
     ...(version ? { openshiftVersion: version } : {}),
     ...(storageGiB > 0 ? { storageGiB, storageTier: tier } : {}),
     ...(operators.length > 0 ? { operators } : {}),
+    ...(objectStorageGiB > 0 ? { objectStorageGiB } : {}),
+    blockBackend,
+    objectBackend,
   };
 }
 
@@ -275,6 +309,18 @@ export function createRouter(options: RouterOptions = {}): Router {
       ...(request.openshiftVersion ? { openshiftVersion: request.openshiftVersion } : {}),
     });
 
+    // ODF nodes are sized by ODF's own minimum, not by the workload profile, so
+    // their candidates have to be priced too. Without this a memory-heavy
+    // request would filter the general-purpose 16/64 sizes out of the price
+    // query, odfNodeSku would find nothing priced, and ODF would silently cost
+    // nothing at all - the worst possible failure for the comparison this is
+    // meant to draw.
+    const odfCandidates = odfSelected(request)
+      ? findSkus({ role: 'worker', allowDay2Only: false }).filter(
+          s => s.vcpu >= ODF_NODE_VCPU && s.ramGiB >= ODF_NODE_RAM_GIB,
+        )
+      : [];
+
     const controlPlaneSkuName = String(
       (body as Record<string, unknown>)?.controlPlaneSku ?? 'Standard_D8s_v3',
     );
@@ -305,7 +351,11 @@ export function createRouter(options: RouterOptions = {}): Router {
 
     let prices: PriceTable;
     try {
-      prices = await loadPrices(cpSku ? [...candidates, cpSku] : candidates, request.region);
+      const toPrice = [...candidates, ...odfCandidates, ...(cpSku ? [cpSku] : [])];
+      // Deduplicate: a general-purpose request already carries most of the ODF
+      // candidates, and the OData filter fails somewhere past 15 clauses.
+      const unique = [...new Map(toPrice.map(s => [s.name, s])).values()];
+      prices = await loadPrices(unique, request.region);
     } catch (err) {
       return {
         ok: false,
@@ -342,8 +392,36 @@ export function createRouter(options: RouterOptions = {}): Router {
         ? recommendations.find(r => r.sku.name === wanted)
         : undefined) ?? recommendations[0]!;
 
-    const storage = request.storageGiB
-      ? planStorage(request.storageGiB, request.storageTier ?? 'premium-ssd')
+    // Block storage only lands on managed disks when ODF is not serving it.
+    // Costing both would bill the same capacity twice.
+    const blockOnOdf = request.blockBackend === 'odf';
+    const storage =
+      request.storageGiB && !blockOnOdf
+        ? planStorage(request.storageGiB, request.storageTier ?? 'premium-ssd')
+        : null;
+
+    const objectStorage = planObjectStorage(
+      request.objectStorageGiB ?? 0,
+      request.objectBackend ?? 'azure-blob',
+      prices.blob,
+    );
+
+    // Everything ODF is asked to serve shares one pool and one replication
+    // factor, so the raw figure is the sum of both kinds of capacity.
+    const odfUsableGiB =
+      (blockOnOdf ? (request.storageGiB ?? 0) : 0) +
+      (request.objectBackend === 'odf' ? (request.objectStorageGiB ?? 0) : 0);
+    const odfSku = odfSelected(request) ? odfNodeSku(prices) : null;
+    const odf: OdfPlan | null = odfSku
+      ? {
+          nodes: ODF_NODES,
+          sku: odfSku,
+          usableGiB: odfUsableGiB,
+          rawGiB: odfRawGiB(odfUsableGiB),
+          replication: ODF_REPLICATION,
+          servesObject: request.objectBackend === 'odf',
+          servesBlock: blockOnOdf,
+        }
       : null;
 
     const plan: ClusterPlan = {
@@ -352,6 +430,8 @@ export function createRouter(options: RouterOptions = {}): Router {
       ...(request.flavour === 'classic' && cpSku ? { controlPlaneSku: cpSku } : {}),
       workerPools: [chosenPool],
       ...(storage ? { storage } : {}),
+      ...(odf ? { odf } : {}),
+      ...(objectStorage ? { objectStorage } : {}),
     };
 
     // Connectivity -> NetworkPolicies. Namespace defaults to the application name

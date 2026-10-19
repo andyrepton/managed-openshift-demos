@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import Alert from '@mui/material/Alert';
+import AlertTitle from '@mui/material/AlertTitle';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Card from '@mui/material/Card';
@@ -10,16 +11,30 @@ import Checkbox from '@mui/material/Checkbox';
 import Chip from '@mui/material/Chip';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Grid from '@mui/material/Grid';
+import Link from '@mui/material/Link';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import ToggleButton from '@mui/material/ToggleButton';
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
+import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 
 import { discoveryApiRef, fetchApiRef, useApi } from '@backstage/core-plugin-api';
 
-import { planStorage } from '@aro-planner/common';
+import {
+  ODF_DOC_URL,
+  ODF_FORCES_DEDICATED_REASON,
+  ODF_NODES,
+  ODF_NODE_RAM_GIB,
+  ODF_NODE_VCPU,
+  ODF_REPLICATION,
+  ODF_WARNING_BODY,
+  ODF_WARNING_TITLE,
+  odfSelected,
+  planStorage,
+} from '@aro-planner/common';
 
 import {
   fetchPlan,
@@ -150,6 +165,38 @@ export function Wizard({ onPlanChange, initial }: WizardProps) {
   }, [key]);
 
   const onPrem = form.deploymentModel === 'on-premises';
+  const odfOn = odfSelected(form);
+  // Everything ODF is serving shares one replicated pool.
+  const odfUsableGiB =
+    (form.blockBackend === 'odf' ? (form.storageGiB ?? 0) : 0) +
+    (form.objectBackend === 'odf' ? (form.objectStorageGiB ?? 0) : 0);
+
+  /** The reason a model cannot be chosen, or undefined when it can. */
+  const unavailableFor = (model: string): string | undefined => {
+    const entry = plan?.comparison.find(c => c.model === model);
+    if (entry?.unavailable) return entry.unavailableReason ?? 'Not available for this request.';
+    // The backend is the authority, but it answers on a debounce. Without this
+    // the shared-namespace button stays live for 400ms after selecting ODF,
+    // long enough to click.
+    if (odfOn && model === 'shared-namespace') return ODF_FORCES_DEDICATED_REASON;
+    return undefined;
+  };
+
+  /*
+   * Selecting ODF moves the deployment model, rather than leaving an
+   * impossible combination selected and complaining about it.
+   *
+   * ODF labels nodes, claims raw devices and runs privileged daemons, so a
+   * tenant namespace cannot host it. Disabling the button alone would leave a
+   * user who had already chosen "shared namespace" looking at a form that
+   * silently contradicts itself.
+   */
+  useEffect(() => {
+    if (odfOn && form.deploymentModel === 'shared-namespace') {
+      set('deploymentModel', 'dedicated-cluster');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [odfOn, form.deploymentModel]);
 
   // Follow the chosen model. Previously this read plan.estimate, which is always
   // the dedicated-cluster costing, so selecting "namespace" left the panel stale.
@@ -238,19 +285,37 @@ export function Wizard({ onPlanChange, initial }: WizardProps) {
               >
                 {MODELS.map(m => {
                   const price = priceFor(m.id);
-                  return (
-                    <ToggleButton key={m.id} value={m.id} sx={{ flexDirection: 'column', py: 1 }}>
+                  const blocked = unavailableFor(m.id);
+                  const button = (
+                    <ToggleButton
+                      key={m.id}
+                      value={m.id}
+                      disabled={blocked !== undefined}
+                      sx={{ flexDirection: 'column', py: 1 }}
+                    >
                       <Typography variant="body2" sx={{ textTransform: 'none', fontWeight: 600 }}>
                         {m.label}
                       </Typography>
                       <Typography
                         variant="caption"
                         sx={{ textTransform: 'none' }}
-                        color={price.assumed ? 'warning.main' : 'success.main'}
+                        color={
+                          blocked ? 'text.disabled' : price.assumed ? 'warning.main' : 'success.main'
+                        }
                       >
-                        {price.text}
+                        {blocked ? 'unavailable' : price.text}
                       </Typography>
                     </ToggleButton>
+                  );
+                  // A disabled control that does not say why is just a dead
+                  // end. MUI swallows events on a disabled button, so the
+                  // tooltip needs a wrapper that still receives them.
+                  return blocked ? (
+                    <Tooltip key={m.id} title={blocked}>
+                      <span style={{ display: 'flex', flex: 1 }}>{button}</span>
+                    </Tooltip>
+                  ) : (
+                    button
                   );
                 })}
               </ToggleButtonGroup>
@@ -322,20 +387,39 @@ export function Wizard({ onPlanChange, initial }: WizardProps) {
 
                 <Grid item xs={6} sm={4}>
                   <TextField
-                    label="Persistent storage (GiB)" type="number" fullWidth size="small"
+                    label="Block storage (GiB)" type="number" fullWidth size="small"
                     inputProps={{ min: 0, max: 32767 }}
                     value={form.storageGiB ?? 0}
                     onChange={e => set('storageGiB', Math.max(0, Number(e.target.value)))}
-                    helperText={onPrem ? 'Still sized, not costed' : '0 for none'}
+                    helperText={onPrem ? 'Still sized, not costed' : 'PVCs. 0 for none'}
                   />
                 </Grid>
+
+                {/* Block storage backend. Managed disks are what ARO gives you;
+                    ODF is the same capacity served from Ceph on nodes you pay
+                    for three times over. */}
+                {!onPrem && (
+                  <Grid item xs={6} sm={4}>
+                    <TextField
+                      select label="Served by" fullWidth size="small"
+                      SelectProps={{ native: true }}
+                      InputLabelProps={{ shrink: true }}
+                      disabled={!(form.storageGiB && form.storageGiB > 0)}
+                      value={form.blockBackend ?? 'azure-disk'}
+                      onChange={e => set('blockBackend', e.target.value as PlanInput['blockBackend'])}
+                    >
+                      <option value="azure-disk">Azure managed disks</option>
+                      <option value="odf">OpenShift Data Foundation</option>
+                    </TextField>
+                  </Grid>
+                )}
 
                 {/* Azure disk tiers are meaningless on-premises - there are no
                     managed disks to choose between. The capacity is still worth
                     capturing, because whoever owns the on-prem platform needs
                     the number; it just is not something this tool can price. */}
                 {!onPrem && (
-                  <Grid item xs={6} sm={8}>
+                  <Grid item xs={6} sm={4}>
                     <TextField
                       select label="Disk tier" fullWidth size="small"
                       SelectProps={{ native: true }}
@@ -343,11 +427,83 @@ export function Wizard({ onPlanChange, initial }: WizardProps) {
                       disabled={!(form.storageGiB && form.storageGiB > 0)}
                       value={form.storageTier ?? 'premium-ssd'}
                       onChange={e => set('storageTier', e.target.value as PlanInput['storageTier'])}
+                      helperText={
+                        form.blockBackend === 'odf' ? 'Also backs the ODF disks' : undefined
+                      }
                     >
                       {STORAGE_TIERS.map(t => (
                         <option key={t.id} value={t.id}>{t.label}</option>
                       ))}
                     </TextField>
+                  </Grid>
+                )}
+
+                {/* Object storage. Buckets, not volumes - a different thing
+                    from the block capacity above, and the one where the gap
+                    between a cloud service and self-hosted Ceph is widest. */}
+                {!onPrem && (
+                  <Grid item xs={6} sm={4}>
+                    <TextField
+                      label="Object storage (GiB)" type="number" fullWidth size="small"
+                      inputProps={{ min: 0 }}
+                      value={form.objectStorageGiB ?? 0}
+                      onChange={e =>
+                        set('objectStorageGiB', Math.max(0, Number(e.target.value)))
+                      }
+                      helperText="Buckets. 0 for none"
+                    />
+                  </Grid>
+                )}
+
+                {!onPrem && (
+                  <Grid item xs={6} sm={8}>
+                    <TextField
+                      select label="Object storage served by" fullWidth size="small"
+                      SelectProps={{ native: true }}
+                      InputLabelProps={{ shrink: true }}
+                      disabled={!((form.objectStorageGiB ?? 0) > 0)}
+                      value={form.objectBackend ?? 'azure-blob'}
+                      onChange={e =>
+                        set('objectBackend', e.target.value as PlanInput['objectBackend'])
+                      }
+                      helperText={
+                        form.blockBackend === 'odf' && form.objectBackend !== 'odf'
+                          ? 'ODF is already running for block storage - its gateway can serve this too'
+                          : form.objectBackend === 'odf'
+                            ? 'Azure Blob is unavailable while ODF serves object storage'
+                            : 'Metered per GB stored, nothing to provision'
+                      }
+                    >
+                      <option value="azure-blob">Azure Blob (Hot LRS)</option>
+                      <option value="odf">OpenShift Data Foundation</option>
+                    </TextField>
+                  </Grid>
+                )}
+
+                {/* The point of offering ODF at all. Deliberately large and
+                    deliberately not dismissible: a team that picks Ceph in a
+                    cloud that already sells storage should have been shown the
+                    other number first. */}
+                {odfOn && !onPrem && (
+                  <Grid item xs={12}>
+                    <Alert severity="warning" icon={<WarningAmberIcon fontSize="large" />}>
+                      <AlertTitle sx={{ fontWeight: 700 }}>{ODF_WARNING_TITLE}</AlertTitle>
+                      <Typography variant="body2" paragraph sx={{ mb: 1 }}>
+                        {ODF_WARNING_BODY}
+                      </Typography>
+                      <Typography variant="body2">
+                        This request now includes <strong>{ODF_NODES} dedicated storage
+                        nodes</strong> of at least {ODF_NODE_VCPU} vCPU / {ODF_NODE_RAM_GIB} GiB
+                        each, which run no application workload, and{' '}
+                        <strong>{ODF_REPLICATION}x replication</strong> &mdash;{' '}
+                        {odfUsableGiB} GiB usable costs {odfUsableGiB * ODF_REPLICATION} GiB of
+                        provisioned disk. A namespace on a shared cluster is no longer an
+                        option.{' '}
+                        <Link href={ODF_DOC_URL} target="_blank" rel="noopener">
+                          ODF infrastructure requirements
+                        </Link>
+                      </Typography>
+                    </Alert>
                   </Grid>
                 )}
 
@@ -437,6 +593,18 @@ export function Wizard({ onPlanChange, initial }: WizardProps) {
             <OperatorSection
               selected={form.operators ?? []}
               onChange={(ids: OperatorId[]) => set('operators', ids)}
+              odfSelected={odfOn}
+              // Ticking ODF here moves both storage backends, because that is
+              // where ODF actually lives. Setting both keeps one meaning for
+              // "ODF is on"; a user who wants it for only one kind changes
+              // the other selector back, and the checkbox stays ticked.
+              onOdfChange={(on: boolean) =>
+                setForm(f => ({
+                  ...f,
+                  blockBackend: on ? 'odf' : 'azure-disk',
+                  objectBackend: on ? 'odf' : 'azure-blob',
+                }))
+              }
             />
 
             <NetworkSection

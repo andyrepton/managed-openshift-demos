@@ -172,6 +172,30 @@ describe('POST /plan with operators', () => {
     expect(res.body.error).toMatch(/unknown operator/);
   });
 
+  it('adds ODF to the operator list when a storage backend selects it', async () => {
+    const res = await request(app())
+      .post('/api/aro-planner/plan')
+      .send({ ...base, storageGiB: 500, blockBackend: 'odf' });
+    expect(res.status).toBe(200);
+    expect(res.body.request.operators).toContain('odf');
+  });
+
+  it('strips ODF when no backend uses it, whatever the client sent', async () => {
+    const res = await request(app())
+      .post('/api/aro-planner/plan')
+      .send({ ...base, operators: ['odf', 'rhbk'] });
+    expect(res.status).toBe(200);
+    expect(res.body.request.operators).toEqual(['rhbk']);
+  });
+
+  it('does not let ODF inflate the worker pool it is not scheduled on', async () => {
+    const plain = await request(app()).post('/api/aro-planner/plan').send(base);
+    const withOdf = await request(app())
+      .post('/api/aro-planner/plan')
+      .send({ ...base, storageGiB: 500, blockBackend: 'odf' });
+    expect(withOdf.body.recommendations[0].nodes).toBe(plain.body.recommendations[0].nodes);
+  });
+
   it('rejects a non-array', async () => {
     const res = await request(app())
       .post('/api/aro-planner/plan')

@@ -1,5 +1,6 @@
 import type { PriceTable, Sku } from './types.js';
 import { licenceMeterKey } from './skus.js';
+import { BLOB_METER, BLOB_PRODUCT, BLOB_SKU, type BlobTier } from './objectStorage.js';
 import { STORAGE_PRODUCT } from './storage.js';
 
 /**
@@ -26,6 +27,8 @@ interface RetailItem {
   armRegionName: string;
   type: string;
   unitOfMeasure: string;
+  /** Present on graduated meters: the quantity at which this band starts. */
+  tierMinimumUnits?: number;
 }
 
 interface RetailPage {
@@ -219,18 +222,53 @@ export async function fetchDiskPrices(
   return out;
 }
 
+/**
+ * Azure Blob Hot LRS storage rates.
+ *
+ * Returns every published band rather than one number, because the meter is
+ * graduated - Azure bills the first 50 TB at one rate and the rest at another,
+ * and collapsing that to a single figure is wrong above 50 TB whichever band
+ * you pick.
+ *
+ * Matched on `productName` as well as `meterName`: the legacy `Blob Storage`
+ * product publishes a meter with the identical name at slightly different
+ * prices, so filtering on the meter alone returns both and the answer depends
+ * on which arrives first.
+ */
+export async function fetchBlobPrices(
+  region: string,
+  opts: FetchOptions = {},
+): Promise<BlobTier[]> {
+  const filter =
+    `serviceName eq 'Storage' and armRegionName eq '${region}' ` +
+    `and priceType eq 'Consumption' ` +
+    `and productName eq '${BLOB_PRODUCT}' and skuName eq '${BLOB_SKU}' ` +
+    `and meterName eq '${BLOB_METER}'`;
+
+  const tiers: BlobTier[] = [];
+  for (const item of await queryAll(filter, opts)) {
+    if (item.unitOfMeasure !== '1 GB/Month') continue;
+    tiers.push({
+      minGiB: item.tierMinimumUnits ?? 0,
+      perGiBMonth: item.retailPrice,
+    });
+  }
+  return tiers.sort((a, b) => a.minGiB - b.minGiB);
+}
+
 /** Build a complete PriceTable for the SKUs a plan needs. */
 export async function buildPriceTable(
   skus: readonly Sku[],
   region: string,
   opts: FetchOptions = {},
 ): Promise<PriceTable> {
-  const [vm, aroLicence, disk] = await Promise.all([
+  const [vm, aroLicence, disk, blob] = await Promise.all([
     fetchVmPrices(skus.map(s => s.name), region, opts),
     fetchAroLicencePrices(opts),
     // Storage is optional: a failure here must not stop a cluster being priced,
     // so it degrades to an unpriced storage line rather than a failed request.
     fetchDiskPrices(region, opts).catch(() => ({})),
+    fetchBlobPrices(region, opts).catch((): BlobTier[] => []),
   ]);
 
   return {
@@ -238,6 +276,7 @@ export async function buildPriceTable(
     region,
     vm,
     disk,
+    blob,
     aroLicence,
     aroLicencePerVcpu: ARO_LICENCE_PER_VCPU_FALLBACK,
     retrievedAt: new Date().toISOString(),

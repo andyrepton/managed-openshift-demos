@@ -6,5 +6,7 @@ export * from './azurePrices.js';
 export * from './netpol.js';
 export * from './storage.js';
 export * from './operators.js';
+export * from './odf.js';
+export * from './objectStorage.js';
 export * from './recommend.js';
 export * from './emit/index.js';

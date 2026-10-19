@@ -23,8 +23,15 @@
  */
 
 import type { SizingRequest } from './types.js';
+import {
+  ODF_NODES,
+  ODF_NODE_RAM_GIB,
+  ODF_NODE_VCPU,
+  ODF_PACKAGE,
+  ODF_REPLICATION,
+} from './odf.js';
 
-export type OperatorId = 'rhbk' | 'amq-streams' | 'flink';
+export type OperatorId = 'rhbk' | 'amq-streams' | 'flink' | 'odf';
 
 /** Which catalog source ships the package, which is also its support story. */
 export type OperatorCatalog = 'redhat-operators' | 'certified-operators' | 'community-operators';
@@ -45,6 +52,25 @@ export interface OperatorOption {
   breakdown: string;
   /** Where the figures came from, or that they are assumed. */
   sourceNote: string;
+  /**
+   * True when this operator's capacity is NOT worker pods.
+   *
+   * ODF is the case: it runs on its own dedicated nodes, costed as a separate
+   * pool in `cost.ts`. Adding its capacity to the worker sizing as well would
+   * bill the same hardware twice, so `operatorFootprint` leaves it out of the
+   * totals while still listing it. `vcpu` and `ramGiB` stay zero to make a
+   * mistake here impossible rather than merely unlikely.
+   */
+  costedSeparately?: boolean;
+  /** Dedicated nodes this operator requires, when it has any. */
+  dedicatedNodes?: number;
+  /**
+   * Selected by choosing it elsewhere in the form rather than by its checkbox.
+   *
+   * ODF is picked as a storage backend; the operator entry reflects that
+   * choice so the catalog check and the plan document both see it.
+   */
+  derivedFromStorage?: boolean;
 }
 
 /**
@@ -103,6 +129,29 @@ export const OPERATOR_CATALOG: OperatorOption[] = [
       'and needs more TaskManagers. The operator pod is assumed at 0.25 vCPU / ' +
       '0.5 GiB.',
   },
+  {
+    id: 'odf',
+    label: 'OpenShift Data Foundation',
+    packageName: ODF_PACKAGE,
+    catalog: 'redhat-operators',
+    supported: true,
+    // Zero on purpose. ODF's capacity is three dedicated nodes, costed as
+    // their own pool. Putting a figure here would add it to the worker sizing
+    // as well and charge for the same hardware twice.
+    vcpu: 0,
+    ramGiB: 0,
+    costedSeparately: true,
+    dedicatedNodes: ODF_NODES,
+    derivedFromStorage: true,
+    breakdown:
+      `${ODF_NODES} dedicated nodes of at least ${ODF_NODE_VCPU} vCPU / ` +
+      `${ODF_NODE_RAM_GIB} GiB, plus ${ODF_REPLICATION}x replicated disks, costed ` +
+      'as their own pool rather than added to the worker sizing.',
+    sourceNote:
+      'Node minimums are the ODF "Planning your deployment" guide, chapter 7. ' +
+      'Selected by choosing ODF as a storage backend, not by this checkbox - ' +
+      'see the Storage section.',
+  },
 ];
 
 export const OPERATOR_IDS: OperatorId[] = OPERATOR_CATALOG.map(o => o.id);
@@ -142,9 +191,14 @@ export function operatorFootprint(ids: readonly OperatorId[] | undefined): Opera
   // them in binary floating point otherwise surfaces 10.949999999999999 in the UI.
   const round = (n: number) => Math.round(n * 100) / 100;
 
+  // Only operators that run as worker pods add to the worker sizing. ODF runs
+  // on dedicated nodes priced as their own pool, so counting it here too would
+  // bill the same hardware twice.
+  const inWorkerPools = items.filter(o => !o.costedSeparately);
+
   return {
-    vcpu: round(items.reduce((sum, o) => sum + o.vcpu, 0)),
-    ramGiB: round(items.reduce((sum, o) => sum + o.ramGiB, 0)),
+    vcpu: round(inWorkerPools.reduce((sum, o) => sum + o.vcpu, 0)),
+    ramGiB: round(inWorkerPools.reduce((sum, o) => sum + o.ramGiB, 0)),
     items,
     hasUnsupported: items.some(o => !o.supported),
   };
