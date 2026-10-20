@@ -107,6 +107,31 @@ rules:
   - apiGroups: ['workspace.devfile.io']
     resources: ['devworkspaces', 'devworkspacetemplates']
     verbs: ['get', 'list', 'create', 'patch', 'update']
+
+  # The container-build SCC. This is the sharpest grant in this file, and it
+  # is not optional on a cluster configured like this one.
+  #
+  # The DevWorkspaceOperatorConfig adds SETGID, SETUID and
+  # allowPrivilegeEscalation to EVERY workspace container, so `restricted-v2`
+  # refuses the pod and no workspace starts. A workspace declares
+  # `controller.devfile.io/scc: container-build`, which makes the controller
+  # grant the workspace's own ServiceAccount that SCC - and the admission
+  # webhook requires whoever CREATES the workspace to hold it too, precisely
+  # so this cannot be used to escalate quietly.
+  #
+  # What it means: combined with cluster-wide `devworkspaces create` - RBAC
+  # cannot scope `create` by name pattern - this ServiceAccount could start
+  # SETUID/SETGID pods in any namespace it can reach. The `<username>-devspaces`
+  # restriction is enforced in the plugin from the signed-in caller, not here.
+  # It is the same capability Che's own ServiceAccount already holds, for the
+  # same workspaces.
+  #
+  # Remove this and the plugin still creates namespaces and quotas; workspace
+  # creation then fails with a message saying so.
+  - apiGroups: ['security.openshift.io']
+    resources: ['securitycontextconstraints']
+    resourceNames: ['container-build']
+    verbs: ['use']
   # The che-code editor definition, needed to build the workspace's editor
   # template. Nothing supplies an editor to a DevWorkspace automatically -
   # the Dev Spaces dashboard does that, so bypassing the dashboard means

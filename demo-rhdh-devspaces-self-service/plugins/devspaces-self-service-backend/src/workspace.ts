@@ -115,10 +115,30 @@ export interface DevWorkspaceOptions {
  * The DevWorkspace.
  *
  * The attributes are not decoration. `devworkspace-config` points it at the
- * operator config Dev Spaces manages, `scc` gives it the container-build SCC
- * the CheCluster specifies, and `storage-type` has to agree with the
+ * operator config Dev Spaces manages, and `storage-type` has to agree with the
  * CheCluster's pvcStrategy or the workspace gets a volume layout Che does not
- * expect. They are copied from what the dashboard sets.
+ * expect.
+ *
+ * **`controller.devfile.io/scc: container-build` is required, not optional.**
+ * It looks like a container-build nicety and is not: this cluster's
+ * DevWorkspaceOperatorConfig sets
+ *
+ *   containerSecurityContext: {allowPrivilegeEscalation: true,
+ *                              capabilities: {add: [SETGID, SETUID]}}
+ *
+ * for EVERY workspace, so `restricted-v2` refuses the pod and it never starts:
+ *
+ *   pods ... is forbidden: unable to validate against any security context
+ *   constraint: ... capability may not be added: "SETUID" ...
+ *
+ * Setting this attribute is also what makes the DevWorkspace controller create
+ * the `devworkspace-use-container-build` Role and RoleBinding granting the
+ * *workspace's* ServiceAccount that SCC. Without the attribute there is no
+ * binding and nothing can admit the pod.
+ *
+ * The admission webhook additionally requires that whoever CREATES the
+ * workspace may use the SCC, which stops this being an escalation path - so
+ * the provisioner is granted it explicitly in rbac/provisioner.yaml.
  */
 export function devWorkspaceManifest(opts: DevWorkspaceOptions): object {
   return {

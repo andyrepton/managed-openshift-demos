@@ -183,12 +183,15 @@ says what was and was not created, rather than discarding the work.
 
 Totals divide evenly across the workspaces requested, then:
 
-* **The editor takes a share.** che-code is injected into the workspace pod and
-  runs *inside* the dev container, so it comes out of the same limit. Roughly
-  500m and 1 GiB. A workspace sized at exactly what the application needs
-  leaves the editor nothing, and the symptom is Code - OSS failing to start
-  with no useful message. Requests below 500m / 2 GiB per workspace are refused
-  with an explanation rather than accepted and broken.
+* **The editor's share is subtracted, not hoped for.** che-code runs inside the
+  dev container and the DevWorkspace controller **adds** its 500m / 1024Mi to
+  whatever the devfile asks for. So the devfile requests the total *minus* that,
+  and the merged container lands exactly on what was requested. Getting this
+  wrong is not a rounding error - asking for 2 vCPU / 4 GiB produced a 2500m /
+  5Gi container that the namespace's own LimitRange then rejected:
+  `maximum memory usage per Container is 4Gi, but limit is 5Gi`. The minimum per
+  workspace is therefore the editor plus a floor for the workload: 1 vCPU and
+  2 GiB.
 * **Requests are half of limits.** A workspace is idle most of the time —
   someone is reading, not compiling — so reserving the ceiling wastes most of
   the cluster.
@@ -299,6 +302,7 @@ adds is the real API key.
   nothing says why.
 * **A quota of zero PVCs rejects a workspace; omitting the key does not.** For
   ephemeral storage the keys are left out rather than set to `0`.
+* **The `container-build` SCC is mandatory here, and it is not about container builds.** This cluster's `DevWorkspaceOperatorConfig` adds `SETGID`, `SETUID` and `allowPrivilegeEscalation` to every workspace container, so `restricted-v2` refuses the pod outright: `unable to validate against any security context constraint`. Declaring `controller.devfile.io/scc: container-build` is what makes the controller create the `devworkspace-use-container-build` RoleBinding granting the *workspace's* ServiceAccount that SCC. The admission webhook separately requires the **creator** to hold it, so the provisioner is granted it explicitly - that grant is the sharpest thing in `rbac/provisioner.yaml` and is commented there.
 * **The provisioner cannot delete.** There is no delete verb in its ClusterRole,
   so a bug in this plugin cannot remove a namespace. Clean-up is deliberately a
   human action.

@@ -122,6 +122,14 @@ describe('devWorkspaceManifest', () => {
     expect(attrs['controller.devfile.io/storage-type']).toBe('per-user');
   });
 
+  it('asks for the container-build SCC, without which no workspace starts', () => {
+    // Not a container-build nicety. This cluster's DevWorkspaceOperatorConfig
+    // adds SETGID/SETUID and allowPrivilegeEscalation to every workspace, so
+    // restricted-v2 refuses the pod. Setting this attribute is also what makes
+    // the controller grant the workspace's ServiceAccount the SCC.
+    expect(dw.spec.template.attributes['controller.devfile.io/scc']).toBe('container-build');
+  });
+
   it('records who asked', () => {
     expect(dw.metadata.annotations['devspaces-self-service/requested-by']).toBe(
       'user:default/andy',

@@ -110,7 +110,10 @@ function aiEnv(opts: DevfileOptions): { name: string; value: string }[] {
 
 export function buildDevfile(opts: DevfileOptions): object {
   const { request, sizing, available, image } = opts;
-  const w = sizing.perWorkspace;
+  // The workload share, NOT the whole workspace: the DevWorkspace controller
+  // merges che-code's own resources into this container, so asking for the
+  // full figure here produces a container bigger than the quota allows.
+  const w = sizing.workload;
 
   const selected = available.filter(a => request.agents.includes(a.id));
   const vsixPaths = selected.filter(a => a.vsixPath).map(a => a.vsixPath as string);

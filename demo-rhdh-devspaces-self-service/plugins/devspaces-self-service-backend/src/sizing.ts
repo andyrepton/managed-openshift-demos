@@ -19,16 +19,39 @@
  * message.
  */
 
-/** Minimum a workspace needs to run che-code at all, before any workload. */
+/**
+ * What che-code adds to the workspace container.
+ *
+ * These are the editor's own figures from the `che-code-runtime-description`
+ * component in the editors-definitions ConfigMap, and they are ADDED to
+ * whatever the devfile asks for - the editor runs inside the same container,
+ * and the DevWorkspace controller merges its resources in.
+ *
+ * Getting this wrong is not a rounding error. Asking for 2 vCPU / 4 GiB
+ * produced a container of 2500m / 5Gi, which the namespace's own LimitRange
+ * then rejected:
+ *
+ *   pods ... is forbidden: [maximum memory usage per Container is 4Gi, but
+ *   limit is 5Gi, maximum cpu usage per Container is 2, but limit is 2500m]
+ *
+ * So the devfile asks for the total MINUS this, and the merged container
+ * comes out at exactly what the user requested.
+ */
 export const EDITOR_CPU_MILLI = 500;
 export const EDITOR_RAM_MIB = 1024;
 
+/** The least the workload itself should get once the editor has taken its share. */
+export const WORKLOAD_FLOOR_CPU_MILLI = 500;
+export const WORKLOAD_FLOOR_RAM_MIB = 1024;
+
 /**
- * Floor for a usable workspace. Below this che-code either fails to start or
- * is too slow to be worth demonstrating.
+ * Floor for a usable workspace: enough for the editor AND something to run.
+ *
+ * Derived rather than written down, so it cannot drift from the two figures
+ * it depends on.
  */
-export const MIN_WORKSPACE_CPU_MILLI = 500;
-export const MIN_WORKSPACE_RAM_MIB = 2048;
+export const MIN_WORKSPACE_CPU_MILLI = EDITOR_CPU_MILLI + WORKLOAD_FLOOR_CPU_MILLI;
+export const MIN_WORKSPACE_RAM_MIB = EDITOR_RAM_MIB + WORKLOAD_FLOOR_RAM_MIB;
 
 export const MAX_WORKSPACES = 20;
 
@@ -76,7 +99,15 @@ export interface QuotaSize {
 
 export interface Sizing {
   input: SizingInput;
+  /** The whole workspace container after the editor is merged in. */
   perWorkspace: WorkspaceSize;
+  /**
+   * What the devfile should ask for: the total minus the editor's share.
+   *
+   * The DevWorkspace controller adds the editor's resources to this, so the
+   * container that actually runs equals `perWorkspace`.
+   */
+  workload: WorkspaceSize;
   quota: QuotaSize;
   /** Things the user should know, in the order they matter. */
   warnings: string[];
@@ -161,6 +192,21 @@ export function computeSizing(input: SizingInput): Sizing {
     ramRequestMiB: Math.max(MIN_WORKSPACE_RAM_MIB, Math.floor(ramLimitMiB * REQUEST_FRACTION)),
   };
 
+  // What the devfile asks for. The editor's share is added back by the
+  // controller, so this plus the editor equals perWorkspace exactly.
+  const workload: WorkspaceSize = {
+    cpuLimitMilli: cpuLimitMilli - EDITOR_CPU_MILLI,
+    ramLimitMiB: ramLimitMiB - EDITOR_RAM_MIB,
+    cpuRequestMilli: Math.max(
+      WORKLOAD_FLOOR_CPU_MILLI,
+      Math.floor((cpuLimitMilli - EDITOR_CPU_MILLI) * REQUEST_FRACTION),
+    ),
+    ramRequestMiB: Math.max(
+      WORKLOAD_FLOOR_RAM_MIB,
+      Math.floor((ramLimitMiB - EDITOR_RAM_MIB) * REQUEST_FRACTION),
+    ),
+  };
+
   const storage = storageFor(input);
 
   const quota: QuotaSize = {
@@ -177,16 +223,15 @@ export function computeSizing(input: SizingInput): Sizing {
 
   const warnings: string[] = [];
 
-  const headroomCpu = perWorkspace.cpuLimitMilli - EDITOR_CPU_MILLI;
-  const headroomRam = perWorkspace.ramLimitMiB - EDITOR_RAM_MIB;
   // Inclusive: half a core and a gigabyte left for the workload is already
   // the point where a language server makes the editor unusable, so the
   // boundary case warrants the warning rather than just missing it.
-  if (headroomCpu <= 500 || headroomRam <= 1024) {
+  if (workload.cpuLimitMilli <= WORKLOAD_FLOOR_CPU_MILLI ||
+      workload.ramLimitMiB <= WORKLOAD_FLOOR_RAM_MIB) {
     warnings.push(
-      `che-code itself uses roughly ${EDITOR_CPU_MILLI}m and ${EDITOR_RAM_MIB}Mi inside the ` +
-        `workspace container, leaving about ${headroomCpu}m and ${headroomRam}Mi for the ` +
-        'actual workload. Builds and language servers will struggle.',
+      `che-code takes ${EDITOR_CPU_MILLI}m and ${EDITOR_RAM_MIB}Mi of each workspace, ` +
+        `leaving ${workload.cpuLimitMilli}m and ${workload.ramLimitMiB}Mi for your own ` +
+        'processes. Builds and language servers will struggle.',
     );
   }
 
@@ -219,7 +264,7 @@ export function computeSizing(input: SizingInput): Sizing {
     storageMode: input.storageMode,
   };
 
-  return { input: echoed, perWorkspace, quota, warnings };
+  return { input: echoed, perWorkspace, workload, quota, warnings };
 }
 
 /** Kubernetes quantity strings, which is what the manifests need. */
