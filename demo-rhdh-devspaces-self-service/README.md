@@ -230,12 +230,15 @@ says what was and was not created, rather than discarding the work.
 
 Totals divide evenly across the workspaces requested, then:
 
-* **The editor takes a share.** che-code is injected into the workspace pod and
-  runs *inside* the dev container, so it comes out of the same limit. Roughly
-  500m and 1 GiB. A workspace sized at exactly what the application needs
-  leaves the editor nothing, and the symptom is Code - OSS failing to start
-  with no useful message. Requests below 500m / 2 GiB per workspace are refused
-  with an explanation rather than accepted and broken.
+* **The editor's share is subtracted, not hoped for.** che-code runs inside the
+  dev container and the DevWorkspace controller **adds** its 500m / 1024Mi to
+  whatever the devfile asks for. So the devfile requests the total *minus* that,
+  and the merged container lands exactly on what was requested. Getting this
+  wrong is not a rounding error - asking for 2 vCPU / 4 GiB produced a 2500m /
+  5Gi container that the namespace's own LimitRange then rejected:
+  `maximum memory usage per Container is 4Gi, but limit is 5Gi`. The minimum per
+  workspace is therefore the editor plus a floor for the workload: 1 vCPU and
+  2 GiB.
 * **Requests are half of limits.** A workspace is idle most of the time —
   someone is reading, not compiling — so reserving the ceiling wastes most of
   the cluster.
@@ -347,6 +350,10 @@ adds is the real API key.
   nothing says why.
 * **A quota of zero PVCs rejects a workspace; omitting the key does not.** For
   ephemeral storage the keys are left out rather than set to `0`.
+* **A hand-built DevWorkspace must carry Che's own environment, or terminals never open.** The dashboard injects `CHE_DASHBOARD_URL`, `CHE_PLUGIN_REGISTRY_URL`, `CHE_PLUGIN_REGISTRY_INTERNAL_URL`, `CLUSTER_CONSOLE_URL`, `CLUSTER_CONSOLE_TITLE`, `OPENVSX_REGISTRY_URL` and `HOST_USERS` into the workspace container. Without them che-code's terminal environment resolution finds a platform-keyed object with a null value and throws `Cannot convert undefined or null to object` in `applyPlatformSpecificKeys` — the editor loads and works, but no terminal can ever be opened, and nothing server-side logs an error. The values are read from the CheCluster (status and spec) and the `console-public` ConfigMap rather than hardcoded. Diffing a dashboard-created workspace against a generated one in the same namespace is what found this; the logs did not.
+* **`routingClass: che` is required, and its absence is silent.** Without it no Che gateway route is created, the editor is unreachable, and the workspace sits in `Starting` until `startTimeoutSeconds` before failing with *"The workspace status remains Starting in the last 300 seconds"*. The pod runs perfectly throughout, which is what makes it hard to place.
+* **That routing adds a second container to the pod.** `che-gateway`, at 500m / 256Mi limits and 50m / 64Mi requests. It is not part of the workspace container, so it does not change what the devfile asks for - but it counts against the quota, and omitting it made the quota reject the very pod it had been sized for: `exceeded quota: requested: limits.cpu=2500m, limited: limits.cpu=2`. The quota budgets the whole pod.
+* **The `container-build` SCC is mandatory here, and it is not about container builds.** This cluster's `DevWorkspaceOperatorConfig` adds `SETGID`, `SETUID` and `allowPrivilegeEscalation` to every workspace container, so `restricted-v2` refuses the pod outright: `unable to validate against any security context constraint`. Declaring `controller.devfile.io/scc: container-build` is what makes the controller create the `devworkspace-use-container-build` RoleBinding granting the *workspace's* ServiceAccount that SCC. The admission webhook separately requires the **creator** to hold it, so the provisioner is granted it explicitly - that grant is the sharpest thing in `rbac/provisioner.yaml` and is commented there.
 * **The provisioner cannot delete.** There is no delete verb in its ClusterRole,
   so a bug in this plugin cannot remove a namespace. Clean-up is deliberately a
   human action.

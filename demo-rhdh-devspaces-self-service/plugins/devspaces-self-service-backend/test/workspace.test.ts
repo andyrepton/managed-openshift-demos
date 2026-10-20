@@ -90,12 +90,53 @@ describe('devWorkspaceManifest', () => {
     editorTemplateName: 'che-code-andy-devspace',
     devfile: {
       components: [
-        { name: 'dev', container: { image: 'custom-udi', env: [{ name: 'DEFAULT_EXTENSIONS', value: '/opt/extensions/kilocode.vsix' }] } },
+        {
+          name: 'dev',
+          container: {
+            image: 'custom-udi',
+            env: [
+              { name: 'CHE_DASHBOARD_URL', value: 'https://che.example.com' },
+              { name: 'CHE_PLUGIN_REGISTRY_URL', value: 'https://che.example.com/plugin-registry/v3' },
+              { name: 'CHE_PLUGIN_REGISTRY_INTERNAL_URL', value: 'http://plugin-registry.openshift-operators.svc:8080/v3' },
+              { name: 'CLUSTER_CONSOLE_URL', value: 'https://console.example.com' },
+              { name: 'CLUSTER_CONSOLE_TITLE', value: 'OpenShift console' },
+              { name: 'OPENVSX_REGISTRY_URL', value: '' },
+              { name: 'HOST_USERS', value: 'true' },
+              { name: 'DEFAULT_EXTENSIONS', value: '/opt/extensions/kilocode.vsix' },
+            ],
+          },
+        },
       ],
     },
     started: true,
     userEntityRef: 'user:default/andy',
   }) as any;
+
+  it('carries the Che environment, without which no terminal can open', () => {
+    // The dashboard injects these; a hand-built DevWorkspace does not. Their
+    // absence makes che-code's terminal env resolution throw
+    // "Cannot convert undefined or null to object" in
+    // applyPlatformSpecificKeys - the editor works, terminals never open.
+    const env = dw.spec.template.components[0].container.env.map((e: any) => e.name);
+    for (const required of [
+      'CHE_DASHBOARD_URL',
+      'CHE_PLUGIN_REGISTRY_URL',
+      'CHE_PLUGIN_REGISTRY_INTERNAL_URL',
+      'CLUSTER_CONSOLE_URL',
+      'CLUSTER_CONSOLE_TITLE',
+      'OPENVSX_REGISTRY_URL',
+      'HOST_USERS',
+    ]) {
+      expect(env).toContain(required);
+    }
+  });
+
+  it('routes through the Che gateway, or the editor is never reachable', () => {
+    // Without this the pod runs fine and the workspace sits in Starting until
+    // startTimeoutSeconds, then fails with "remains Starting in the last 300
+    // seconds". Nothing in the pod looks wrong.
+    expect(dw.spec.routingClass).toBe('che');
+  });
 
   it('contributes the editor, since nothing injects one', () => {
     // Verified on Dev Spaces 3.30: a DevWorkspace with no contributions gets
@@ -120,6 +161,14 @@ describe('devWorkspaceManifest', () => {
       namespace: 'openshift-operators',
     });
     expect(attrs['controller.devfile.io/storage-type']).toBe('per-user');
+  });
+
+  it('asks for the container-build SCC, without which no workspace starts', () => {
+    // Not a container-build nicety. This cluster's DevWorkspaceOperatorConfig
+    // adds SETGID/SETUID and allowPrivilegeEscalation to every workspace, so
+    // restricted-v2 refuses the pod. Setting this attribute is also what makes
+    // the controller grant the workspace's ServiceAccount the SCC.
+    expect(dw.spec.template.attributes['controller.devfile.io/scc']).toBe('container-build');
   });
 
   it('records who asked', () => {
