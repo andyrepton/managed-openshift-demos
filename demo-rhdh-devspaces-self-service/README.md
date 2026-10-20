@@ -4,7 +4,7 @@ A developer asks for a Dev Space in Red Hat Developer Hub — how many, how big,
 which AI assistant, where its model lives — and gets a namespace, a quota and a
 workspace definition, created on the cluster in their name.
 
-Sibling to [demo-aro-cluster-planner](../demo-aro-cluster-planner), with one
+Sibling to [demo-rhdh-cluster-planner](../demo-rhdh-cluster-planner), with one
 important difference: **that one shows you what it would do, this one does it.**
 
 ## Overview
@@ -148,7 +148,7 @@ oc start-build devspaces-self-service -n rhdh --from-dir=plugin-registry --follo
 
 Both plugins ship in one image, pushed to `quay.io/<you>/rhdh-plugins` with a
 `<plugin>-<version>` tag so several demos' plugins can share one repository.
-See [demo-aro-cluster-planner](../demo-aro-cluster-planner) for the
+See [demo-rhdh-cluster-planner](../demo-rhdh-cluster-planner) for the
 `FROM scratch` and `!<plugin-path>` requirements, which apply here too.
 
 Then compose this demo's entry into RHDH's plugin config and apply it:
@@ -408,4 +408,4 @@ delete verb, and neither should an automated clean-up of someone's workspace.
 * **[Red Hat Developer Hub](../demo-developer-hub)** — the RHDH instance this plugs into.
 * **[Custom UDI](../demo-custom-udi)** — the workspace image and its assistants.
 * **[OpenShift Dev Spaces](../openshift-devspaces)** — the operator and CheCluster.
-* **[Deployment Planner](../demo-aro-cluster-planner)** — the sibling plugin, which previews rather than provisions.
+* **[Deployment Planner](../demo-rhdh-cluster-planner)** — the sibling plugin, which previews rather than provisions.

@@ -133,7 +133,7 @@ into [demo-developer-hub](../demo-developer-hub) and apply:
 ```bash
 cd ../demo-developer-hub
 python3 -I scripts/compose-dynamic-plugins.py \
-  ../demo-aro-cluster-planner/rhdh/dynamic-plugins-entry.yaml --apply
+  ../demo-rhdh-cluster-planner/rhdh/dynamic-plugins-entry.yaml --apply
 ```
 
 It lives here rather than in that demo so the base deploys on its own: the

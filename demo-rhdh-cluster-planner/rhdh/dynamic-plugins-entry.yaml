@@ -8,14 +8,14 @@
 # Compose it in, from demo-developer-hub:
 #
 #   python3 -I scripts/compose-dynamic-plugins.py \
-#     ../demo-aro-cluster-planner/rhdh/dynamic-plugins-entry.yaml --apply
+#     ../demo-rhdh-cluster-planner/rhdh/dynamic-plugins-entry.yaml --apply
 #
 # Indentation is deliberate: these are list items under `plugins:` inside
 # the ConfigMap's literal block, so they sit at six spaces. The compose
 # script appends them verbatim.
 ---
 
-      # ARO cluster planner, from ../demo-aro-cluster-planner. Two plugins ship in
+      # ARO cluster planner, from ../demo-rhdh-cluster-planner. Two plugins ship in
       # one registry image: the backend serves /api/aro-planner (the Azure Retail
       # Prices API sends no CORS headers, so pricing must happen server-side), and
       # the frontend provides the wizard page and the Scaffolder field.

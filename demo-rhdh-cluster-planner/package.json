@@ -1,5 +1,5 @@
 {
-  "name": "demo-aro-cluster-planner",
+  "name": "demo-rhdh-cluster-planner",
   "version": "0.1.0",
   "private": true,
   "description": "Self-service ARO cluster planner for Red Hat Developer Hub",

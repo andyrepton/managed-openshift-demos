@@ -90,7 +90,7 @@ data:
         email: rhdh@example.com
       defaultCommitMessage: "Scaffolded by Red Hat Developer Hub"
 
-    # ARO cluster planner (../demo-aro-cluster-planner).
+    # ARO cluster planner (../demo-rhdh-cluster-planner).
     #
     # Microsoft has NOT published a per-cluster control-plane fee for ARO HCP - it
     # is absent from both the pricing page and the Azure Retail Prices API. The

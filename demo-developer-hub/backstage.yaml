@@ -57,7 +57,7 @@ spec:
             #
             # The token is only as useful as the SA's permissions, which are
             # get/list on packagemanifests in one namespace - see
-            # ../demo-aro-cluster-planner/rbac/operator-catalog-reader.yaml.
+            # ../demo-rhdh-cluster-planner/rbac/operator-catalog-reader.yaml.
             # Without that RoleBinding this line grants nothing.
             automountServiceAccountToken: true
             # The Dev Spaces self-service plugin's own credential, from
