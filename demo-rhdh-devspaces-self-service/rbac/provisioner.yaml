@@ -3,14 +3,21 @@
 # This is the only thing in this repo that lets RHDH create a namespace, so
 # the scoping is the point and is worth reading before applying.
 #
+# APPLY rbac/provisioner-scope.yaml WITH THIS FILE. On its own, this grants
+# every verb below in every namespace on the cluster; that file is what
+# confines them to `<username>-devspaces`. Read its header before deciding to
+# skip it.
+#
 # What it can do:
-#   * create and read namespaces, resource quotas, limit ranges and secrets
+#   * create namespaces, resource quotas, limit ranges and workspaces
+#   * write (not read) the one AI-credential Secret per namespace
 #   * read the CheCluster, for the dashboard URL
 #   * read one ConfigMap, for the list of tools baked into the UDI
 #
 # What it deliberately cannot do:
 #   * DELETE anything. Removing a namespace is a human decision; the plugin
 #     has no verb for it, so a bug in it cannot take one away.
+#   * READ secrets. Write-only, for the reason given on that rule below.
 #   * touch pods, deployments, nodes, RBAC or anything in another namespace's
 #     workloads.
 #   * escalate: no bind, no escalate, no impersonate. Without those a
@@ -19,8 +26,10 @@
 # Namespace creation cannot be restricted by name in RBAC - there is no
 # resourceName matching on create, because the object does not exist yet. The
 # plugin enforces the `<username>-devspaces` pattern itself, from the signed-in
-# caller's identity rather than from the request body. Treat that as the
-# control and this as the backstop.
+# caller's identity rather than from the request body, and
+# rbac/provisioner-scope.yaml enforces the same pattern at the API server so
+# it holds even for a caller that is not the plugin. Three layers, because the
+# credential is a file in a pod shared with other plugins.
 #
 # Everything the plugin creates is labelled
 # app.kubernetes.io/managed-by=devspaces-self-service, so the whole blast
@@ -80,14 +89,26 @@ rules:
 
   # The AI credential, mounted into workspaces by Dev Spaces.
   #
-  # `get` is included because server-side apply needs to read what is there.
-  # This does mean the token can read Secrets in any namespace, which is the
-  # sharpest edge in this file. Scoping it per-namespace is not possible for
-  # namespaces that do not exist yet; if that trade is unacceptable, drop the
-  # third-party AI option and this rule with it.
+  # Deliberately write-only. `get` is NOT here, and that is the one rule in
+  # this file worth not relaxing: RBAC cannot scope a read to a namespace that
+  # does not exist yet, so a `get` on secrets is a `get` on every Secret in
+  # the cluster - every operator's credentials, every ServiceAccount token.
+  # Combined with `create`, it was also an escalation rather than a
+  # disclosure: create a Secret of type kubernetes.io/service-account-token
+  # annotated for a privileged ServiceAccount, wait for the token controller,
+  # read it back. That is exactly how this plugin's own token is issued a few
+  # lines up, so it demonstrably works on this cluster.
+  #
+  # Server-side apply does not need `get` - the API server does the merge.
+  # The only thing lost is the `created: true|false` flag that provision.ts
+  # reports for the Secret: exists() turns the 403 into `false`, so a Secret
+  # that was updated is reported as created. Cosmetic, and worth it.
+  #
+  # Writes are bounded to the devspaces-ai-credentials Secret in
+  # <username>-devspaces by rbac/provisioner-scope.yaml. Apply that too.
   - apiGroups: ['']
     resources: ['secrets']
-    verbs: ['get', 'create', 'patch', 'update']
+    verbs: ['create', 'patch']
 
   # Read-only, for the dashboard URL shown in the factory link.
   - apiGroups: ['org.eclipse.che']
@@ -104,6 +125,11 @@ rules:
   # them a dashboard to remove it from. `patch` is needed for server-side
   # apply, which is also how a re-submitted request converges rather than
   # failing.
+  #
+  # This is the broadest rule here: a DevWorkspace runs a container image of
+  # the submitter's choosing, so cluster-wide `create` would mean arbitrary
+  # workloads in any namespace. rbac/provisioner-scope.yaml is what keeps it
+  # to <username>-devspaces.
   - apiGroups: ['workspace.devfile.io']
     resources: ['devworkspaces', 'devworkspacetemplates']
     verbs: ['get', 'list', 'create', 'patch', 'update']
