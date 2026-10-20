@@ -24,8 +24,18 @@ components:
       cpuLimit: "2"
       mountSources: true
       env:
-        - name: NODE_TLS_REJECT_UNAUTHORIZED
-          value: "0"
+        # NODE_TLS_REJECT_UNAUTHORIZED is deliberately NOT set here.
+        #
+        # It was "0", which switches off certificate verification for every
+        # Node process in the workspace - che-code, all three assistants, and
+        # anything the developer runs. The assistants authenticate to model
+        # endpoints with an API key, so that key was being sent over a
+        # connection that validated nothing and would accept any certificate.
+        #
+        # If a workspace cannot reach something over TLS, the cause is a CA it
+        # does not trust. Mount that CA and point NODE_EXTRA_CA_CERTS at it,
+        # which fixes the one endpoint rather than disarming the check
+        # everywhere.
         # che-code installs these at editor startup. postStart only downloads
         # them: the remote-cli code-oss needs VSCODE_IPC_HOOK_CLI from a live
         # editor terminal, so --install-extension always fails from postStart

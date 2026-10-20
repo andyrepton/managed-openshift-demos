@@ -52,11 +52,58 @@ Depends on **[demo-developer-hub](../demo-developer-hub)** for RHDH,
 
 ```bash
 oc apply -f rbac/provisioner.yaml
+oc apply -f rbac/provisioner-scope.yaml
 ```
 
-Read that file before applying it — it is the only thing in this repo that lets
-RHDH create a namespace, and the comments explain each grant and each
+Read both files before applying them — this is the only thing in this repo that
+lets RHDH create a namespace, and the comments explain each grant and each
 deliberate omission.
+
+**Apply the second file too.** RBAC cannot say "create a Namespace, but only one
+whose name ends in `-devspaces`" — `resourceNames` does not apply to `create`,
+because the object does not exist yet to be named. So `provisioner.yaml` on its
+own grants its verbs in *every* namespace, and the only thing keeping the
+provisioner inside `<username>-devspaces` is the plugin's own code — a check in
+a workload whose credential is a file in a pod shared with every other dynamic
+plugin.
+
+`provisioner-scope.yaml` is a ValidatingAdmissionPolicy that enforces the same
+pattern at the API server, against the authenticated identity on the request,
+so it holds regardless of what is holding the token. It also pins the Secret
+the provisioner may write to one name and one type, which is what stops it
+minting a ServiceAccount token for a privileged account.
+
+It needs OpenShift 4.17 or later (ValidatingAdmissionPolicy went GA in
+Kubernetes 1.30). Check first:
+
+```bash
+oc get --raw /apis/admissionregistration.k8s.io/v1 \
+  | grep -q validatingadmissionpolicies && echo supported
+```
+
+On an older cluster the policy will not apply and the in-code check is your
+only control — which is worth knowing deliberately rather than discovering.
+
+Verify the boundary is live. The refusal *is* the test:
+
+```bash
+# denied
+oc --as=system:serviceaccount:rhdh:devspaces-provisioner \
+  create namespace not-a-workspace
+
+# allowed
+oc --as=system:serviceaccount:rhdh:devspaces-provisioner \
+  create namespace testuser-devspaces --dry-run=server
+```
+
+Checked on OpenShift 4.22: namespaces outside the pattern, Secrets by the
+wrong name, Secrets in the wrong namespace, `kubernetes.io/service-account-token`
+Secrets and DevWorkspaces in `default` are all refused, while the plugin's own
+four objects and its server-side apply go through unchanged.
+
+`oc apply` will not work as this ServiceAccount — client-side apply reads the
+object first and there is no `get` on secrets. The plugin uses server-side
+apply, which is a PATCH with no read, so this affects only ad-hoc `oc` use.
 
 ### 2. Mount the credential
 
@@ -273,7 +320,8 @@ plugins/devspaces-self-service-backend/
   src/kube.ts           A very small Kubernetes client
 plugins/devspaces-self-service/
   src/components/       The request form and the preview panel
-rbac/provisioner.yaml   The ServiceAccount and exactly what it may do
+rbac/provisioner.yaml       The ServiceAccount and exactly what it may do
+rbac/provisioner-scope.yaml The API-server boundary that confines it
 ```
 
 `plan.ts` is pure and is what both the preview and the provisioner use, so what
@@ -304,9 +352,21 @@ adds is the real API key.
   human action.
 * **RBAC cannot restrict namespace creation by name** — there is no
   `resourceNames` matching on `create`, because the object does not exist yet.
-  The `<username>-devspaces` pattern is enforced in the plugin, from the
-  signed-in identity. Treat that as the control and the ClusterRole as the
-  backstop.
+  The `<username>-devspaces` pattern is therefore enforced twice: in the
+  plugin, from the signed-in identity, and at the API server by
+  `rbac/provisioner-scope.yaml`. The second one matters because the first is a
+  check in a workload, and the credential it guards is a file in a pod that
+  runs every other dynamic plugin too.
+* **The provisioner cannot read Secrets.** Its secrets rule is `create` and
+  `patch` only. A `get` would have been a read of every Secret on the cluster,
+  since RBAC cannot scope a read to namespaces that do not exist yet — and
+  together with `create` it was an escalation, not just a disclosure: create a
+  Secret of type `kubernetes.io/service-account-token` annotated for a
+  privileged ServiceAccount, wait for the token controller, read it back. That
+  is how this plugin's own token is issued, so it demonstrably works here.
+  Server-side apply does not need the read; the only casualty is the
+  `created: true|false` flag reported for the Secret, which now always says
+  created.
 * **The provisioner's token is long-lived, not projected.** A projected
   `serviceAccountToken` volume can only project the pod's *own* ServiceAccount;
   there is no way to project a second one. `oc delete secret
@@ -325,9 +385,13 @@ adds is the real API key.
 # Everything the plugin ever created, by one label
 oc get ns -l app.kubernetes.io/managed-by=devspaces-self-service
 
+oc delete -f rbac/provisioner-scope.yaml
 oc delete -f rbac/provisioner.yaml
 oc -n rhdh delete bc/devspaces-self-service is/devspaces-self-service
 ```
+
+Remove the scope policy *before* the ClusterRole, not after. The other order
+leaves a window where the permissions exist with nothing confining them.
 
 Namespaces are left for you to remove deliberately — the provisioner has no
 delete verb, and neither should an automated clean-up of someone's workspace.

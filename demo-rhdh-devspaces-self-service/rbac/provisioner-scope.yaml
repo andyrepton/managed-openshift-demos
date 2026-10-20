@@ -1,0 +1,158 @@
+# The namespace boundary, enforced by the API server.
+#
+# Apply this with rbac/provisioner.yaml. Without it the provisioner's
+# permissions are cluster-wide, and the only thing keeping it inside
+# `<username>-devspaces` is the plugin's own code.
+#
+# WHY THIS EXISTS
+#
+# RBAC cannot express "create a Namespace, but only one whose name ends in
+# -devspaces". `resourceNames` does not apply to `create`, because the object
+# does not exist yet to be named. The same gap applies to every namespace this
+# plugin creates on demand: at the moment permission is checked, there is no
+# namespace to scope to.
+#
+# That left the ClusterRole granting its verbs in every namespace on the
+# cluster. provision.ts checks the `<username>-devspaces` pattern itself and
+# refuses anything else, which is a real control - but it is a control in the
+# workload, and the credential it guards is a file inside a pod that runs
+# several other plugins. Anything able to read
+# /var/run/secrets/devspaces-provisioner/token bypasses it entirely.
+#
+# A ValidatingAdmissionPolicy closes that: the pattern is checked by the API
+# server, against the authenticated identity on the request, so it holds no
+# matter what is holding the token or what the plugin's code does.
+#
+# WHAT IT STOPS
+#
+#   * Writing into a namespace that is not <username>-devspaces - including
+#     kube-system, openshift-*, and any other team's project.
+#   * Creating or patching any Secret other than devspaces-ai-credentials.
+#   * Minting a ServiceAccount token. The provisioner could otherwise create a
+#     Secret of type kubernetes.io/service-account-token annotated for a
+#     privileged ServiceAccount, let the token controller fill it in, and read
+#     the result - which is how the provisioner's own token is issued, a few
+#     lines up in provisioner.yaml. Only `Opaque` is allowed through.
+#
+# WHAT IT DOES NOT STOP
+#
+# Reads. Admission runs on writes only, so no policy here can stop a GET. That
+# is why `get` was removed from the secrets rule in provisioner.yaml rather
+# than left to this file - the two halves do different jobs and both are
+# needed.
+#
+# REQUIREMENTS
+#
+# ValidatingAdmissionPolicy is GA in Kubernetes 1.30, so OpenShift 4.17 or
+# later. It is in a separate file from provisioner.yaml for that reason: on an
+# older cluster this one fails to apply and the other still works, leaving the
+# in-code check as the only control. Check before relying on it:
+#
+#   oc get --raw /apis/admissionregistration.k8s.io/v1 | grep -q validatingadmissionpolicies
+#
+# VERIFYING IT
+#
+# The policy should refuse this, and the refusal is the test:
+#
+#   oc --as=system:serviceaccount:rhdh:devspaces-provisioner \
+#     create namespace not-a-workspace
+#
+# and allow this (--dry-run, or you have a stray namespace to clean up):
+#
+#   oc --as=system:serviceaccount:rhdh:devspaces-provisioner \
+#     create namespace testuser-devspaces --dry-run=server
+#
+# Note `oc apply` will NOT work as this ServiceAccount: client-side apply
+# reads the object first, and the secrets rule has no `get`. That is expected
+# and does not affect the plugin, which uses server-side apply - a PATCH, with
+# no read. To check that path:
+#
+#   oc --as=system:serviceaccount:rhdh:devspaces-provisioner \
+#     apply --server-side --field-manager=devspaces-self-service \
+#     --dry-run=server -f <manifest>
+#
+# Verified on OpenShift 4.22 / Kubernetes 1.35: namespaces outside the
+# pattern, Secrets by the wrong name, Secrets in the wrong namespace,
+# service-account-token Secrets and DevWorkspaces in `default` are all
+# refused; the plugin's own four objects and its server-side apply are not.
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: devspaces-self-service-provisioner-scope
+  labels:
+    app.kubernetes.io/managed-by: devspaces-self-service
+spec:
+  # Deny if the policy cannot be evaluated. A policy that fails open is a
+  # policy that reports success while the boundary is not being enforced.
+  failurePolicy: Fail
+
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ['']
+        apiVersions: ['v1']
+        operations: ['CREATE', 'UPDATE']
+        resources: ['namespaces', 'resourcequotas', 'limitranges', 'secrets']
+      # Server-side apply arrives as CREATE or UPDATE depending on whether the
+      # object was already there, so both are needed to cover one `kube.apply`.
+      - apiGroups: ['workspace.devfile.io']
+        apiVersions: ['*']
+        operations: ['CREATE', 'UPDATE']
+        resources: ['devworkspaces', 'devworkspacetemplates']
+
+  # Only this one ServiceAccount. Everything else on the cluster - users,
+  # operators, the Dev Spaces controllers - is unaffected, so this cannot
+  # become the reason something unrelated stops working.
+  matchConditions:
+    - name: only-the-provisioner
+      expression: >-
+        request.userInfo.username == 'system:serviceaccount:rhdh:devspaces-provisioner'
+
+  variables:
+    # A Namespace names itself; everything else names the namespace it goes in.
+    # request.namespace is set by the API server from the request path, not by
+    # the submitted object, so it cannot be spoofed by the manifest.
+    - name: targetNamespace
+      expression: >-
+        request.resource.resource == 'namespaces'
+          ? object.metadata.name
+          : request.namespace
+
+  validations:
+    # The whole point: the same `<username>-devspaces` shape manifests.ts
+    # builds, checked where it cannot be bypassed. The username half must be a
+    # DNS label, matching validateUsername().
+    - expression: >-
+        variables.targetNamespace.matches('^[a-z0-9]([-a-z0-9]*[a-z0-9])?-devspaces$')
+      messageExpression: >-
+        'the Dev Spaces self-service provisioner may only write into <username>-devspaces
+        namespaces; "' + variables.targetNamespace + '" is not one'
+
+    # One Secret, by name. The plugin creates exactly this and nothing else.
+    - expression: >-
+        request.resource.resource != 'secrets' ||
+        object.metadata.name == 'devspaces-ai-credentials'
+      messageExpression: >-
+        'the Dev Spaces self-service provisioner may only write the
+        devspaces-ai-credentials Secret; "' + object.metadata.name + '" is not it'
+
+    # No token minting. See the note at the top of this file.
+    - expression: >-
+        request.resource.resource != 'secrets' ||
+        !has(object.type) ||
+        object.type == 'Opaque'
+      messageExpression: >-
+        'the Dev Spaces self-service provisioner may only create Opaque Secrets;
+        "' + object.type + '" would let it mint a ServiceAccount token'
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: devspaces-self-service-provisioner-scope
+  labels:
+    app.kubernetes.io/managed-by: devspaces-self-service
+spec:
+  policyName: devspaces-self-service-provisioner-scope
+  # Deny, not Warn or Audit. A boundary that logs a violation and then permits
+  # it is not a boundary.
+  validationActions: ['Deny']
