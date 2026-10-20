@@ -14,6 +14,7 @@ In a managed environment, the cloud provider and Red Hat handle the cluster's li
 * **[Graviton on ROSA](./demo-graviton-on-rosa):** Multi-architecture builds and ARM64/Graviton node deployment.
 * **[Multi-Region ROSA](./demo-multi-region-rosa):** Multi-region failover with Route53 and Global Accelerator.
 * **[Stretched Layer 2 onto ROSA](./demo-stretched-layer2-onto-rosa):** Bridge factory-floor L2 protocols to VMs on ROSA via VXLAN/VPN.
+* **[BGP Direct Routing on ROSA HCP](./demo-bgp-on-rosa):** Advertise pod and VM networks directly to the physical fabric with BGP.
 
 ### AWS Integration
 
@@ -45,10 +46,18 @@ In a managed environment, the cloud provider and Red Hat handle the cluster's li
 * **[Claude Code via Open Source Models](./demo-claude-via-open-source-models):** Run Claude Code against self-hosted LLMs with LiteLLM and MaaS.
 * **[Model as a Service (MaaS)](./demo-maas-on-rosa):** LLM inference via OpenAI-compatible MaaS API.
 * **[GitLab Duo on ROSA](./demo-gitlab-duo-on-rosa):** GitLab + Duo AI code assistant with in-cluster LLM serving.
+* **[Tuning OpenShift Lightspeed](./demo-lightspeed-tuning):** Improve Lightspeed tool calling against a self-hosted model.
+
+### Developer Portal (Red Hat Developer Hub)
+
+* **[Red Hat Developer Hub](./demo-developer-hub):** RHDH 1.10 with GitHub sign-in, the software catalog and the dynamic-plugin loader. Prerequisite for the plugins below.
+* **[Deployment Planner](./demo-rhdh-cluster-planner):** Self-service wizard comparing a shared namespace, a dedicated ARO cluster and on-premises, with live Azure pricing and generated NetworkPolicies.
+* **[Dev Spaces Self-Service](./demo-rhdh-devspaces-self-service):** Request a Dev Space and get a namespace, quota and running workspace with the AI assistants you picked.
 
 ### Developer Experience & GitOps
 
 * **[OpenCode in Dev Spaces](./demo-opencode-devspaces):** AI coding assistant (OpenCode) in Dev Spaces backed by self-hosted vLLM.
+* **[Custom Universal Developer Image](./demo-custom-udi):** Build a Dev Spaces workspace image with newer runtimes and the approved AI assistants baked in.
 * **[Segregated GitOps](./demo-deploying-segregated-gitops):** Per-team ArgoCD instances managed by a central platform team.
 * **[Source-to-Image & Dev Spaces](./demo-source2image):** Build and deploy from source with S2I and browser-based IDEs.
 * **[Service Mesh App Deployment](./demo-deploying-an-app-with-service-mesh):** Enroll applications in OpenShift Service Mesh.
@@ -62,6 +71,7 @@ In a managed environment, the cloud provider and Red Hat handle the cluster's li
 
 * **[GitLab on OpenShift](./demo-gitlab-on-openshift):** Basic GitLab operator deployment (WIP -- see [GitLab Duo on ROSA](./demo-gitlab-duo-on-rosa) for a complete setup).
 * **[OpenShift Virt on ROSA](./demo-openshift-virt-on-rosa):** OpenShift Virtualization on ROSA (WIP).
+* **[Continue on ROSA](./demo-continue-on-rosa):** Continue AI code assistant against an in-cluster LLM (WIP -- see [GitLab Duo on ROSA](./demo-gitlab-duo-on-rosa) for a working Continue setup).
 
 -----
 

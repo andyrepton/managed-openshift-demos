@@ -9327,9 +9327,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"demo-aro-cluster-planner@workspace:.":
+"demo-rhdh-cluster-planner@workspace:.":
   version: 0.0.0-use.local
-  resolution: "demo-aro-cluster-planner@workspace:."
+  resolution: "demo-rhdh-cluster-planner@workspace:."
   dependencies:
     "@backstage/cli-defaults": "npm:^0.1.0"
   languageName: unknown

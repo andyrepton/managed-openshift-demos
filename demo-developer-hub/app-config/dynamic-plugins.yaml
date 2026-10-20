@@ -46,7 +46,7 @@ data:
     # Each plugin demo now owns its own entry and composes it in:
     #
     #   python3 -I scripts/compose-dynamic-plugins.py \
-    #     ../demo-aro-cluster-planner/rhdh/dynamic-plugins-entry.yaml \
+    #     ../demo-rhdh-cluster-planner/rhdh/dynamic-plugins-entry.yaml \
     #     ../demo-rhdh-devspaces-self-service/rhdh/dynamic-plugins-entry.yaml \
     #     --apply
     #

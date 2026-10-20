@@ -9,9 +9,9 @@
 # tree, so it is enormous and nobody reads it line by line. It must stay
 # committed: it is what makes the build reproducible, and it carries the
 # security resolutions for got and adm-zip.
-demo-aro-cluster-planner/yarn.lock linguist-generated=true
+demo-rhdh-cluster-planner/yarn.lock linguist-generated=true
 
 # 272 ARO-supported VM sizes, produced by scripts/generate-sku-catalog.py from
 # Microsoft's support policy page. Committed output, regenerated deliberately,
 # never fetched at runtime.
-demo-aro-cluster-planner/packages/aro-planner-common/data/sku-catalog.json linguist-generated=true
+demo-rhdh-cluster-planner/packages/aro-planner-common/data/sku-catalog.json linguist-generated=true

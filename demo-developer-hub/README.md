@@ -103,7 +103,7 @@ Sign in with **GitHub**. Only accounts with a matching `User` entity in `catalog
 ### 6. Verify
 
 1. Open **Catalog**. You should see `payments-api`, the `payments` system and two groups.
-2. Open **Deployment Planner** in the sidebar, if you have also installed [demo-aro-cluster-planner](../demo-aro-cluster-planner).
+2. Open **Deployment Planner** in the sidebar, if you have also installed [demo-rhdh-cluster-planner](../demo-rhdh-cluster-planner).
 
 ## Granting someone else access
 
@@ -230,7 +230,7 @@ invite-one-person mode.
 
 ## Related Demos
 
-* **[Deployment Planner](../demo-aro-cluster-planner)** -- a self-service wizard that compares a shared namespace, a dedicated ARO cluster and on-premises, and runs as a plugin inside this RHDH instance.
+* **[Deployment Planner](../demo-rhdh-cluster-planner)** -- a self-service wizard that compares a shared namespace, a dedicated ARO cluster and on-premises, and runs as a plugin inside this RHDH instance.
 
 ## Clean Up
 
