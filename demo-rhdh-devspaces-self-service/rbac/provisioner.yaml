@@ -93,6 +93,28 @@ rules:
   - apiGroups: ['org.eclipse.che']
     resources: ['checlusters']
     verbs: ['get', 'list']
+
+  # The workspace itself, and the editor template it needs.
+  #
+  # Without these the plugin can create a namespace with a quota but not the
+  # workspace that goes in it, and the assistant selection ends up in a
+  # devfile nobody applies.
+  #
+  # Still no delete: a workspace is the user's, and Dev Spaces already gives
+  # them a dashboard to remove it from. `patch` is needed for server-side
+  # apply, which is also how a re-submitted request converges rather than
+  # failing.
+  - apiGroups: ['workspace.devfile.io']
+    resources: ['devworkspaces', 'devworkspacetemplates']
+    verbs: ['get', 'list', 'create', 'patch', 'update']
+  # The che-code editor definition, needed to build the workspace's editor
+  # template. Nothing supplies an editor to a DevWorkspace automatically -
+  # the Dev Spaces dashboard does that, so bypassing the dashboard means
+  # doing it here. Read-only, one ConfigMap.
+  - apiGroups: ['']
+    resources: ['configmaps']
+    resourceNames: ['editors-definitions']
+    verbs: ['get']
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

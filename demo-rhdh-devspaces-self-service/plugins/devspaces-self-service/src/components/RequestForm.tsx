@@ -412,6 +412,14 @@ export function RequestForm() {
                 ))}
               </Box>
 
+              {/* The namespace exists but the workspace does not. Said plainly,
+                  because the difference decides what the user does next. */}
+              {result.workspaceError && (
+                <Typography variant="caption" display="block" sx={{ mb: 1 }} color="warning.main">
+                  {result.workspaceError}
+                </Typography>
+              )}
+
               {result.openUrl && (
                 <>
                   <Button
@@ -431,7 +439,13 @@ export function RequestForm() {
                       carries the image and the assistants, so a workspace
                       started any other way will not have them - and a button
                       that implied otherwise would be worse than no button. */}
-                  {result.exact === false && (
+                  {result.exact ? (
+                    <Typography variant="caption" display="block" mt={1}>
+                      Your workspace is starting with the image and assistants you
+                      chose. The first start takes a minute or two while the editor
+                      initialises.
+                    </Typography>
+                  ) : (
                     <Typography variant="caption" display="block" mt={1}>
                       This opens Dev Spaces, where the quota above now applies. To
                       get the image and assistants you chose, start the workspace

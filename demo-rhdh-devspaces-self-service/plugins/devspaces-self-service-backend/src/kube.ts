@@ -132,7 +132,11 @@ export class KubeClient {
    * a field Che has since written blocks the apply with a conflict that no
    * user can act on.
    */
-  async apply(path: string, manifest: object, fieldManager = 'devspaces-self-service') {
+  async apply(
+    path: string,
+    manifest: object | string,
+    fieldManager = 'devspaces-self-service',
+  ) {
     const sep = path.includes('?') ? '&' : '?';
     const url = `${path}${sep}fieldManager=${fieldManager}&force=true`;
     return this.request('PATCH', url, manifest, 'application/apply-patch+yaml');
@@ -165,7 +169,11 @@ function rawRequest(
         // server the request fails below rather than silently skipping TLS.
       }
 
-      const payload = body === undefined ? undefined : JSON.stringify(body);
+      // A string body is sent verbatim. Server-side apply takes YAML, and the
+      // editor definition is copied straight out of a ConfigMap - round-tripping
+      // it through a parser would mean adding one, and would risk changing it.
+      const payload =
+        body === undefined ? undefined : typeof body === 'string' ? body : JSON.stringify(body);
       const req = https.request(
         url,
         {
