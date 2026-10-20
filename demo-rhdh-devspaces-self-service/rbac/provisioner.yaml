@@ -138,7 +138,7 @@ rules:
   # doing it here. Read-only, one ConfigMap.
   - apiGroups: ['']
     resources: ['configmaps']
-    resourceNames: ['editors-definitions']
+    resourceNames: ['editors-definitions', 'console-public']
     verbs: ['get']
 ---
 apiVersion: rbac.authorization.k8s.io/v1

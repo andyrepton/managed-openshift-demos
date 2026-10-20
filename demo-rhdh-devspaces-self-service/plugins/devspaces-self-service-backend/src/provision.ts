@@ -214,6 +214,7 @@ function buildDevfileFor(opts: ProvisionOptions): {
     sizing: computeSizing(opts.request),
     available: opts.capabilities.agents,
     image: opts.capabilities.image ?? STOCK_UDI,
+    ...(opts.capabilities.cheEnv ? { cheEnv: opts.capabilities.cheEnv } : {}),
     ...(opts.capabilities.inClusterAi
       ? { inClusterBaseUrl: opts.capabilities.inClusterAi.baseUrl }
       : {}),

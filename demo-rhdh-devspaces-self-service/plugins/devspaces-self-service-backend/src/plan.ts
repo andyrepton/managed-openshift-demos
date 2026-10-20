@@ -86,6 +86,7 @@ export function planRequest(opts: PlanOptions): PlanResponse {
     sizing,
     available: capabilities.agents,
     image,
+    ...(capabilities.cheEnv ? { cheEnv: capabilities.cheEnv } : {}),
     ...(capabilities.inClusterAi ? { inClusterBaseUrl: capabilities.inClusterAi.baseUrl } : {}),
   });
 

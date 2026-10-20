@@ -74,6 +74,8 @@ export function renderYaml(doc: object): string {
 
 export interface DevfileOptions {
   request: DevSpaceRequest;
+  /** Che's own environment, which the dashboard injects and we must too. */
+  cheEnv?: { name: string; value: string }[];
   sizing: Sizing;
   /** Agents available in the image, from the published capability list. */
   available: AgentCapability[];
@@ -119,6 +121,8 @@ export function buildDevfile(opts: DevfileOptions): object {
   const vsixPaths = selected.filter(a => a.vsixPath).map(a => a.vsixPath as string);
 
   const env = [
+    // First, because without it che-code cannot open a terminal at all.
+    ...(opts.cheEnv ?? []),
     ...aiEnv(opts),
     ...(vsixPaths.length > 0
       ? [{ name: 'DEFAULT_EXTENSIONS', value: vsixPaths.join(';') }]

@@ -41,6 +41,17 @@ export interface Capabilities {
    * supplies an editor to a DevWorkspace automatically.
    */
   editorDefinition?: string;
+  /**
+   * The Che environment every workspace container needs.
+   *
+   * The dashboard injects these and a hand-built DevWorkspace does not, which
+   * is not cosmetic: without them che-code's terminal environment resolution
+   * finds a platform-keyed object with a null value and throws
+   * `Cannot convert undefined or null to object` in applyPlatformSpecificKeys,
+   * so no terminal can ever be opened. The editor itself works fine, which
+   * makes it look like a terminal bug rather than missing configuration.
+   */
+  cheEnv?: { name: string; value: string }[];
   /** Why something above is missing. Shown to the user, not swallowed. */
   problems: string[];
 }
@@ -183,6 +194,56 @@ export async function readCapabilities(opts: CapabilitiesOptions): Promise<Capab
       err instanceof NoCredentialError
         ? 'No cluster credential, so the Dev Spaces URL could not be read.'
         : `Could not read the CheCluster: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
+  // Everything the dashboard puts in a workspace's environment, taken from
+  // the same places the dashboard takes it.
+  try {
+    const che = await kube.get(
+      `/apis/org.eclipse.che/v2/namespaces/${cheNamespace}/checlusters/${cheName}`,
+    );
+    const body = che.body as {
+      status?: { cheURL?: string; pluginRegistryURL?: string };
+      spec?: { components?: { pluginRegistry?: { openVSXURL?: string } } };
+    };
+    const dashboard = body.status?.cheURL;
+    const registry = body.status?.pluginRegistryURL;
+
+    let consoleUrl = '';
+    const cm = await kube.get(
+      '/api/v1/namespaces/openshift-config-managed/configmaps/console-public',
+    );
+    if (cm.status === 200) {
+      consoleUrl = (cm.body as { data?: Record<string, string> }).data?.consoleURL ?? '';
+    } else {
+      problems.push(
+        `Could not read the OpenShift console URL: HTTP ${cm.status}. Workspaces still ` +
+          'start; the console link inside them is empty.',
+      );
+    }
+
+    if (dashboard) {
+      result.cheEnv = [
+        { name: 'CHE_DASHBOARD_URL', value: dashboard },
+        { name: 'CHE_PLUGIN_REGISTRY_URL', value: registry ?? `${dashboard}/plugin-registry/v3` },
+        {
+          name: 'CHE_PLUGIN_REGISTRY_INTERNAL_URL',
+          value: `http://plugin-registry.${cheNamespace}.svc:8080/v3`,
+        },
+        { name: 'CLUSTER_CONSOLE_URL', value: consoleUrl },
+        { name: 'CLUSTER_CONSOLE_TITLE', value: 'OpenShift console' },
+        {
+          name: 'OPENVSX_REGISTRY_URL',
+          value: body.spec?.components?.pluginRegistry?.openVSXURL ?? '',
+        },
+        { name: 'HOST_USERS', value: 'true' },
+      ];
+    }
+  } catch (err) {
+    problems.push(
+      `Could not build the Che workspace environment: ${err instanceof Error ? err.message : String(err)}. ` +
+        'Workspaces may start without a working terminal.',
     );
   }
 
