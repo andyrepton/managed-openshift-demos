@@ -59,10 +59,22 @@ describe('computeSizing', () => {
     expect(s.perWorkspace.ramRequestMiB).toBeLessThan(s.perWorkspace.ramLimitMiB);
   });
 
-  it('caps the quota at what was actually asked for', () => {
+  it('budgets the whole pod, including the Che gateway sidecar', () => {
+    // routingClass: che adds a 500m/256Mi sidecar to every workspace pod.
+    // Sizing the quota to the workspace container alone made the quota
+    // reject the very pod it was sized for:
+    //   exceeded quota: requested: limits.cpu=2500m,limits.memory=4352Mi
     const s = computeSizing(base);
-    expect(s.quota.limitsCpuMilli).toBe(4000);
-    expect(s.quota.limitsRamMiB).toBe(8192);
+    expect(s.quota.limitsCpuMilli).toBe((2000 + 500) * 2);
+    expect(s.quota.limitsRamMiB).toBe((4096 + 256) * 2);
+  });
+
+  it('leaves the quota able to admit the pod it describes', () => {
+    const s = computeSizing(base);
+    const podCpu = s.perWorkspace.cpuLimitMilli + 500;
+    const podRam = s.perWorkspace.ramLimitMiB + 256;
+    expect(s.quota.limitsCpuMilli).toBeGreaterThanOrEqual(podCpu * base.workspaceCount);
+    expect(s.quota.limitsRamMiB).toBeGreaterThanOrEqual(podRam * base.workspaceCount);
   });
 
   it('leaves pod headroom, because a restart runs two pods briefly', () => {

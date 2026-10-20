@@ -156,6 +156,17 @@ export function devWorkspaceManifest(opts: DevWorkspaceOptions): object {
       },
     },
     spec: {
+      /*
+       * Without `routingClass: che` the DevWorkspace falls back to the
+       * default routing, no Che gateway route is created, and the editor is
+       * unreachable. The pod runs perfectly and the workspace never leaves
+       * Starting, failing after the CheCluster's startTimeoutSeconds with:
+       *
+       *   The workspace status remains "Starting" in the last 300 seconds.
+       *
+       * Nothing in the pod looks wrong, which is what makes it hard to find.
+       */
+      routingClass: 'che',
       started: opts.started,
       contributions: [{ name: 'editor', kubernetes: { name: opts.editorTemplateName } }],
       template: {

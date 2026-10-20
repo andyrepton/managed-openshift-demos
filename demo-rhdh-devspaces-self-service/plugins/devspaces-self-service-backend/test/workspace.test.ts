@@ -97,6 +97,13 @@ describe('devWorkspaceManifest', () => {
     userEntityRef: 'user:default/andy',
   }) as any;
 
+  it('routes through the Che gateway, or the editor is never reachable', () => {
+    // Without this the pod runs fine and the workspace sits in Starting until
+    // startTimeoutSeconds, then fails with "remains Starting in the last 300
+    // seconds". Nothing in the pod looks wrong.
+    expect(dw.spec.routingClass).toBe('che');
+  });
+
   it('contributes the editor, since nothing injects one', () => {
     // Verified on Dev Spaces 3.30: a DevWorkspace with no contributions gets
     // no editor and no template created for it.

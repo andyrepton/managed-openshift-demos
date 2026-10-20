@@ -40,6 +40,21 @@
 export const EDITOR_CPU_MILLI = 500;
 export const EDITOR_RAM_MIB = 1024;
 
+/**
+ * The Che gateway sidecar, which `routingClass: che` adds to every workspace pod.
+ *
+ * A SEPARATE container from the workspace, so unlike the editor it does not
+ * change what the devfile asks for - but it does count against the namespace
+ * quota, and forgetting it means the quota rejects the pod it was sized for:
+ *
+ *   exceeded quota: requested: limits.cpu=2500m,limits.memory=4352Mi,
+ *   limited: limits.cpu=2,limits.memory=4Gi
+ */
+export const GATEWAY_CPU_LIMIT_MILLI = 500;
+export const GATEWAY_RAM_LIMIT_MIB = 256;
+export const GATEWAY_CPU_REQUEST_MILLI = 50;
+export const GATEWAY_RAM_REQUEST_MIB = 64;
+
 /** The least the workload itself should get once the editor has taken its share. */
 export const WORKLOAD_FLOOR_CPU_MILLI = 500;
 export const WORKLOAD_FLOOR_RAM_MIB = 1024;
@@ -209,11 +224,14 @@ export function computeSizing(input: SizingInput): Sizing {
 
   const storage = storageFor(input);
 
+  // Quota covers the whole POD, not just the workspace container: the Che
+  // gateway sidecar rides along with every workspace and counts too.
   const quota: QuotaSize = {
-    requestsCpuMilli: perWorkspace.cpuRequestMilli * workspaceCount,
-    requestsRamMiB: perWorkspace.ramRequestMiB * workspaceCount,
-    limitsCpuMilli: perWorkspace.cpuLimitMilli * workspaceCount,
-    limitsRamMiB: perWorkspace.ramLimitMiB * workspaceCount,
+    requestsCpuMilli:
+      (perWorkspace.cpuRequestMilli + GATEWAY_CPU_REQUEST_MILLI) * workspaceCount,
+    requestsRamMiB: (perWorkspace.ramRequestMiB + GATEWAY_RAM_REQUEST_MIB) * workspaceCount,
+    limitsCpuMilli: (perWorkspace.cpuLimitMilli + GATEWAY_CPU_LIMIT_MILLI) * workspaceCount,
+    limitsRamMiB: (perWorkspace.ramLimitMiB + GATEWAY_RAM_LIMIT_MIB) * workspaceCount,
     // Headroom of one: a workspace restart briefly runs the new pod alongside
     // the old one, and a quota of exactly N makes that fail rather than wait.
     pods: workspaceCount + 1,

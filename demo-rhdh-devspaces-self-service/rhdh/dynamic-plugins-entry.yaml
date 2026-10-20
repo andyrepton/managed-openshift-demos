@@ -26,10 +26,10 @@
       # It refuses guest and anonymous callers outright rather than relying on
       # auth.environment staying as it is, since guest sign-in is an
       # installation-wide switch another demo could flip.
-      - package: 'oci://quay.io/andyrepton/rhdh-plugins:devspaces-self-service-0.2.3!devspaces-backstage-plugin-devspaces-self-service-backend'
+      - package: 'oci://quay.io/andyrepton/rhdh-plugins:devspaces-self-service-0.2.4!devspaces-backstage-plugin-devspaces-self-service-backend'
         disabled: false
 
-      - package: 'oci://quay.io/andyrepton/rhdh-plugins:devspaces-self-service-0.2.3!devspaces-backstage-plugin-devspaces-self-service'
+      - package: 'oci://quay.io/andyrepton/rhdh-plugins:devspaces-self-service-0.2.4!devspaces-backstage-plugin-devspaces-self-service'
         disabled: false
         pluginConfig:
           dynamicPlugins:
