@@ -96,6 +96,15 @@ oc --as=system:serviceaccount:rhdh:devspaces-provisioner \
   create namespace testuser-devspaces --dry-run=server
 ```
 
+Checked on OpenShift 4.22: namespaces outside the pattern, Secrets by the
+wrong name, Secrets in the wrong namespace, `kubernetes.io/service-account-token`
+Secrets and DevWorkspaces in `default` are all refused, while the plugin's own
+four objects and its server-side apply go through unchanged.
+
+`oc apply` will not work as this ServiceAccount — client-side apply reads the
+object first and there is no `get` on secrets. The plugin uses server-side
+apply, which is a PATCH with no read, so this affects only ad-hoc `oc` use.
+
 ### 2. Mount the credential
 
 RHDH runs as the `default` ServiceAccount, shared by every plugin in the pod.

@@ -57,10 +57,24 @@
 #   oc --as=system:serviceaccount:rhdh:devspaces-provisioner \
 #     create namespace not-a-workspace
 #
-# and allow this:
+# and allow this (--dry-run, or you have a stray namespace to clean up):
 #
 #   oc --as=system:serviceaccount:rhdh:devspaces-provisioner \
-#     create namespace testuser-devspaces
+#     create namespace testuser-devspaces --dry-run=server
+#
+# Note `oc apply` will NOT work as this ServiceAccount: client-side apply
+# reads the object first, and the secrets rule has no `get`. That is expected
+# and does not affect the plugin, which uses server-side apply - a PATCH, with
+# no read. To check that path:
+#
+#   oc --as=system:serviceaccount:rhdh:devspaces-provisioner \
+#     apply --server-side --field-manager=devspaces-self-service \
+#     --dry-run=server -f <manifest>
+#
+# Verified on OpenShift 4.22 / Kubernetes 1.35: namespaces outside the
+# pattern, Secrets by the wrong name, Secrets in the wrong namespace,
+# service-account-token Secrets and DevWorkspaces in `default` are all
+# refused; the plugin's own four objects and its server-side apply are not.
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
