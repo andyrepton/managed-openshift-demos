@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-# Factory Simulator VM — runs as a KVM guest on the on-prem server so we
+# Factory Simulator VM: runs as a KVM guest on the on-prem server so we
 # don't touch the host networking. Creates a lightweight Fedora cloud VM
 # with OpenVPN TAP server + bridge + simulated factory device.
 
@@ -146,7 +146,7 @@ write_files:
       ip link set tap0 up
       ip link set tap0 promisc on
 
-      # Simulated factory device — a network namespace with its own
+      # Simulated factory device: a network namespace with its own
       # MAC and IP on the factory bridge, as if it were a PLC/sensor.
       ip netns add plc-sim 2>/dev/null || true
       ip link add veth-plc type veth peer name veth-br

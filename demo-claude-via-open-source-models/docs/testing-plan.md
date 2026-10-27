@@ -53,7 +53,7 @@ claude
 
 - [ ] `/status` shows the cluster route as base URL
 - [ ] Simple prompt ("Hello") returns a response
-- [ ] `/model` picker works — switch between Sonnet and Opus
+- [ ] `/model` picker works: switch between Sonnet and Opus
 - [ ] Both models respond after switching
 
 ### 1.4 Tool use validation
@@ -97,7 +97,7 @@ List all YAML files in the models/ directory, then read the first one and summar
 - [ ] Ask the same question again
 - [ ] Verify response comes from the other local model
 - [ ] Exit Claude Code, `unset ANTHROPIC_BASE_URL`, relaunch
-- [ ] Ask the same question — verify response comes from real Claude
+- [ ] Ask the same question, then verify response comes from real Claude
 - [ ] Note quality/speed difference
 
 ---

@@ -2,7 +2,7 @@
 
 Serve [Devstral Small 2 24B](https://huggingface.co/mistralai/Devstral-Small-2-24B-Instruct-2512) (AWQ 4-bit) via vLLM on OpenShift AI, exposing an OpenAI-compatible API.
 
-Devstral is Mistral's agentic coding model — 68% SWE-bench Verified, Apache 2.0, with native tool-calling support. The AWQ 4-bit quantized variant fits on a single A10G (24GB) GPU.
+Devstral is Mistral's agentic coding model: 68% SWE-bench Verified, Apache 2.0, with native tool-calling support. The AWQ 4-bit quantized variant fits on a single A10G (24GB) GPU.
 
 ## Prerequisites
 
@@ -41,7 +41,7 @@ oc apply -f inference-service.yaml
 Wait for the predictor pod to become ready (takes 2-3 minutes to load weights):
 
 ```bash
-oc wait --for=condition=Ready pod -l serving.kserve.io/inferenceservice=devstral -n vllm-model-serving --timeout=10m
+oc wait --for=condition=Ready pod -l serving.kserve.io/inferenceservice=devstral -n vllm-model-serving --timeout=15m
 ```
 
 ## Verify
@@ -66,7 +66,7 @@ oc run curl-chat --rm -i --restart=Never -n vllm-model-serving --image=curlimage
 Other services (e.g. OpenCode in Dev Spaces) can reach the model at:
 
 ```
-http://devstral-predictor.vllm-model-serving.svc.cluster.local:80/v1
+http://devstral-predictor.vllm-model-serving.svc.cluster.local:8000/v1
 ```
 
 Model name: `devstral`

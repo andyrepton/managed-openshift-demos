@@ -6,12 +6,12 @@ Lightspeed's out-of-the-box config works for basic Q&A, but tool calling (MCP to
 
 Common causes of poor tool calling in Lightspeed:
 
-1. **Token budget too small** (`maxTokensForResponse: 2048`) — tool call JSON gets truncated mid-output, producing malformed calls. Bump to 4096+.
-2. **Tool filtering too aggressive** — the default `toolFilteringConfig` may exclude relevant tools before the model sees them. Lowering `threshold` and `alpha` while raising `topK` gives the model more tools to choose from.
-3. **System prompt doesn't guide tool use** — the default prompt doesn't instruct the model to prefer tools over memorized answers. A custom `querySystemPrompt` that explicitly says "use tools for live cluster state" makes a big difference.
-4. **Low iteration limit** (`maxIterations: 5`) — complex queries need chained tool calls (list -> get -> describe). 5 iterations isn't always enough.
-5. **Short timeouts** — `mcpKubeServerConfig.timeout` defaults to 60s, `mcpServers[].timeout` defaults to 5s. Large list operations or slow clusters can hit these.
-6. **Tool budget ratio** (`toolBudgetRatio: 0.5`) — controls what fraction of context is allocated to tool schemas. If you have many tools, lowering this leaves more room for conversation history. If you have few tools, 0.3 is fine.
+1. **Token budget too small** (`maxTokensForResponse: 2048`): tool call JSON gets truncated mid-output, producing malformed calls. Bump to 4096+.
+2. **Tool filtering too aggressive**: the default `toolFilteringConfig` may exclude relevant tools before the model sees them. Lowering `threshold` and `alpha` while raising `topK` gives the model more tools to choose from.
+3. **System prompt doesn't guide tool use**: the default prompt doesn't instruct the model to prefer tools over memorized answers. A custom `querySystemPrompt` that explicitly says "use tools for live cluster state" makes a big difference.
+4. **Low iteration limit** (`maxIterations: 5`): complex queries need chained tool calls (list -> get -> describe). 5 iterations isn't always enough.
+5. **Short timeouts**: `mcpKubeServerConfig.timeout` defaults to 60s, `mcpServers[].timeout` defaults to 5s. Large list operations or slow clusters can hit these.
+6. **Tool budget ratio** (`toolBudgetRatio: 0.5`): controls what fraction of context is allocated to tool schemas. If you have many tools, lowering this leaves more room for conversation history. If you have few tools, 0.3 is fine.
 
 ## Tunable Fields
 
@@ -43,7 +43,7 @@ oc apply -f operator.yaml
 # Wait for CSV
 oc get csv -n openshift-lightspeed -w
 
-# Create credentials — set the apitoken to your RHOAI inference endpoint token
+# Create credentials: set the apitoken to your RHOAI inference endpoint token
 oc apply -f credentials-secret.yaml
 
 # Edit olsconfig-tuned.yaml:
@@ -52,7 +52,7 @@ oc apply -f credentials-secret.yaml
 #   - Adjust contextWindowSize to match your model's context length
 oc apply -f olsconfig-tuned.yaml
 
-# Grant users access — edit rbac.yaml first to set your AD group names
+# Grant users access: edit rbac.yaml first to set your AD group names
 oc apply -f rbac.yaml
 ```
 
@@ -60,16 +60,16 @@ A minimal default config is also provided in `olsconfig-default.yaml` for compar
 
 ## Files
 
-- `operator.yaml` — Namespace, operator group, and subscription
-- `credentials-secret.yaml` — MaaS / RHOAI inference endpoint token (replace REPLACE_ME)
-- `rbac.yaml` — ClusterRoleBinding to grant users/groups access to Lightspeed
-- `olsconfig-default.yaml` — Minimal baseline config with defaults
-- `olsconfig-tuned.yaml` — Tuned config with improved tool calling
-- `olsconfig-with-mcp-server.yaml` — Tuned config with external MCP server examples
-- `mcp-server-secret.yaml` — Credentials for external MCP servers (replace REPLACE_ME)
-- `kustomization.yaml` — Kustomize overlay using tuned config
+- `operator.yaml`: Namespace, operator group, and subscription
+- `credentials-secret.yaml`: MaaS / RHOAI inference endpoint token (replace REPLACE_ME)
+- `rbac.yaml`: ClusterRoleBinding to grant users/groups access to Lightspeed
+- `olsconfig-default.yaml`: Minimal baseline config with defaults
+- `olsconfig-tuned.yaml`: Tuned config with improved tool calling
+- `olsconfig-with-mcp-server.yaml`: Tuned config with external MCP server examples
+- `mcp-server-secret.yaml`: Credentials for external MCP servers (replace REPLACE_ME)
+- `kustomization.yaml`: Kustomize overlay using tuned config
 
-## RBAC — Granting User Access
+## RBAC: Granting User Access
 
 The Lightspeed operator creates a `lightspeed-operator-ols-user` ClusterRole but does **not** bind it to any users or groups by default. Without a binding, users get:
 
@@ -111,11 +111,11 @@ oc apply -f olsconfig-with-mcp-server.yaml
 
 The `type` field on the provider supports: `azure_openai`, `openai`, `watsonx`, `bam`, `rhoai_vllm`, `rhelai_vllm`, `bedrock`, `google_vertex`, `google_vertex_anthropic`, `fake_provider`.
 
-The configs in this demo use `openai` because the LLM is served by RHOAI MaaS on a separate cluster — MaaS exposes a standard OpenAI-compatible API, so `openai` is the correct type. If the RHOAI endpoint is on the **same cluster**, use `rhoai_vllm` instead — it handles internal cluster TLS and service discovery natively.
+The configs in this demo use `openai` because the LLM is served by RHOAI MaaS on a separate cluster. MaaS exposes a standard OpenAI-compatible API, so `openai` is the correct type. If the RHOAI endpoint is on the **same cluster**, use `rhoai_vllm` instead. It handles internal cluster TLS and service discovery natively.
 
 ## External MCP Servers
 
-Lightspeed's built-in introspection MCP server gives it access to the Kubernetes API. External MCP servers extend this with tools for other systems — monitoring, ticketing, CI/CD, databases, etc.
+Lightspeed's built-in introspection MCP server gives it access to the Kubernetes API. External MCP servers extend this with tools for other systems: monitoring, ticketing, CI/CD, databases, etc.
 
 MCP servers communicate over HTTP+SSE (Server-Sent Events). Lightspeed discovers the server's available tools at startup and offers them to the LLM alongside the built-in tools.
 
@@ -136,7 +136,7 @@ There are three ways to authenticate with external MCP servers:
 | **Kubernetes** | `kubernetes` | Service account token for in-cluster MCP servers |
 | **Client passthrough** | `client` | Forwards the end user's OpenShift token to the MCP server |
 
-Secret-based auth is the simplest — create a Secret with the token and reference it:
+Secret-based auth is the simplest. Create a Secret with the token and reference it:
 
 ```yaml
 mcpServers:
@@ -178,4 +178,4 @@ Without tool filtering, all tools are sent to the model on every query, which ca
 - **`toolBudgetRatio`** is a tradeoff: higher = more tool schemas in context = less room for conversation history. With few tools (< 10), 0.3 is fine.
 - **`maxIterations`** controls how many agentic loop steps the model can take. Each tool call + response is one iteration. Set higher for complex multi-step queries.
 - **`toolFilteringConfig`** uses hybrid RAG to pre-filter which tools the model sees. If the model isn't calling a tool you expect, these thresholds may be filtering it out. Requires the `ToolFiltering` feature gate.
-- **`mcpKubeServerConfig.timeout`** (default 60s) — increase if the cluster API is slow or you're listing many resources.
+- **`mcpKubeServerConfig.timeout`** (default 60s): increase if the cluster API is slow or you're listing many resources.

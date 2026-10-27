@@ -56,12 +56,12 @@ Each packet crosses two tunnels. The Hub bridges between them, preserving the or
          ┌──────┴───────┐
          │  Factory GW  │  Wraps L2 in OpenVPN TAP
          └──────┬───────┘
-                ║  UDP 1194 — VPN tunnel over internet
+                ║  UDP 1194: VPN tunnel over internet
          ┌──────┴───────┐
          │   Hub Pod    │  Unwraps VPN → bridges to VXLAN
          │   (br-hub)   │
          └──────┬───────┘
-                ║  UDP 4789 — VXLAN tunnel over VPC
+                ║  UDP 4789: VXLAN tunnel over VPC
          ┌──────┴───────┐
          │  Spoke Pod   │  Unwraps VXLAN → local bridge
          │  (br-spoke)  │
@@ -283,7 +283,7 @@ cluster and make ROSA the outbound VPN client.
 ### `bridge fdb replace` unsupported on some kernels
 
 On ROSA HCP worker nodes, `bridge fdb replace` returns "Operation not
-supported" for VXLAN FDB entries. Use `bridge fdb append` instead — it is
+supported" for VXLAN FDB entries. Use `bridge fdb append` instead. It is
 idempotent for new entries and silently ignores duplicates.
 
 ### Fedora VM interface naming and NetworkManager

@@ -3,8 +3,8 @@
 #
 # The l2bridge binding is required. In a primary-UDN namespace the VM attaches
 # to the UDN interface (ovn-udn1), and the masquerade binding installs nftables
-# rules in the virt-launcher pod that drop inbound traffic on that interface —
-# the VM would be unreachable from outside even though BGP advertises its
+# rules in the virt-launcher pod that drop inbound traffic on that interface.
+# The VM would be unreachable from outside even though BGP advertises its
 # subnet correctly. l2bridge is the default for primary UDNs and needs no
 # HyperConverged configuration.
 apiVersion: kubevirt.io/v1

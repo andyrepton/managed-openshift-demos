@@ -3,7 +3,7 @@
 // read this same file.
 //
 // The model key must match an id returned by GET /v1/models on the endpoint
-// below — vLLM serves it as "devstral" because the InferenceService passes
+// below: vLLM serves it as "devstral" because the InferenceService passes
 // --served-model-name=devstral.
 //
 // context must match the InferenceService's --max-model-len (65536). Kilo
@@ -39,7 +39,7 @@
   // never gets and reports "Task completed" having done nothing.
   //
   // These are scoped to a throwaway workspace running as a non-root user in
-  // its own namespace. Tighten them for anything longer lived — the values
+  // its own namespace. Tighten them for anything longer lived. The values
   // are "allow", "ask" or "deny", and bash accepts per-command patterns, e.g.
   //   "bash": { "*": "ask", "git *": "allow", "rm *": "deny" }
   //

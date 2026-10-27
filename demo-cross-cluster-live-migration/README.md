@@ -2,7 +2,7 @@
 
 Bidirectional VM migration between an on-prem OpenShift cluster and
 ROSA HCP using MTV (Migration Toolkit for Virtualization). The VM keeps its
-IP address after migration thanks to the stretched L2 network — clients
+IP address after migration thanks to the stretched L2 network: clients
 can reach it at the same address regardless of which cluster hosts it.
 
 This is a **warm migration** (cold switchover): MTV copies the disk while the
@@ -50,7 +50,7 @@ migration. MTV orchestrates the disk transfer and VM recreation.
 
 - Two OpenShift 4.20+ clusters (tested on 4.22)
 - **Deploy the [cluster-to-cluster stretched L2 demo](../demo-stretched-layer2-onto-rosa/cluster-to-cluster/)
-  first** — it creates the L2 network, namespaces (`industrial-network`,
+  first**. It creates the L2 network, namespaces (`industrial-network`,
   `industrial-spoke`), spoke DaemonSets, NADs, and node labels that this
   demo depends on. Verify hub-to-hub ping works before continuing.
 - `oc` CLI with cluster-admin on both clusters
@@ -106,7 +106,7 @@ KUBECONFIG=$KUBECONFIG_HETZNER oc apply -f prereqs/hyperconverged-cclm.yaml
 
 ## Part B: Enable CCLM feature gate on ROSA
 
-ROSA already has a HyperConverged CR — patch it to enable the
+ROSA already has a HyperConverged CR. Patch it to enable the
 `decentralizedLiveMigration` feature gate:
 
 ```bash
@@ -282,7 +282,7 @@ oc get vmi -n industrial-spoke -o wide
 ```
 
 **Important:** MTV does not automatically delete the source VM after
-migration — it leaves a stopped VM object on the source cluster. You must
+migration. It leaves a stopped VM object on the source cluster. You must
 delete it before attempting a reverse migration:
 
 ```bash
@@ -356,7 +356,7 @@ oc delete datavolume cclm-test-vm-rootdisk -n industrial-spoke --ignore-not-foun
 
 **Migration plan shows "Not Ready"**
 
-Check the Provider status — it must show `Ready`:
+Check the Provider status. It must show `Ready`:
 ```bash
 oc get provider -n openshift-mtv -o wide
 ```
@@ -420,6 +420,6 @@ proportionally longer.
 
 ## Related Demos
 
-- [Stretched L2 onto ROSA](../demo-stretched-layer2-onto-rosa/) — the L2 network foundation
-- [Multi-Cloud VM Migration with MTV](../demo-mtv-migration-multi-cloud/) — cold migration between clusters
+- [Stretched L2 onto ROSA](../demo-stretched-layer2-onto-rosa/): the L2 network foundation
+- [Multi-Cloud VM Migration with MTV](../demo-mtv-migration-multi-cloud/): cold migration between clusters
 - [OpenShift Virtualization on ROSA](../demo-openshift-virt-on-rosa/)

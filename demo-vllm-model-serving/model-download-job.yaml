@@ -25,8 +25,7 @@ spec:
               pip install -q huggingface_hub &&
               /tmp/.local/bin/hf download \
                 cyankiwi/Devstral-Small-2-24B-Instruct-2512-AWQ-4bit \
-                --local-dir /models/devstral-awq \
-                --token "$HF_TOKEN"
+                --local-dir /models/devstral-awq
           env:
             - name: HOME
               value: /tmp

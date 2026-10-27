@@ -53,8 +53,8 @@ export KUBECONFIG_HUB=<path-to-rosa-kubeconfig>
 export KUBECONFIG_ONPREM=<path-to-onprem-kubeconfig>
 ```
 
-Commands in **Part A**, **Part C**, and **Part D** target the hub (ROSA) cluster — use `KUBECONFIG=$KUBECONFIG_HUB`.
-Commands in **Part B step 3** target the on-prem cluster — use `KUBECONFIG=$KUBECONFIG_ONPREM`.
+Commands in **Part A**, **Part C**, and **Part D** target the hub (ROSA) cluster. Use `KUBECONFIG=$KUBECONFIG_HUB`.
+Commands in **Part B step 3** target the on-prem cluster. Use `KUBECONFIG=$KUBECONFIG_ONPREM`.
 
 ## Part A: Install ACM on ROSA
 
@@ -149,13 +149,13 @@ oc get policy -n open-cluster-management \
   -o custom-columns='NAME:.metadata.name,MODE:.spec.remediationAction,STATUS:.status.compliant'
 ```
 
-Expected: `policy-logging-operator`, `policy-clf-configured`, and `policy-resource-quotas` show `Compliant`. `policy-no-privileged-pods` shows `NonCompliant` (expected — some system pods run privileged).
+Expected: `policy-logging-operator`, `policy-clf-configured`, and `policy-resource-quotas` show `Compliant`. `policy-no-privileged-pods` shows `NonCompliant` (expected: some system pods run privileged).
 
 Open the ACM console → **Governance → Policies** to see compliance per cluster.
 
 ## Part D: Application Deployment via ACM
 
-Deploy a chatty app to both clusters — directly on the hub, and via ManifestWork to the on-prem cluster:
+Deploy a chatty app to both clusters: directly on the hub, and via ManifestWork to the on-prem cluster:
 
 ```bash
 # Deploy on hub

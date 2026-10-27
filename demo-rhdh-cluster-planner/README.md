@@ -193,7 +193,7 @@ operator runs pods like anything else.
 | Red Hat build of Keycloak | `rhbk-operator` | `redhat-operators` | 6.1 vCPU / 4.0 GiB |
 | Streams for Apache Kafka | `amq-streams` | `redhat-operators` | 4.7 vCPU / 9.4 GiB |
 | Apache Flink | `flink-kubernetes-operator` | `community-operators` | 2.25 vCPU / 4.5 GiB |
-| OpenShift Data Foundation | `odf-operator` | `redhat-operators` | 3 dedicated nodes — see below |
+| OpenShift Data Foundation | `odf-operator` | `redhat-operators` | 3 dedicated nodes (see below) |
 
 **The two halves of that table have different provenance, and the UI keeps them
 apart.** Availability is live: the backend lists PackageManifests from this
@@ -202,7 +202,7 @@ installable here and at what version. The footprints are curated constants from
 vendor documentation.
 
 They have to be. A `PackageManifest`'s `currentCSVDesc` carries no deployment
-spec, and the part that dominates — three Kafka brokers, three Keycloak pods —
+spec, and the part that dominates (three Kafka brokers, three Keycloak pods)
 lives in a CR that does not exist until someone creates it. No API can answer
 "what will this cost me in vCPU", so the figures are written down with their
 source and marked as what they are.
@@ -211,15 +211,15 @@ Each figure covers **the operator and one default instance of what it manages**.
 A controller pod on its own is a rounding error, and sizing a cluster for 200m
 of CPU would be theatre.
 
-* **Keycloak** — three pods at 2 vCPU / 1250 MB, from the example CR in the
+* **Keycloak**: three pods at 2 vCPU / 1250 MB, from the example CR in the
   [RHBK High Availability Guide](https://docs.redhat.com/en/documentation/red_hat_build_of_keycloak/26.2/html/high_availability_guide/concepts-memory-and-cpu-sizing-).
   That guide sizes CPU by login rate, so a quiet realm needs far less.
-* **Streams for Apache Kafka** — three brokers and three KRaft controllers, from
+* **Streams for Apache Kafka**: three brokers and three KRaft controllers, from
   [Red Hat solution 4205851](https://access.redhat.com/solutions/4205851), which
   is explicitly a **development** starting point and not suitable for
   production. Streams for Apache Kafka sets no default requests or limits on its
   operands at all, so there is no vendor production default to quote.
-* **Flink** — one JobManager and one TaskManager, from the upstream
+* **Flink**: one JobManager and one TaskManager, from the upstream
   [`examples/basic.yaml`](https://github.com/apache/flink-kubernetes-operator/blob/main/examples/basic.yaml).
   A real job sets its own parallelism and needs more TaskManagers.
 
@@ -229,7 +229,7 @@ both say so rather than letting it sit unmarked next to two supported products.
 
 **ODF is in the list but behaves differently.** Its capacity is three dedicated
 nodes costed as their own pool, so its worker-pod footprint is deliberately
-**zero** — a figure there would be added to the worker sizing as well and bill
+**zero**. A figure there would be added to the worker sizing as well and bill
 the same hardware twice. It is also the one entry whose checkbox has no state of
 its own: it reflects the storage backends, and ticking it writes there. The
 backend derives it from those backends rather than trusting the client, and
@@ -249,7 +249,7 @@ ServiceAccount token by default, so `demo-developer-hub/backstage.yaml` also set
 
 Without either, nothing breaks: every operator reports **not checked** with the
 reason, and the footprints and sizing still work. "Not in this cluster's catalog"
-and "we could not check" are different answers and get different chips — a plan
+and "we could not check" are different answers and get different chips. A plan
 that asks for something uninstallable must not look fine doing it.
 
 This is the only part of the planner that talks to Kubernetes, which is why it
@@ -263,12 +263,12 @@ differently.
 
 | Capacity | Default backend | Alternative |
 | --- | --- | --- |
-| **Block** (GiB) — PVCs | Azure managed disks | ODF |
-| **Object** (GiB) — buckets | Azure Blob, Hot LRS, live-priced | ODF |
+| **Block** (GiB): PVCs | Azure managed disks | ODF |
+| **Object** (GiB): buckets | Azure Blob, Hot LRS, live-priced | ODF |
 
 Azure Blob comes from the Retail Prices API like everything else, and the meter
 is **graduated**: $0.0196/GB/month for the first 50 TB, then $0.018816, then
-$0.018032. Those are bands, not cliffs — 100 TB is the first 50 TB at one rate
+$0.018032. Those are bands, not cliffs: 100 TB is the first 50 TB at one rate
 and the rest at another. Picking a single band and multiplying is wrong in one
 direction or the other depending on which you pick, so the bands are applied
 cumulatively.
@@ -421,7 +421,7 @@ All pure logic lives in `aro-planner-common` so the wizard, the backend and the 
 * **The Blob "Data Stored" meter is graduated, and the API returns one row per band.** Three rows come back with the same `meterId`, distinguished only by `tierMinimumUnits` (0, 51200, 512000). Taking the first row overcharges above 50 TB; taking the last undercharges below it. Both are wrong and neither looks wrong.
 * **`General Block Blob v2` and the legacy `Blob Storage` publish identically named meters** at slightly different prices, so matching on `meterName` alone returns both and the result depends on arrival order. The same trap as the disk meters and Spot VM pricing - several plausible rows, one correct.
 * **ODF node candidates have to be priced separately from the workload profile.** They are sized by ODF's own 16 vCPU / 64 GiB minimum, not by the profile, so a memory-heavy request would otherwise filter the general-purpose sizes out of the price query and ODF would silently cost nothing - the worst possible failure for a comparison about cost.
-* **A PackageManifest cannot tell you what an operator costs in capacity.** `currentCSVDesc` carries `annotations`, `description`, `installModes`, CRDs, `version` and little else — no deployment spec, no resource requests. The operand is worse: three Kafka brokers exist only in a CR nobody has created yet. So the live catalog answers "is this installable here", and the footprints stay curated. The half that most needs to be accurate is exactly the half the API cannot supply.
+* **A PackageManifest cannot tell you what an operator costs in capacity.** `currentCSVDesc` carries `annotations`, `description`, `installModes`, CRDs, `version` and little else: no deployment spec, no resource requests. The operand is worse: three Kafka brokers exist only in a CR nobody has created yet. So the live catalog answers "is this installable here", and the footprints stay curated. The half that most needs to be accurate is exactly the half the API cannot supply.
 * **RHDH mounts no ServiceAccount token by default**, and the Deployment is operator-managed, so `automountServiceAccountToken` has to go through `spec.deployment.patch` on the `Backstage` CR. Editing the Deployment directly is reverted.
 * **`oc get packagemanifest -o json` shows channels in catalog order, not preference order.** Reading `channels[0]` returned RHBK 22.0.13 while the default channel was on 26.6.7. Match on `status.defaultChannel`.
 * The MCP endpoint only accepts in-pod callers, checked on the TCP peer address. The assistant sidecar shares the pod; an `Origin` header would be forgeable. It refuses to serve at all if Express `trust proxy` is ever enabled, since that would make `X-Forwarded-For` -- and therefore the peer address -- caller-controlled.

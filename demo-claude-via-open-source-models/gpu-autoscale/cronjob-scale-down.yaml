@@ -11,7 +11,7 @@ metadata:
     app.kubernetes.io/name: gpu-pool-scaler
     app.kubernetes.io/component: scale-down
 spec:
-  schedule: "15 21 * * *"   # 21:15 daily — verify cluster timezone first
+  schedule: "15 21 * * *"   # 21:15 daily. Verify cluster timezone first
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 5
   failedJobsHistoryLimit: 10
@@ -22,7 +22,7 @@ spec:
       template:
         spec:
           restartPolicy: Never
-          # Placeholder — replace with your built + pushed image
+          # Placeholder: replace with your built + pushed image
           # (docker buildx build --platform linux/amd64 -t quay.io/<your-org>/gpu-pool-scaler:latest ...)
           image: quay.io/REPLACE_WITH_YOUR_ORG/gpu-pool-scaler:latest
           imagePullPolicy: IfNotPresent
@@ -30,7 +30,7 @@ spec:
           containers:
             - name: scaler
               env:
-                # Client credentials (preferred) or offline token — whichever
+                # Client credentials (preferred) or offline token, whichever
                 # keys exist in the ocm-client Secret. optional: true so the
                 # pod starts whether the Secret uses one shape or the other.
                 - name: OCM_CLIENT_ID

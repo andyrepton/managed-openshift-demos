@@ -26,7 +26,7 @@ spec:
         #
         # This needs a 48 GiB card. On a 24 GiB A10G (g5.4xlarge) the 15.16
         # GiB of weights leave only 3.81 GiB of KV cache, which vLLM caps at
-        # 24976 tokens — enough for the Kilo CLI but not the extension, which
+        # 24976 tokens, enough for the Kilo CLI but not the extension, which
         # has under 4k tokens left for the conversation. On an L40S
         # (g7e.2xlarge) there is room for 65536.
         #

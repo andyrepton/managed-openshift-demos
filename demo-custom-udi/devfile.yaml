@@ -13,7 +13,7 @@ components:
     container:
       # Built by demo-custom-udi/buildconfig.yaml. Workspaces run in per-user
       # namespaces, so custom-udi must grant system:image-puller to
-      # system:authenticated or this pull is denied — see the README.
+      # system:authenticated or this pull is denied (see the README).
       image: image-registry.openshift-image-registry.svc:5000/custom-udi/custom-udi:latest
       memoryRequest: 2Gi
       memoryLimit: 6Gi

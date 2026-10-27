@@ -57,7 +57,7 @@ spec:
               ip link set tap0 up
               ip link set tap0 promisc on
               echo 0 > /proc/sys/net/ipv4/conf/tap0/rp_filter
-              # server-bridge assigns a pool IP to tap0 — remove it since
+              # server-bridge assigns a pool IP to tap0. Remove it since
               # tap0 is a bridge slave and the IP belongs on br-hub
               sleep 5
               TAP_IP=$(ip -4 addr show tap0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}')

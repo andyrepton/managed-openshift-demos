@@ -15,7 +15,7 @@ roleRef:
 subjects:
   - apiGroup: rbac.authorization.k8s.io
     kind: Group
-    name: REPLACE_ME # AD group name — must match the group claim from your IDP
+    name: REPLACE_ME # AD group name (must match the group claim from your IDP)
 ---
 # Option 2: Grant access to all authenticated users (uncomment to use)
 # apiVersion: rbac.authorization.k8s.io/v1

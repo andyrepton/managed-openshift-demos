@@ -57,7 +57,7 @@ spec:
               ip link set tap0 up
               ip link set tap0 promisc on
               echo 0 > /proc/sys/net/ipv4/conf/tap0/rp_filter
-              # server-bridge assigns the gateway IP to tap0 — remove it since
+              # server-bridge assigns the gateway IP to tap0. Remove it since
               # tap0 is a bridge slave and the IP belongs on br-hub
               sleep 5
               TAP_IP=$(ip -4 addr show tap0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
@@ -103,7 +103,7 @@ spec:
               done
             ) &
 
-            # 7. Start OpenVPN SERVER (foreground — --daemon silently dies in containers)
+            # 7. Start OpenVPN SERVER (foreground: --daemon silently dies in containers)
             echo "HUB READY (VPN SERVER) - IP 192.168.100.1"
             openvpn --config /etc/openvpn/config/server.conf
         volumeMounts:

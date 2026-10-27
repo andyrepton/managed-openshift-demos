@@ -5,7 +5,7 @@
 #   oc adm groups add-users claude-code-users alice bob charlie
 #
 # On ARO HCP, OpenShift groups are not available (Entra ID auth).
-# Use the users field instead — add individual usernames or ServiceAccount
+# Use the users field instead: add individual usernames or ServiceAccount
 # identities (e.g. system:serviceaccount:claude-code-demo:maas-client).
 apiVersion: maas.opendatahub.io/v1alpha1
 kind: MaaSSubscription
