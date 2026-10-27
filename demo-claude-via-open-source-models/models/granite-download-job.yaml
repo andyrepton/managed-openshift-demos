@@ -24,8 +24,7 @@ spec:
               pip install -q huggingface_hub &&
               /tmp/.local/bin/hf download \
                 ibm-granite/granite-4.1-30b \
-                --local-dir /models/granite-4-1-30b \
-                --token "$HF_TOKEN"
+                --local-dir /models/granite-4-1-30b
           env:
             - name: HOME
               value: /tmp

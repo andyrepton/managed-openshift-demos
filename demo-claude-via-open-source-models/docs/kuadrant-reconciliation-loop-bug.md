@@ -31,7 +31,7 @@ oc logs -n openshift-operators deployment/kuadrant-operator-controller-manager -
 
 ## Root Cause
 
-Go's `sort.Sort` is not stable. When a Gateway has multiple listeners sharing the same hostname attached to the same HTTPRoute, multiple topological paths produce action sets with identical sort keys. The non-deterministic ordering causes the generated WASM configuration to differ between reconciliation runs, producing a different EnvoyFilter each cycle — triggering an infinite update loop.
+Go's `sort.Sort` is not stable. When a Gateway has multiple listeners sharing the same hostname attached to the same HTTPRoute, multiple topological paths produce action sets with identical sort keys. The non-deterministic ordering causes the generated WASM configuration to differ between reconciliation runs, producing a different EnvoyFilter each cycle and triggering an infinite update loop.
 
 Each EnvoyFilter update triggers an Envoy hot restart which:
 1. Removes old filter chains (`filter_chain_is_being_removed`)

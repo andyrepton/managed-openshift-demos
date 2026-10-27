@@ -42,7 +42,7 @@ Terraform project for deploying ROSA HCP (Hosted Control Planes) clusters in a b
 
 Each cluster gets its own VPC with:
 - **Load balancer subnets** (public, 3x /28): for ingress controllers and external-facing services
-- **Application subnets** (private, 3x /26): for ROSA HCP worker nodes — receives 75% of the /24 address space
+- **Application subnets** (private, 3x /26): for ROSA HCP worker nodes (receives 75% of the /24 address space)
 
 All VPCs are connected via a Transit Gateway with automatic route propagation, enabling cross-cluster communication.
 
@@ -118,7 +118,7 @@ Each entry in the `machine_pools` map creates an additional node pool on both th
 | `labels` | map(string) | null | Kubernetes node labels |
 | `taints` | list(object) | null | Kubernetes node taints (`key`, `value`, `schedule_type`) |
 | `auto_repair` | bool | true | Automatically repair unhealthy nodes |
-| `subnet_index` | number | 0 | Index into the VPC's private subnets (0, 1, or 2 — one per AZ) |
+| `subnet_index` | number | 0 | Index into the VPC's private subnets (0, 1, or 2: one per AZ) |
 | `aws_tags` | map(string) | {} | Additional AWS tags on the node pool instances |
 
 ### `irsa_roles`

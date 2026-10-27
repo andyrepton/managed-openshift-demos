@@ -24,8 +24,7 @@ spec:
               pip install -q huggingface_hub &&
               /tmp/.local/bin/hf download \
                 RedHatAI/Qwen3.8-27B-INT4 \
-                --local-dir /models/qwen3-8-27b \
-                --token "$HF_TOKEN"
+                --local-dir /models/qwen3-8-27b
           env:
             - name: HOME
               value: /tmp

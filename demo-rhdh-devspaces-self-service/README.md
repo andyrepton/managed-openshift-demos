@@ -1,7 +1,7 @@
 # Dev Spaces Self-Service
 
-A developer asks for a Dev Space in Red Hat Developer Hub — how many, how big,
-which AI assistant, where its model lives — and gets a namespace, a quota and a
+A developer asks for a Dev Space in Red Hat Developer Hub (how many, how big,
+which AI assistant, where its model lives) and gets a namespace, a quota and a
 workspace definition, created on the cluster in their name.
 
 Sibling to [demo-rhdh-cluster-planner](../demo-rhdh-cluster-planner), with one
@@ -9,16 +9,16 @@ important difference: **that one shows you what it would do, this one does it.**
 
 ## Overview
 
-* **Sized, not guessed** — totals divide across the workspaces asked for, with
+* **Sized, not guessed**: totals divide across the workspaces asked for, with
   the editor's own appetite accounted for and a floor below which a workspace
   cannot start.
-* **A real quota** — `ResourceQuota` and `LimitRange`, so the namespace is
+* **A real quota**: `ResourceQuota` and `LimitRange`, so the namespace is
   bounded rather than nominally sized.
-* **AI assistants already in the image** — Kilo and OpenCode are baked into the
+* **AI assistants already in the image**: Kilo and OpenCode are baked into the
   workspace image and selected per request, so nothing is downloaded at start.
-* **Credentials handled properly** — a third-party API key becomes a Secret
+* **Credentials handled properly**: a third-party API key becomes a Secret
   mounted as environment variables, never written into a devfile bound for git.
-* **A scoped credential** — a dedicated ServiceAccount that can create but
+* **A scoped credential**: a dedicated ServiceAccount that can create but
   never delete, with everything it makes findable by one label.
 
 Depends on **[demo-developer-hub](../demo-developer-hub)** for RHDH,
@@ -33,13 +33,13 @@ Depends on **[demo-developer-hub](../demo-developer-hub)** for RHDH,
 | `ResourceQuota` | The thing that actually caps the namespace |
 | `LimitRange` | Defaults for anything created without its own resources |
 | `Secret` | Only for a third-party AI key, mounted as env vars |
-| `devfile.yaml` | Yours to use. Names the image explicitly — see Notes |
+| `devfile.yaml` | Yours to use. Names the image explicitly (see Notes) |
 
 ## Prerequisites
 
-1. [demo-developer-hub](../demo-developer-hub) — RHDH with GitHub sign-in.
-2. [openshift-devspaces](../openshift-devspaces) — the operator and CheCluster.
-3. [demo-custom-udi](../demo-custom-udi) — built, with its capabilities
+1. [demo-developer-hub](../demo-developer-hub): RHDH with GitHub sign-in.
+2. [openshift-devspaces](../openshift-devspaces): the operator and CheCluster.
+3. [demo-custom-udi](../demo-custom-udi): built, with its capabilities
    published. Without it the form offers no assistants and says why.
 4. For the in-cluster AI option only:
    [demo-vllm-model-serving](../demo-vllm-model-serving) must be deployed and
@@ -55,15 +55,15 @@ oc apply -f rbac/provisioner.yaml
 oc apply -f rbac/provisioner-scope.yaml
 ```
 
-Read both files before applying them — this is the only thing in this repo that
+Read both files before applying them: this is the only thing in this repo that
 lets RHDH create a namespace, and the comments explain each grant and each
 deliberate omission.
 
 **Apply the second file too.** RBAC cannot say "create a Namespace, but only one
-whose name ends in `-devspaces`" — `resourceNames` does not apply to `create`,
+whose name ends in `-devspaces`". `resourceNames` does not apply to `create`,
 because the object does not exist yet to be named. So `provisioner.yaml` on its
 own grants its verbs in *every* namespace, and the only thing keeping the
-provisioner inside `<username>-devspaces` is the plugin's own code — a check in
+provisioner inside `<username>-devspaces` is the plugin's own code: a check in
 a workload whose credential is a file in a pod shared with every other dynamic
 plugin.
 
@@ -82,7 +82,7 @@ oc get --raw /apis/admissionregistration.k8s.io/v1 \
 ```
 
 On an older cluster the policy will not apply and the in-code check is your
-only control — which is worth knowing deliberately rather than discovering.
+only control, which is worth knowing deliberately rather than discovering.
 
 Verify the boundary is live. The refusal *is* the test:
 
@@ -101,7 +101,7 @@ wrong name, Secrets in the wrong namespace, `kubernetes.io/service-account-token
 Secrets and DevWorkspaces in `default` are all refused, while the plugin's own
 four objects and its server-side apply go through unchanged.
 
-`oc apply` will not work as this ServiceAccount — client-side apply reads the
+`oc apply` will not work as this ServiceAccount: client-side apply reads the
 object first and there is no `get` on secrets. The plugin uses server-side
 apply, which is a PATCH with no read, so this affects only ad-hoc `oc` use.
 
@@ -109,7 +109,7 @@ apply, which is a PATCH with no read, so this affects only ad-hoc `oc` use.
 
 RHDH runs as the `default` ServiceAccount, shared by every plugin in the pod.
 Granting `default` the right to create namespaces would grant it to all of
-them, so the provisioner's token is mounted separately — already wired into
+them, so the provisioner's token is mounted separately, already wired into
 [demo-developer-hub/backstage.yaml](../demo-developer-hub/backstage.yaml) and
 named in app-config:
 
@@ -180,14 +180,14 @@ namespace name in the panel on the right.
 this cluster happens to be configured.
 
 Guest is an installation-wide sign-in provider controlled by
-`auth.environment`, not a per-plugin setting — you cannot have one plugin
+`auth.environment`, not a per-plugin setting: you cannot have one plugin
 accept guests and another refuse them. Since this endpoint creates namespaces
 with a privileged ServiceAccount, it checks for itself rather than inheriting
 whatever another demo sets that switch to.
 
 The caller's identity comes from Backstage's **verified credentials**
 (`httpAuth` with `allow: ['user']`), never from a header. An earlier version
-read `x-backstage-user-entity-ref`, which any client can set — anyone reaching
+read `x-backstage-user-entity-ref`, which any client can set, so anyone reaching
 the endpoint could have claimed to be anyone and had a namespace created in
 their name. There is a test that fails if that fallback ever returns.
 
@@ -239,8 +239,8 @@ Totals divide evenly across the workspaces requested, then:
   `maximum memory usage per Container is 4Gi, but limit is 5Gi`. The minimum per
   workspace is therefore the editor plus a floor for the workload: 1 vCPU and
   2 GiB.
-* **Requests are half of limits.** A workspace is idle most of the time —
-  someone is reading, not compiling — so reserving the ceiling wastes most of
+* **Requests are half of limits.** A workspace is idle most of the time
+  (someone is reading, not compiling), so reserving the ceiling wastes most of
   the cluster.
 * **The pod quota has headroom of one.** Restarting a workspace briefly runs
   the new pod alongside the old one; a quota of exactly N makes that fail
@@ -248,7 +248,7 @@ Totals divide evenly across the workspaces requested, then:
 
 **A number the form cannot enforce:** `maxNumberOfRunningWorkspacesPerUser` is
 a CheCluster field and therefore cluster-wide. If it is lower than the
-workspace count requested, it wins — the quota permits what Che then refuses.
+workspace count requested, it wins: the quota permits what Che then refuses.
 The panel says so when more than one workspace is asked for.
 
 ## AI assistants
@@ -276,7 +276,7 @@ a strange thing to select on its own.
 
 | Choice | Where the endpoint comes from |
 | --- | --- |
-| None | — |
+| None | n/a |
 | In-cluster | `devspacesSelfService.inClusterAiBaseUrl`, hidden if unset |
 | Third-party | Typed in; stored as a Secret |
 
@@ -304,8 +304,8 @@ attaches to from a locally installed Gateway, and most are commercial products
 needing the user's own licence. Browser-based JetBrains is gone.
 
 More decisively: `DEFAULT_EXTENSIONS` is a che-code mechanism. Under any
-JetBrains editor the AI extensions silently do not install — the `.vsix` files
-sit unused — while the OpenCode CLI still works, because it is a binary in a
+JetBrains editor the AI extensions silently do not install (the `.vsix` files
+sit unused) while the OpenCode CLI still works, because it is a binary in a
 terminal. Offering the choice would mean offering combinations that quietly do
 less than they appear to.
 
@@ -344,20 +344,20 @@ adds is the real API key.
   `che.eclipse.org/username: <user>`. The documented alternative is
   `defaultNamespace.autoProvision: false`, which is cluster-wide and would stop
   every existing user getting a namespace at all.
-* **The namespace name must match `defaultNamespace.template`** — `<username>-devspaces`
+* **The namespace name must match `defaultNamespace.template`**: `<username>-devspaces`
   here. Get it wrong and Che provisions a second namespace alongside: the quota
   lands on one and the workspace on the other, so nothing is enforced and
   nothing says why.
 * **A quota of zero PVCs rejects a workspace; omitting the key does not.** For
   ephemeral storage the keys are left out rather than set to `0`.
-* **A hand-built DevWorkspace must carry Che's own environment, or terminals never open.** The dashboard injects `CHE_DASHBOARD_URL`, `CHE_PLUGIN_REGISTRY_URL`, `CHE_PLUGIN_REGISTRY_INTERNAL_URL`, `CLUSTER_CONSOLE_URL`, `CLUSTER_CONSOLE_TITLE`, `OPENVSX_REGISTRY_URL` and `HOST_USERS` into the workspace container. Without them che-code's terminal environment resolution finds a platform-keyed object with a null value and throws `Cannot convert undefined or null to object` in `applyPlatformSpecificKeys` — the editor loads and works, but no terminal can ever be opened, and nothing server-side logs an error. The values are read from the CheCluster (status and spec) and the `console-public` ConfigMap rather than hardcoded. Diffing a dashboard-created workspace against a generated one in the same namespace is what found this; the logs did not.
+* **A hand-built DevWorkspace must carry Che's own environment, or terminals never open.** The dashboard injects `CHE_DASHBOARD_URL`, `CHE_PLUGIN_REGISTRY_URL`, `CHE_PLUGIN_REGISTRY_INTERNAL_URL`, `CLUSTER_CONSOLE_URL`, `CLUSTER_CONSOLE_TITLE`, `OPENVSX_REGISTRY_URL` and `HOST_USERS` into the workspace container. Without them che-code's terminal environment resolution finds a platform-keyed object with a null value and throws `Cannot convert undefined or null to object` in `applyPlatformSpecificKeys`. The editor loads and works, but no terminal can ever be opened, and nothing server-side logs an error. The values are read from the CheCluster (status and spec) and the `console-public` ConfigMap rather than hardcoded. Diffing a dashboard-created workspace against a generated one in the same namespace is what found this; the logs did not.
 * **`routingClass: che` is required, and its absence is silent.** Without it no Che gateway route is created, the editor is unreachable, and the workspace sits in `Starting` until `startTimeoutSeconds` before failing with *"The workspace status remains Starting in the last 300 seconds"*. The pod runs perfectly throughout, which is what makes it hard to place.
 * **That routing adds a second container to the pod.** `che-gateway`, at 500m / 256Mi limits and 50m / 64Mi requests. It is not part of the workspace container, so it does not change what the devfile asks for - but it counts against the quota, and omitting it made the quota reject the very pod it had been sized for: `exceeded quota: requested: limits.cpu=2500m, limited: limits.cpu=2`. The quota budgets the whole pod.
 * **The `container-build` SCC is mandatory here, and it is not about container builds.** This cluster's `DevWorkspaceOperatorConfig` adds `SETGID`, `SETUID` and `allowPrivilegeEscalation` to every workspace container, so `restricted-v2` refuses the pod outright: `unable to validate against any security context constraint`. Declaring `controller.devfile.io/scc: container-build` is what makes the controller create the `devworkspace-use-container-build` RoleBinding granting the *workspace's* ServiceAccount that SCC. The admission webhook separately requires the **creator** to hold it, so the provisioner is granted it explicitly - that grant is the sharpest thing in `rbac/provisioner.yaml` and is commented there.
 * **The provisioner cannot delete.** There is no delete verb in its ClusterRole,
   so a bug in this plugin cannot remove a namespace. Clean-up is deliberately a
   human action.
-* **RBAC cannot restrict namespace creation by name** — there is no
+* **RBAC cannot restrict namespace creation by name**: there is no
   `resourceNames` matching on `create`, because the object does not exist yet.
   The `<username>-devspaces` pattern is therefore enforced twice: in the
   plugin, from the signed-in identity, and at the API server by
@@ -366,7 +366,7 @@ adds is the real API key.
   runs every other dynamic plugin too.
 * **The provisioner cannot read Secrets.** Its secrets rule is `create` and
   `patch` only. A `get` would have been a read of every Secret on the cluster,
-  since RBAC cannot scope a read to namespaces that do not exist yet — and
+  since RBAC cannot scope a read to namespaces that do not exist yet, and
   together with `create` it was an escalation, not just a disclosure: create a
   Secret of type `kubernetes.io/service-account-token` annotated for a
   privileged ServiceAccount, wait for the token controller, read it back. That
@@ -383,7 +383,7 @@ adds is the real API key.
   obvious thing.
 * **It refuses to adopt a namespace it does not recognise.** One that exists
   without this plugin's label, and without being Che's for that user, belongs
-  to something else — applying a quota over the top is how a self-service tool
+  to something else. Applying a quota over the top is how a self-service tool
   breaks someone's project.
 
 ## Clean Up
@@ -400,12 +400,12 @@ oc -n rhdh delete bc/devspaces-self-service is/devspaces-self-service
 Remove the scope policy *before* the ClusterRole, not after. The other order
 leaves a window where the permissions exist with nothing confining them.
 
-Namespaces are left for you to remove deliberately — the provisioner has no
+Namespaces are left for you to remove deliberately. The provisioner has no
 delete verb, and neither should an automated clean-up of someone's workspace.
 
 ## Related Demos
 
-* **[Red Hat Developer Hub](../demo-developer-hub)** — the RHDH instance this plugs into.
-* **[Custom UDI](../demo-custom-udi)** — the workspace image and its assistants.
-* **[OpenShift Dev Spaces](../openshift-devspaces)** — the operator and CheCluster.
-* **[Deployment Planner](../demo-rhdh-cluster-planner)** — the sibling plugin, which previews rather than provisions.
+* **[Red Hat Developer Hub](../demo-developer-hub)**: the RHDH instance this plugs into.
+* **[Custom UDI](../demo-custom-udi)**: the workspace image and its assistants.
+* **[OpenShift Dev Spaces](../openshift-devspaces)**: the operator and CheCluster.
+* **[Deployment Planner](../demo-rhdh-cluster-planner)**: the sibling plugin, which previews rather than provisions.

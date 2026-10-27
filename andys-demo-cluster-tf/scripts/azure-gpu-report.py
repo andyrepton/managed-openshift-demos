@@ -8,8 +8,8 @@ two API calls.
 The SKU API exposes GPU *count* but not the GPU model or its VRAM, so those
 come from the table below (sourced from the Microsoft Learn size-series
 pages). Note that several NV sizes get a *fraction* of a physical GPU while
-the API still reports "GPUs: 1" — e.g. Standard_NV6ads_A10_v5 is 1/6 of an
-A10 with only 4 GB of VRAM. That distinction matters a lot when sizing model
+the API still reports "GPUs: 1" (e.g. Standard_NV6ads_A10_v5 is 1/6 of an
+A10 with only 4 GB of VRAM). That distinction matters a lot when sizing model
 serving, which is why GPU_SPECS records the real fraction and total VRAM.
 
 Usage: azure-gpu-report.py <skus.json> <usage.json> <region> [--no-quota] [vm-size ...]
@@ -67,54 +67,54 @@ import sys
 # Last reviewed 2026-10-13: the table covered all 37 GPU sizes Azure offers in
 # westeurope, with nothing falling through to "unknown".
 GPU_SPECS = {
-    # NCads_H100_v5 — NVIDIA H100 NVL, 94 GB per GPU
+    # NCads_H100_v5: NVIDIA H100 NVL, 94 GB per GPU
     "Standard_NC40ads_H100_v5":  ("H100 NVL",   "1",   94),
     "Standard_NC80adis_H100_v5": ("H100 NVL",   "2",   188),
-    # NCCads_H100_v5 — confidential computing, H100 NVL 94 GB
+    # NCCads_H100_v5: confidential computing, H100 NVL 94 GB
     "Standard_NCC40ads_H100_v5": ("H100 NVL*",  "1",   94),
-    # NC_A100_v4 — NVIDIA A100 PCIe, 80 GB per GPU
+    # NC_A100_v4: NVIDIA A100 PCIe, 80 GB per GPU
     "Standard_NC24ads_A100_v4":  ("A100 PCIe",  "1",   80),
     "Standard_NC48ads_A100_v4":  ("A100 PCIe",  "2",   160),
     "Standard_NC96ads_A100_v4":  ("A100 PCIe",  "4",   320),
-    # NCasT4_v3 — NVIDIA Tesla T4, 16 GB per GPU
+    # NCasT4_v3: NVIDIA Tesla T4, 16 GB per GPU
     "Standard_NC4as_T4_v3":      ("Tesla T4",   "1",   16),
     "Standard_NC8as_T4_v3":      ("Tesla T4",   "1",   16),
     "Standard_NC16as_T4_v3":     ("Tesla T4",   "1",   16),
     "Standard_NC64as_T4_v3":     ("Tesla T4",   "4",   64),
-    # NCv3 — NVIDIA Tesla V100 PCIe, 16 GB per GPU (retired 2025-09-30)
+    # NCv3: NVIDIA Tesla V100 PCIe, 16 GB per GPU (retired 2025-09-30)
     "Standard_NC6s_v3":          ("V100 PCIe",  "1",   16),
     "Standard_NC12s_v3":         ("V100 PCIe",  "2",   32),
     "Standard_NC24s_v3":         ("V100 PCIe",  "4",   64),
     "Standard_NC24rs_v3":        ("V100 PCIe",  "4",   64),
-    # NVads_A10_v5 — NVIDIA A10 24 GB, partitioned into fractional GPUs
+    # NVads_A10_v5: NVIDIA A10 24 GB, partitioned into fractional GPUs
     "Standard_NV6ads_A10_v5":    ("A10",        "1/6", 4),
     "Standard_NV12ads_A10_v5":   ("A10",        "1/3", 8),
     "Standard_NV18ads_A10_v5":   ("A10",        "1/2", 12),
     "Standard_NV36ads_A10_v5":   ("A10",        "1",   24),
     "Standard_NV36adms_A10_v5":  ("A10",        "1",   24),
     "Standard_NV72ads_A10_v5":   ("A10",        "2",   48),
-    # NVv4 — AMD Radeon Instinct MI25 16 GB, fractional (retired 2026-09-30)
+    # NVv4: AMD Radeon Instinct MI25 16 GB, fractional (retired 2026-09-30)
     "Standard_NV4as_v4":         ("AMD MI25",   "1/8", 2),
     "Standard_NV8as_v4":         ("AMD MI25",   "1/4", 4),
     "Standard_NV16as_v4":        ("AMD MI25",   "1/2", 8),
     "Standard_NV32as_v4":        ("AMD MI25",   "1",   16),
-    # NVv3 — NVIDIA Tesla M60, 8 GB per exposed GPU (retired 2026-09-30)
+    # NVv3: NVIDIA Tesla M60, 8 GB per exposed GPU (retired 2026-09-30)
     "Standard_NV12s_v3":         ("Tesla M60",  "1",   8),
     "Standard_NV24s_v3":         ("Tesla M60",  "2",   16),
     "Standard_NV48s_v3":         ("Tesla M60",  "4",   32),
-    # NVv2 — NVIDIA Tesla M60, 8 GB per exposed GPU
+    # NVv2: NVIDIA Tesla M60, 8 GB per exposed GPU
     "Standard_NV6s_v2":          ("Tesla M60",  "1",   8),
     "Standard_NV12s_v2":         ("Tesla M60",  "2",   16),
     "Standard_NV24s_v2":         ("Tesla M60",  "4",   32),
-    # NDv2 — NVIDIA V100 NVLink, 32 GB per GPU
+    # NDv2: NVIDIA V100 NVLink, 32 GB per GPU
     "Standard_ND40rs_v2":        ("V100 NVLink", "8",  256),
-    # NDm_A100_v4 — NVIDIA A100 SXM, 80 GB per GPU
+    # NDm_A100_v4: NVIDIA A100 SXM, 80 GB per GPU
     "Standard_ND96amsr_A100_v4": ("A100 SXM",   "8",   640),
-    # NDasrA100_v4 — NVIDIA A100 SXM, 40 GB per GPU
+    # NDasrA100_v4: NVIDIA A100 SXM, 40 GB per GPU
     "Standard_ND96asr_v4":       ("A100 SXM",   "8",   320),
-    # ND_H100_v5 — NVIDIA H100 SXM, 80 GB per GPU
+    # ND_H100_v5: NVIDIA H100 SXM, 80 GB per GPU
     "Standard_ND96isr_H100_v5":  ("H100 SXM",   "8",   640),
-    # NP — AMD/Xilinx Alveo U250 FPGA, 64 GB per card (retires 2027-05-31)
+    # NP: AMD/Xilinx Alveo U250 FPGA, 64 GB per card (retires 2027-05-31)
     "Standard_NP10s":            ("U250 FPGA",  "1",   64),
     "Standard_NP20s":            ("U250 FPGA",  "2",   128),
     "Standard_NP40s":            ("U250 FPGA",  "4",   256),

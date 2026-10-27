@@ -226,10 +226,10 @@ Investigated responses being "cut off" mid-generation after switching the Opus s
 | Test | Result |
 |------|--------|
 | Plain completion (non-stream, short) | ✅ 200, clean |
-| Tool calling (non-stream) | ✅ Structured `tool_calls`, `finish_reason: tool_calls` — `qwen3_coder` parser works with Qwen 3.8 |
+| Tool calling (non-stream) | ✅ Structured `tool_calls`, `finish_reason: tool_calls`. The `qwen3_coder` parser works with Qwen 3.8 |
 | Thinking separation | ✅ `reasoning` field cleanly split from `content` by `qwen3` reasoning parser |
 | Streaming, short essay (`max_tokens: 8192`) | ✅ `data: [DONE]`, clean end |
-| Streaming, `max_tokens: 4096`, "write 3000 words" | ✅ Completed in 54s but `finish_reason: length` at exactly 4096 tokens — thinking was only ~894 chars of the budget, visible text consumed the rest |
+| Streaming, `max_tokens: 4096`, "write 3000 words" | ✅ Completed in 54s but `finish_reason: length` at exactly 4096 tokens. Thinking was only ~894 chars of the budget, visible text consumed the rest |
 | Non-streaming, 3000-word essay, `max_tokens: 32768` | ❌ **504 at exactly ~30s** |
 | Full path via LiteLLM (Anthropic API, streaming, `max_tokens: 64000`) | ✅ `stop_reason: end_turn`, clean `message_stop` |
 | Claude-Code-shaped payload (large system + 8 tools + history) | ✅ Clean `tool_use` response |
@@ -237,11 +237,11 @@ Investigated responses being "cut off" mid-generation after switching the Opus s
 
 ### Root causes identified
 
-1. **`maas-api-external` route missing the router timeout annotation.** OpenShift Routes default to a 30s HAProxy `timeout server`. Non-streaming requests to `maas.apps...` die with a 504 at exactly 30s whenever generation takes longer (the model is silent until the first token, so 30s of "no data" trips the timeout). Streaming requests are unaffected because token deltas keep the connection active — which is why Claude Code (always streaming) mostly worked while manual `curl` debugging kept failing. **Fix:** added `haproxy.router.openshift.io/timeout: 10m` to `maas/maas-api-external-route.yaml`.
+1. **`maas-api-external` route missing the router timeout annotation.** OpenShift Routes default to a 30s HAProxy `timeout server`. Non-streaming requests to `maas.apps...` die with a 504 at exactly 30s whenever generation takes longer (the model is silent until the first token, so 30s of "no data" trips the timeout). Streaming requests are unaffected because token deltas keep the connection active, which is why Claude Code (always streaming) mostly worked while manual `curl` debugging kept failing. **Fix:** added `haproxy.router.openshift.io/timeout: 10m` to `maas/maas-api-external-route.yaml`.
 
-2. **LiteLLM `NotFoundError: Model Group=qwen3-8-27b`** in gateway logs during the model swap. Caused by a transition window where Qwen 3.6 was scaled down before Qwen 3.8 was wired into LiteLLM's config. A mid-session 400/NotFound manifests exactly like the assistant "stopping halfway". Lesson: when swapping models, bring the replacement up and verified in the gateway *before* removing the old one (the GPU deadlock gotcha — delete InferenceService, apply, recreate — makes this order awkward, so plan the swap window).
+2. **LiteLLM `NotFoundError: Model Group=qwen3-8-27b`** in gateway logs during the model swap. Caused by a transition window where Qwen 3.6 was scaled down before Qwen 3.8 was wired into LiteLLM's config. A mid-session 400/NotFound manifests exactly like the assistant "stopping halfway". Lesson: when swapping models, bring the replacement up and verified in the gateway *before* removing the old one (the GPU deadlock gotcha [delete InferenceService, apply, recreate] makes this order awkward, so plan the swap window).
 
-3. **Token budget exhaustion** (proven reproducible, not the primary cause). Qwen 3.8's thinking consumes part of `max_tokens`. With a small `max_tokens` the visible text hits the wall mid-sentence with `finish_reason: length`. With Claude Code's normal `max_tokens: 64000` this is not a practical problem — the thinking-to-visible ratio observed was small (~900 thinking chars vs ~25k visible).
+3. **Token budget exhaustion** (proven reproducible, not the primary cause). Qwen 3.8's thinking consumes part of `max_tokens`. With a small `max_tokens` the visible text hits the wall mid-sentence with `finish_reason: length`. With Claude Code's normal `max_tokens: 64000` this is not a practical problem: the thinking-to-visible ratio observed was small (~900 thinking chars vs ~25k visible).
 
 ### Lessons
 

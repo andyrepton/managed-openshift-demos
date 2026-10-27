@@ -1,7 +1,7 @@
-# Stretched Layer 2 — Cluster to Cluster
+# Stretched Layer 2: Cluster to Cluster
 
 Connect two OpenShift clusters at Layer 2 so VMs on both clusters share the
-same broadcast domain. Uses OpenVPN TAP + VXLAN architecture — both endpoints
+same broadcast domain. Uses OpenVPN TAP + VXLAN architecture. Both endpoints
 are OpenShift clusters.
 
 ## Architecture
@@ -39,7 +39,7 @@ Both clusters run the same Hub & Spoke topology. The Hubs connect to each other 
 reliably on ROSA HCP (OVN-Kubernetes).** Cross-node DNAT fails because
 hostNetwork traffic bypasses the Geneve overlay tunnels that OVN-K uses for
 pod-to-pod communication. This means you **cannot run the VPN server on ROSA
-HCP** — the inbound connection will never reach the pod.
+HCP**: the inbound connection will never reach the pod.
 
 The workaround is to make ROSA HCP the **VPN client** (outbound-only, no
 Service needed). The on-prem or self-managed cluster runs the VPN server.
@@ -98,7 +98,7 @@ oc apply -f common/spoke-daemonset.yaml
 ```
 
 The hub pod uses `hostNetwork: true`, so OpenVPN listens directly on the
-node's IP at port 1194/UDP. No Kubernetes Service is needed — you expose
+node's IP at port 1194/UDP. No Kubernetes Service is needed. You expose
 this port externally depending on your platform (see next section).
 
 ### 5. Expose the VPN server externally
@@ -146,7 +146,7 @@ spec:
   type: LoadBalancer
 ```
 
-**ROSA HCP — do NOT run the VPN server here.** See the limitation above.
+**ROSA HCP: do NOT run the VPN server here.** See the limitation above.
 Use ROSA HCP as Cluster B (client) instead.
 
 ### 6. Deploy Cluster B (VPN client)
@@ -166,7 +166,7 @@ oc apply -f cluster-b-client/vpn-client-hub.yaml
 oc apply -f common/spoke-daemonset.yaml
 ```
 
-No Service or external exposure is needed on the client side — OpenVPN
+No Service or external exposure is needed on the client side. OpenVPN
 connects outbound to the server.
 
 ### 7. Deploy test VMs (on both clusters)
@@ -273,7 +273,7 @@ systemctl enable iptables
 ## Validation
 
 ```bash
-# 1. VPN tunnel (on Cluster B — client)
+# 1. VPN tunnel (on Cluster B, client)
 oc logs deployment/industrial-hub -n industrial-network | grep "Initialization Sequence Completed"
 
 # 2. Hub-to-hub ping (Cluster B hub → Cluster A hub)
@@ -345,13 +345,13 @@ exist, the pod will fail to start.
 
 The hub and spoke pods use `hostNetwork: true` and `privileged: true`:
 
-- **Full host network access** — the pod shares the node's network
+- **Full host network access**: the pod shares the node's network
   namespace. It can see all host interfaces, bind any port, and observe
   traffic on the node. Network Policies do not apply.
-- **Privileged escalation** — the pod can modify kernel parameters
+- **Privileged escalation**: the pod can modify kernel parameters
   (rp_filter, ip_forward), create/delete network interfaces, and
   manipulate iptables rules on the node.
-- **Blast radius** — a compromised hub or spoke pod has root-level network
+- **Blast radius**: a compromised hub or spoke pod has root-level network
   access to the node and can intercept or inject traffic on the L2 bridge.
 
 ### Mitigations
@@ -359,7 +359,7 @@ The hub and spoke pods use `hostNetwork: true` and `privileged: true`:
 - Run hub and spoke pods in a dedicated namespace with strict RBAC.
 - Use a dedicated service account (`industrial-admin`) with only the
   permissions it needs (pod list for FDB discovery).
-- Restrict which nodes can run these pods using `nodeSelector` labels —
+- Restrict which nodes can run these pods using `nodeSelector` labels:
   only label nodes that need L2 connectivity.
 - Use OpenVPN `tls-crypt` for additional tunnel security.
 - On the VPN server, restrict inbound source IPs to the client cluster's
@@ -369,7 +369,7 @@ The hub and spoke pods use `hostNetwork: true` and `privileged: true`:
 
 Any pod or VM attached to `br-spoke` via Multus has direct L2 access to the
 entire stretched network, including devices on the remote cluster. There is
-no network policy enforcement on bridge traffic — isolation relies on which
+no network policy enforcement on bridge traffic: isolation relies on which
 pods/VMs are allowed to use the NetworkAttachmentDefinition.
 
 ## Notes
@@ -384,7 +384,7 @@ pods/VMs are allowed to use the NetworkAttachmentDefinition.
   assigns to tap0 (since tap0 is a bridge slave, its IP conflicts with
   br-hub routing)
 - Hub deployments use `strategy: type: Recreate` because hostNetwork pods
-  bind port 1194 directly — a RollingUpdate would fail with "Address already
+  bind port 1194 directly: a RollingUpdate would fail with "Address already
   in use" when the new pod starts before the old one terminates
 - OpenVPN runs in the foreground (not with `--daemon`) because daemonized
   OpenVPN silently exits in containers

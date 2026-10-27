@@ -2,7 +2,7 @@
 
 Browser-based cloud development environment powered by Eclipse Che.
 Provides on-demand, pre-configured workspaces that run entirely on the
-cluster — no local IDE setup required.
+cluster: no local IDE setup required.
 
 ## Prerequisites
 

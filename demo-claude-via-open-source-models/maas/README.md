@@ -42,7 +42,7 @@ oc apply -f monitoring.yaml
 
 ## Step 2: Install Red Hat Connectivity Link
 
-RHCL provides Kuadrant (API gateway policy engine) which MaaS uses for authentication and rate limiting. This is a prerequisite — MaaS will not function without it.
+RHCL provides Kuadrant (API gateway policy engine) which MaaS uses for authentication and rate limiting. This is a prerequisite: MaaS will not function without it.
 
 ```bash
 oc apply -f operator.yaml
@@ -113,7 +113,7 @@ oc patch datasciencecluster default-dsc --type=merge \
   -p '{"spec":{"components":{"aigateway":{"managementState":"Managed","modelsAsAService":{"managementState":"Managed"}}}}}'
 ```
 
-> **Important**: The top-level `aigateway.managementState` MUST be `Managed` — setting only the `modelsAsAService` sub-field is not enough.
+> **Important**: The top-level `aigateway.managementState` MUST be `Managed`. Setting only the `modelsAsAService` sub-field is not enough.
 
 Wait for the MaaS API to start:
 
@@ -151,7 +151,7 @@ oc apply -f ../models/qwen3-8-llm-inference-service.yaml
 oc get llminferenceservice -n claude-code-demo -w
 ```
 
-> **baseRef names**: LLMInferenceService requires `baseRefs` pointing to LLMInferenceServiceConfig presets. The available names differ between fresh installs and upgraded clusters — run `oc get llminferenceserviceconfig -A` to check. See the `CLAUDE.md` gotchas section for details.
+> **baseRef names**: LLMInferenceService requires `baseRefs` pointing to LLMInferenceServiceConfig presets. The available names differ between fresh installs and upgraded clusters. Run `oc get llminferenceserviceconfig -A` to check. See the `CLAUDE.md` gotchas section for details.
 
 ## Step 10: Register Models and Create Access Policies
 
@@ -174,7 +174,7 @@ oc apply -f subscription.yaml
 
 ### On ARO HCP (OpenShift groups not available)
 
-ARO HCP uses Entra ID authentication — `oc adm groups` is not available. Use the `users` field in both the MaaSAuthPolicy and MaaSSubscription instead:
+ARO HCP uses Entra ID authentication, so `oc adm groups` is not available. Use the `users` field in both the MaaSAuthPolicy and MaaSSubscription instead:
 
 ```bash
 # Register models with MaaS
@@ -234,7 +234,7 @@ echo "Save this - it is only shown once."
 
 #### On ARO HCP
 
-ARO HCP uses client certificate auth — `oc whoami -t` returns no token. Create a ServiceAccount token instead:
+ARO HCP uses client certificate auth, so `oc whoami -t` returns no token. Create a ServiceAccount token instead:
 
 ```bash
 MAAS_API="https://maas.${CLUSTER_DOMAIN}"
@@ -344,7 +344,7 @@ oc get envoyfilter -n openshift-ingress payload-processing -o json | \
 
 ### Gateway OOMKilled
 
-See the data-science-gateway ConfigMap memory fix in `gateway.yaml` — increases istio-proxy memory to 2Gi.
+See the data-science-gateway ConfigMap memory fix in `gateway.yaml`, which increases istio-proxy memory to 2Gi.
 
 ## File Summary
 

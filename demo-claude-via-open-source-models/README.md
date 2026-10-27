@@ -51,13 +51,13 @@ Both routes pass through the MaaS gateway for authentication and usage tracking 
 
 | Model | Source | Parameters | Quantisation | SWE-bench |
 |-------|--------|-----------|-------------|-----------|
-| [granite-4.1-30b](https://huggingface.co/ibm-granite/granite-4.1-30b) | IBM Granite | 30B | FP8 (on-the-fly) | — |
-| [Qwen3.8-27B-INT4](https://huggingface.co/RedHatAI/Qwen3.8-27B-INT4) | RedHatAI | 27B | INT4 (compressed-tensors) | — |
+| [granite-4.1-30b](https://huggingface.co/ibm-granite/granite-4.1-30b) | IBM Granite | 30B | FP8 (on-the-fly) | n/a |
+| [Qwen3.8-27B-INT4](https://huggingface.co/RedHatAI/Qwen3.8-27B-INT4) | RedHatAI | 27B | INT4 (compressed-tensors) | n/a |
 
 ### Why these models
 
-- **Granite 4.1 30B** (`ibm-granite/granite-4.1-30b`) — IBM's text-only coding model with 131K context, native tool calling via `--tool-call-parser granite4`, and strong coding benchmarks. BF16 weights are quantised on-the-fly to FP8 by vLLM (`--quantization fp8`). Text-only architecture means no wasted VRAM on vision encoders. Part of the IBM/Red Hat ecosystem.
-- **Qwen3.8-27B** (`RedHatAI/Qwen3.8-27B-INT4`) — Successor to Qwen3.6, supports native tool calling via `--tool-call-parser qwen3_coder`, and has 262K token native context. Dense 27B architecture handles agentic coding workflows more reliably than larger MoE models. `--language-model-only` disables the vision encoder to free VRAM for KV cache. `--reasoning-parser qwen3` strips internal `<think>` tags from output. Requires a custom chat template to fix Claude Code compatibility issues (see gotchas in CLAUDE.md).
+- **Granite 4.1 30B** (`ibm-granite/granite-4.1-30b`): IBM's text-only coding model with 131K context, native tool calling via `--tool-call-parser granite4`, and strong coding benchmarks. BF16 weights are quantised on-the-fly to FP8 by vLLM (`--quantization fp8`). Text-only architecture means no wasted VRAM on vision encoders. Part of the IBM/Red Hat ecosystem.
+- **Qwen3.8-27B** (`RedHatAI/Qwen3.8-27B-INT4`): Successor to Qwen3.6, supports native tool calling via `--tool-call-parser qwen3_coder`, and has 262K token native context. Dense 27B architecture handles agentic coding workflows more reliably than larger MoE models. `--language-model-only` disables the vision encoder to free VRAM for KV cache. `--reasoning-parser qwen3` strips internal `<think>` tags from output. Requires a custom chat template to fix Claude Code compatibility issues (see gotchas in CLAUDE.md).
 
 ## Directory Layout
 
@@ -84,7 +84,7 @@ docs/                   Documentation and blog posts
 
 ### GPU Requirements
 
-Both models require a GPU with at least 24GB VRAM (FP8 quantisation). Running both simultaneously needs 2 GPU nodes. If you only have 1 GPU node, deploy Qwen only — see the single-model instructions in Steps 6-8. The g7e.2xlarge (96GB) provides significant headroom for large context windows.
+Both models require a GPU with at least 24GB VRAM (FP8 quantisation). Running both simultaneously needs 2 GPU nodes. If you only have 1 GPU node, deploy Qwen only (see the single-model instructions in Steps 6-8). The g7e.2xlarge (96GB) provides significant headroom for large context windows.
 
 | Platform | Instance Type | GPU | VRAM |
 |----------|--------------|-----|------|
@@ -102,7 +102,7 @@ Both models require a GPU with at least 24GB VRAM (FP8 quantisation). Running bo
 
 ```bash
 cd ../andys-demo-cluster-tf
-# Edit ai_rosa.tfvars — set GPU pool replicas to 2 for both models, or 1 for Qwen only
+# Edit ai_rosa.tfvars: set GPU pool replicas to 2 for both models, or 1 for Qwen only
 terraform apply -var-file=ai_rosa.tfvars
 ```
 
@@ -288,14 +288,14 @@ oc apply -f maas/auth-policy.yaml
 oc apply -f maas/subscription.yaml
 ```
 
-**On ROSA / standard OCP** — create an OpenShift group and add yourself:
+**On ROSA / standard OCP**: create an OpenShift group and add yourself:
 
 ```bash
 oc adm groups new claude-code-users
 oc adm groups add-users claude-code-users $(oc whoami)
 ```
 
-**On ARO HCP** — OpenShift groups (`oc adm groups`) are not available because ARO HCP uses Entra ID auth. Use the `users` field instead:
+**On ARO HCP**: OpenShift groups (`oc adm groups`) are not available because ARO HCP uses Entra ID auth. Use the `users` field instead:
 
 ```bash
 # Create a ServiceAccount for API key creation
@@ -339,7 +339,7 @@ echo "Your MaaS API key: $MAAS_KEY"
 echo "Save this — it is only shown once."
 ```
 
-**On ARO HCP** — `oc whoami -t` returns no token (client certificate auth). Use a ServiceAccount token instead:
+**On ARO HCP**: `oc whoami -t` returns no token (client certificate auth). Use a ServiceAccount token instead:
 
 ```bash
 MAAS_API="https://maas.${CLUSTER_DOMAIN}"
@@ -452,11 +452,11 @@ Both should return responses from their respective local models.
 export ANTHROPIC_BASE_URL="https://$(oc get route litellm-gateway -n claude-code-demo -o jsonpath='{.spec.host}')"
 export ANTHROPIC_API_KEY="$LITELLM_KEY"
 
-# Launch Claude Code — set the model to one that's mapped in LiteLLM
+# Launch Claude Code, setting the model to one that's mapped in LiteLLM
 claude --model claude-opus-4-20250514
 ```
 
-The `--model` flag tells Claude Code which model ID to send. This must match a `model_name` in `litellm-gateway/litellm-config.yaml`. If you get a `400 Invalid model name` error, either the model ID isn't mapped in the LiteLLM config or Claude Code has been updated with a newer default model ID — see [Adding New Claude Model IDs](#adding-new-claude-model-ids) below.
+The `--model` flag tells Claude Code which model ID to send. This must match a `model_name` in `litellm-gateway/litellm-config.yaml`. If you get a `400 Invalid model name` error, either the model ID isn't mapped in the LiteLLM config or Claude Code has been updated with a newer default model ID. See [Adding New Claude Model IDs](#adding-new-claude-model-ids) below.
 
 Check that Claude Code is connected to your gateway:
 
@@ -510,7 +510,7 @@ oc apply -f litellm-gateway/litellm-config.yaml
 oc rollout restart deployment/litellm-gateway -n claude-code-demo
 ```
 
-You can also check the current model IDs by running `/status` in Claude Code — the model name shown is what gets sent to the API.
+You can also check the current model IDs by running `/status` in Claude Code: the model name shown is what gets sent to the API.
 
 ### Using with Cursor
 
@@ -546,7 +546,7 @@ To use the real Anthropic API instead of your local models, exit Claude Code and
 unset ANTHROPIC_BASE_URL
 unset ANTHROPIC_API_KEY
 
-# Relaunch Claude Code — it will use your saved login or default API key
+# Relaunch Claude Code. It will use your saved login or default API key
 claude
 ```
 
@@ -578,15 +578,15 @@ Run each task three times: once with Granite (select Sonnet via `/model`), once 
 4. "Write unit tests for this module" (tests understanding of testing frameworks)
 5. "Find and fix the bug in this code" (with a deliberately buggy sample)
 
-For tasks 1-5, switch between Granite and Qwen inside the same Claude Code session using `/model` — no restart needed. Only switching to/from the real Anthropic API requires relaunching.
+For tasks 1-5, switch between Granite and Qwen inside the same Claude Code session using `/model`, no restart needed. Only switching to/from the real Anthropic API requires relaunching.
 
 ### Known Limitations with Open-Source Models
 
-- **Tool use**: File reading, editing, and bash commands may not work reliably — these require the model to emit correctly formatted tool calls. Qwen3.8 has native tool calling support via `qwen3_coder` and Granite 4.1 via `granite4`, which handle most straightforward tool calls. Complex multi-tool chains are where quality drops off compared to Claude
-- **Web search**: Claude Code's built-in web search is a native Anthropic API feature and is not available with open-source models. Attempting it will produce an error. There is no workaround — web search requires Anthropic's backend. However, in testing, the model reliably falls back onto the Fetch method, which works the same.
+- **Tool use**: File reading, editing, and bash commands may not work reliably, since these require the model to emit correctly formatted tool calls. Qwen3.8 has native tool calling support via `qwen3_coder` and Granite 4.1 via `granite4`, which handle most straightforward tool calls. Complex multi-tool chains are where quality drops off compared to Claude
+- **Web search**: Claude Code's built-in web search is a native Anthropic API feature and is not available with open-source models. Attempting it will produce an error. There is no workaround: web search requires Anthropic's backend. However, in testing, the model reliably falls back onto the Fetch method, which works the same.
 - **Extended thinking**: Claude's extended thinking feature is not available. Qwen3.8 has its own reasoning mode (`<think>` tags) which is stripped from output by `--reasoning-parser qwen3`. Claude Code sends `reasoning_effort: "high"` which the custom chat template maps to `medium` (vLLM only accepts `xhigh`/`medium`/`low`, and `xhigh` causes empty responses ~17% of the time)
 - **System messages mid-conversation**: Claude Code sends system messages mid-conversation for tool context. Both Qwen and Granite's default chat templates reject this. Fixed with a custom chat template (`models/qwen-chat-template.yaml`) that allows system messages anywhere. Granite's built-in template handles this natively
-- **Prompt caching**: Not available — all tokens are processed on every request. This increases latency and GPU utilisation compared to Claude's cached prompt handling
+- **Prompt caching**: Not available. All tokens are processed on every request. This increases latency and GPU utilisation compared to Claude's cached prompt handling
 - **Long context**: Granite is configured for 131K tokens, Qwen for 262K (vs Claude's 200K). Context is comparable, but without prompt caching, long contexts are more expensive to process
 - **Multi-step reasoning**: Open-source models may struggle with complex, multi-tool workflows that require planning across many steps. Single-step tasks (code generation, file edits, explanations) work well
 - **First request latency**: vLLM compiles CUDA graphs on the first request after startup, causing 30-60 second delays. Step 11 includes a warm-up step to trigger this before you start using Claude Code
@@ -633,7 +633,7 @@ spec:
 '
 ```
 
-> **Note:** Enabling `captureUser` logs user identity per request — ensure GDPR/privacy compliance before enabling in production.
+> **Note:** Enabling `captureUser` logs user identity per request. Ensure GDPR/privacy compliance before enabling in production.
 
 ### Accessing the Dashboard
 
@@ -644,7 +644,7 @@ The `observabilityDashboard` flag was enabled in Step 6. The MaaS usage dashboar
 - **Rate-limited requests** when token quotas are exceeded
 - **Request latency** breakdown
 
-The dashboards are auto-managed Perses dashboards (`PersesDashboard` resources in `redhat-ods-monitoring`). There are no CLI or REST API endpoints for usage data — the dashboard is the only interface in RHOAI 3.5.
+The dashboards are auto-managed Perses dashboards (`PersesDashboard` resources in `redhat-ods-monitoring`). There are no CLI or REST API endpoints for usage data. The dashboard is the only interface in RHOAI 3.5.
 
 
 ## Alternative Approaches
@@ -690,7 +690,7 @@ oc delete -f cluster-setup/ai-project/serving-runtime.yaml
 oc delete -f cluster-setup/ai-project/data-science-cluster.yaml
 oc delete -f cluster-setup/ai-project/namespace.yaml
 
-# Remove operators (optional — other workloads may depend on these)
+# Remove operators (optional: other workloads may depend on these)
 oc delete -f cluster-setup/operators/nvidia-cluster-policy.yaml
 oc delete -f cluster-setup/operators/nvidia-gpu-operator.yaml
 oc delete -f cluster-setup/operators/nfd-instance.yaml

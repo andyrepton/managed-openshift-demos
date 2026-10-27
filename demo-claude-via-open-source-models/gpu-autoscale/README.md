@@ -4,7 +4,7 @@ Stops the two `g7e.2xlarge` GPU instances billing overnight by scaling the
 `poc-andyr-gpu` machine pool to 0, and scales it back to 2 in the morning.
 
 ROSA HCP machine-pool size lives in the Red Hat **control plane**, not in any
-Kubernetes object — there is nothing in-cluster you can `kubectl scale`.
+Kubernetes object. There is nothing in-cluster you can `kubectl scale`.
 So a `CronJob` in the cluster calls out to the OCM API (via the `rosa` CLI)
 with client credentials kept in a cluster **Secret**. The credentials never
 leave the cluster; nothing is added to GitHub.
@@ -26,12 +26,12 @@ Two options, in order of preference:
 
 ### Option A (preferred): OCM API client credentials
 
-A client-credentials pair is durable — it has no user session to expire, so
+A client-credentials pair is durable: it has no user session to expire, so
 the CronJob keeps working weeks later (unlike a personal token).
 
 1. Log in to the Red Hat console at `https://console.redhat.com`.
 2. In the console, create an **API client** / **API key**. It lives under
-   **OpenShift** in the console — look for an *API Clients* / *Client
+   **OpenShift** in the console. Look for an *API Clients* / *Client
    credentials* section. Create a new client named e.g. `gpu-pool-scaler`.
    (The exact screen has moved between console versions; if you can't find
    it, search "API client" in the console, or use Option B below.)
@@ -39,7 +39,7 @@ the CronJob keeps working weeks later (unlike a personal token).
 
 > **Verified note:** there is no self-service `POST /clients` REST endpoint
 > for minting clients (confirmed against the OCM OpenAPI spec at
-> `https://api.openshift.com/api/clusters_mgmt/v1/openapi`) — clients are
+> `https://api.openshift.com/api/clusters_mgmt/v1/openapi`). Clients are
 > created in the console UI only. Don't waste time looking for a curl for it.
 >
 > If you can create one, **scope the client to a limited role** (e.g. a
@@ -94,7 +94,7 @@ The image is amd64 (g7e / cluster nodes are amd64). Build with `buildx
 Replace `quay.io/REPLACE_WITH_YOUR_ORG/gpu-pool-scaler:latest` in both
 CronJob files with your real image, and confirm the cron schedule matches
 your **cluster's timezone** (ROSA control-plane cron uses the cluster's local
-time — typically UTC; check with `oc exec` a node or `date`):
+time, typically UTC; check with `oc exec` a node or `date`):
 
 ```bash
 oc apply -f cronjob-scale-up.yaml
@@ -145,7 +145,7 @@ oc logs -n claude-code-demo job/gpu-pool-scale-down-<ts>
 - **Model pods flap at 0.** While the pool is at 0 the two InferenceService
   pods show `0/1` (pending, no node). This is expected overnight and resolves
   automatically at scale-up. If you want them to look tidy, you can also
-  scale the two InferenceServices to 0 at 21:00 and back to 1 at 05:00 —
+  scale the two InferenceServices to 0 at 21:00 and back to 1 at 05:00,
   but it's cosmetic, the CronJob here is the one that stops the billing.
 - **Terraform drift.** The pool is also defined in Terraform
   (`andys-demo-cluster-tf/rosa/modules/openshift-ai/openshift-ai-machine-pool.tf`,

@@ -49,8 +49,8 @@ export KUBECONFIG_HUB=<path-to-rosa-kubeconfig>
 export KUBECONFIG_ONPREM=<path-to-onprem-kubeconfig>
 ```
 
-Commands in **Part A** and **Part C** target the hub (ROSA) cluster — use `KUBECONFIG=$KUBECONFIG_HUB`.
-Commands in **Part B** target the on-prem cluster — use `KUBECONFIG=$KUBECONFIG_ONPREM`.
+Commands in **Part A** and **Part C** target the hub (ROSA) cluster. Use `KUBECONFIG=$KUBECONFIG_HUB`.
+Commands in **Part B** target the on-prem cluster. Use `KUBECONFIG=$KUBECONFIG_ONPREM`.
 
 ## Part A: ROSA Setup
 
@@ -130,7 +130,7 @@ oc apply -f rosa/chatty-app.yaml
 
 ## Part B: On-Prem Setup
 
-All commands in this section target the **on-prem cluster** — prefix commands with `KUBECONFIG=$KUBECONFIG_ONPREM`.
+All commands in this section target the **on-prem cluster**. Prefix commands with `KUBECONFIG=$KUBECONFIG_ONPREM`.
 
 ### 1. Install the Cluster Logging Operator
 
@@ -153,7 +153,7 @@ oc apply -f onprem/collector-sa-rbac.yaml
 
 ### 3. Create the bearer token secret and deploy CLF
 
-The bearer token secret must be created separately from the CLF manifest — bundling it in the same file causes `oc apply` to overwrite the real token with a placeholder on re-apply.
+The bearer token secret must be created separately from the CLF manifest: bundling it in the same file causes `oc apply` to overwrite the real token with a placeholder on re-apply.
 
 ```bash
 # Create the bearer token secret (use the token from Part A step 4)
@@ -202,7 +202,7 @@ To query both clusters' chatty app logs:
 
 To see infrastructure logs from all nodes (both ROSA and on-prem hosts will appear):
 
-Switch to **infrastructure** log type — you'll see ROSA nodes (e.g. `ip-10-0-*`) and on-prem nodes (e.g. `compute-0`, `master-0`) side by side.
+Switch to **infrastructure** log type. You'll see ROSA nodes (e.g. `ip-10-0-*`) and on-prem nodes (e.g. `compute-0`, `master-0`) side by side.
 
 ### Verify via Loki API
 
@@ -265,4 +265,4 @@ oc delete -f rosa/loki-operator-ns.yaml
 
 **Token expired**: Regenerate with `oc create token onprem-forwarder -n openshift-logging --duration=8760h` on ROSA and recreate the secret on the on-prem cluster.
 
-**"Missing permissions" for on-prem namespaces in Console**: The Loki OPA sidecar's default admin groups don't include `cluster-admins` (the ROSA/OSD admin group). Non-admin users fall through to namespace-level authorization, which filters by locally-existing namespaces — remote cluster namespaces get silently dropped, causing a 403. The `lokistack.yaml` manifest includes `adminGroups` with `cluster-admins` to work around this. If you see this error, verify the LokiStack has `spec.tenants.openshift.adminGroups` set correctly.
+**"Missing permissions" for on-prem namespaces in Console**: The Loki OPA sidecar's default admin groups don't include `cluster-admins` (the ROSA/OSD admin group). Non-admin users fall through to namespace-level authorization, which filters by locally-existing namespaces. Remote cluster namespaces get silently dropped, causing a 403. The `lokistack.yaml` manifest includes `adminGroups` with `cluster-admins` to work around this. If you see this error, verify the LokiStack has `spec.tenants.openshift.adminGroups` set correctly.

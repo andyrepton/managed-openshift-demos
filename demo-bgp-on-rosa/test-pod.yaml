@@ -1,7 +1,7 @@
 # One pod per network. These are the clients for the isolation test: curl from
 # the red pod to the blue VM's IP should hang and fail, while curl to the red
 # VM's IP succeeds. Both pods also show the two-interface layout of a primary
-# UDN — ovn-udn1 carries the routable address, eth0 is infrastructure-locked.
+# UDN: ovn-udn1 carries the routable address, eth0 is infrastructure-locked.
 apiVersion: v1
 kind: Pod
 metadata:

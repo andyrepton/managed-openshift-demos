@@ -33,7 +33,7 @@ $TF_VAR_deploy_virt_machine_pool (only for ROSA)
 **Before setting `deploy_ai_machine_pool = true`, run the capacity scripts in
 [`scripts/`](scripts/).** A GPU instance type is not offered in every
 availability zone, and quota is not uniform across regions. Terraform does not
-discover this for you — the machine pool API rejects the pool outright rather
+discover this for you: the machine pool API rejects the pool outright rather
 than picking another zone, and the apply fails partway through with the rest
 of the resources already created:
 
@@ -51,8 +51,8 @@ cd scripts
 
 Feed the result back into two variables:
 
-- `ai_gpu_instance_type` — a type the region actually offers.
-- `ai_gpu_subnet_index` — the index into the VPC's private subnets, which
+- `ai_gpu_instance_type`: a type the region actually offers.
+- `ai_gpu_subnet_index`: the index into the VPC's private subnets, which
   selects the AZ. In `eu-west-2` index 0 is `eu-west-2a`, 1 is `eu-west-2b`
   and 2 is `eu-west-2c`. Confirm the mapping for your own cluster, since it
   depends on the subnet order the VPC module produced:
@@ -103,7 +103,7 @@ and is not reversible if the old type has no capacity:
 - Check capacity for the *new* type with `scripts/test-gpu-capacity-aws.sh`,
   and check it for the old type too if you might want to go back.
 - A GPU instance is not offered in every AZ, and EBS is zone-bound. Moving
-  the pool to another AZ strands any PVC in the old one — model weights have
+  the pool to another AZ strands any PVC in the old one. Model weights have
   to be downloaded again into a new volume.
 
 ### GCP API prerequisites (OSD on GCP)

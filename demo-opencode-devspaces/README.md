@@ -1,16 +1,16 @@
 # OpenCode AI Coding Assistant in Dev Spaces
 
-Run [OpenCode](https://github.com/opencode-ai/opencode), an AI-powered coding assistant, inside OpenShift Dev Spaces — backed by a self-hosted Devstral model served via vLLM.
+Run [OpenCode](https://github.com/opencode-ai/opencode), an AI-powered coding assistant, inside OpenShift Dev Spaces, backed by a self-hosted Devstral model served via vLLM.
 
 ## Prerequisites
 
-Deploy these in order — each one depends on the one above it:
+Deploy these in order. Each one depends on the one above it:
 
-1. [`openshift-ai/`](../openshift-ai/) — NFD, NVIDIA GPU Operator and RHOAI.
+1. [`openshift-ai/`](../openshift-ai/): NFD, NVIDIA GPU Operator and RHOAI.
    Needs a GPU machine pool (`deploy_ai_machine_pool = true` in terraform).
-2. [`demo-vllm-model-serving/`](../demo-vllm-model-serving/) — Devstral served
+2. [`demo-vllm-model-serving/`](../demo-vllm-model-serving/): Devstral served
    by vLLM. Needs `$HUGGING_FACE_HUB_TOKEN`.
-3. [`openshift-devspaces/`](../openshift-devspaces/) — Dev Spaces operator and
+3. [`openshift-devspaces/`](../openshift-devspaces/): Dev Spaces operator and
    CheCluster.
 
 On AWS, pick a GPU instance type your region actually offers in the subnet
@@ -29,7 +29,7 @@ oc get checluster devspaces -n openshift-operators -o jsonpath='{.status.cheURL}
 ```
 
 Open the factory URL to launch a workspace with this devfile. Dev Spaces takes
-the repository after a `#` fragment, with parameters appended to it — a
+the repository after a `#` fragment, with parameters appended to it. A
 `/f?url=` query string does not work:
 
 ```
@@ -71,7 +71,7 @@ opencode run "Reply with exactly: WORKING" # one-shot, useful for a smoke test
 ```
 
 Continue and Kilo Code appear in the editor's left sidebar once installed.
-Both are preconfigured against Devstral — no API key or sign-in needed, since
+Both are preconfigured against Devstral: no API key or sign-in needed, since
 vLLM runs unauthenticated inside the cluster.
 
 Kilo Code is the agentic one of the three: it sends a system prompt of about
@@ -94,13 +94,13 @@ Compaction exhausted: context still exceeds model limits after 3 attempts.
 
 vLLM refuses to start rather than degrading when the KV cache cannot hold
 `max-model-len`, so too large a value is a crash loop rather than a slow
-model. Check GPU capacity before changing instance type — see
+model. Check GPU capacity before changing instance type. See
 [`andys-demo-cluster-tf/scripts/`](../andys-demo-cluster-tf/scripts/).
 
 > **Config precedence trap.** Kilo reads legacy `opencode.json` files as well
 > as its own, and a *project-level* config overrides the global one. An
 > `opencode.json` in the repository root therefore silently overrides
-> `~/.config/kilo/kilo.jsonc` — including its token limits. Keep OpenCode's
+> `~/.config/kilo/kilo.jsonc`, including its token limits. Keep OpenCode's
 > config in `~/.config/opencode/` only.
 
 > **Permissions must be granted explicitly.** Kilo defaults every tool with no
@@ -108,7 +108,7 @@ model. Check GPU capacity before changing instance type — see
 > block the agent reads files but silently fails to write or run anything: it
 > waits on an approval it never receives and reports "Task completed" having
 > done nothing. `kilocode-config.jsonc` grants `read`, `edit` and `bash`,
-> which suits a throwaway workspace — tighten it for anything longer lived.
+> which suits a throwaway workspace. Tighten it for anything longer lived.
 
 ## How it works
 
@@ -153,4 +153,4 @@ opencode run "Reply with exactly the word: WORKING"
 
 ## Cleanup
 
-Close the workspace from the Dev Spaces dashboard. No cluster resources to clean up beyond the workspace itself — the model serving and Dev Spaces infrastructure are managed by their respective demos.
+Close the workspace from the Dev Spaces dashboard. No cluster resources to clean up beyond the workspace itself. The model serving and Dev Spaces infrastructure are managed by their respective demos.

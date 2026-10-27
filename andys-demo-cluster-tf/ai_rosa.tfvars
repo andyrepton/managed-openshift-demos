@@ -1,8 +1,8 @@
 create_vpc                    = true
 deploy_ai_machine_pool        = true
 ai_gpu_instance_type          = "g7e.2xlarge"
-ai_gpu_subnet_index           = 2
-aws_region                    = "us-east-2"
+ai_gpu_subnet_index           = 0
+aws_region                    = "eu-west-2"
 deploy_graviton_machine_pool  = false
 deploy_lokistack_machine_pool = false
 deploy_virt_machine_pool      = false

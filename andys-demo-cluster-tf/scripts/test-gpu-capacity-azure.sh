@@ -2,7 +2,7 @@
 #
 # Test GPU VM capacity across availability zones in a given Azure region.
 # Uses az cli to check SKU availability and quota restrictions.
-# Unlike the AWS script, this does NOT launch real VMs — Azure exposes
+# Unlike the AWS script, this does NOT launch real VMs. Azure exposes
 # capacity/restriction info via the SKU API.
 #
 # Usage: ./test-gpu-capacity-azure.sh <region> [vm-size ...]

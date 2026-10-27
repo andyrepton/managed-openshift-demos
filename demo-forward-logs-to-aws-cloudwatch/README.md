@@ -6,20 +6,20 @@ the Cluster Logging Operator 6.x with a Vector collector and IRSA
 
 ## Overview
 
-* **Cluster Logging Operator** (`stable-6.6`) — Deploys the Vector-based
+* **Cluster Logging Operator** (`stable-6.6`): Deploys the Vector-based
   log collector and manages the `ClusterLogForwarder` pipeline.
-* **ClusterLogForwarder** — Routes `infrastructure` and `audit` logs to
+* **ClusterLogForwarder**: Routes `infrastructure` and `audit` logs to
   CloudWatch with prefix `poc-andyr` in the configured region.
-* **IRSA** — The collector assumes an IAM role via OIDC federation.
+* **IRSA**: The collector assumes an IAM role via OIDC federation.
   No long-lived AWS credentials are stored on the cluster.
 
-No Elasticsearch Operator or `ClusterLogging` CR is needed — the
+No Elasticsearch Operator or `ClusterLogging` CR is needed. The
 `ClusterLogForwarder` is the only custom resource required.
 
 ## Prerequisites
 
 * A ROSA HCP cluster (tested on ROSA HCP 4.22).
-* The CloudWatch IAM role created by terraform — set
+* The CloudWatch IAM role created by terraform: set
   `deploy_cloudwatch_logging = true` in your tfvars (see
   `andys-demo-cluster-tf/`). The role ARN is output as
   `cloudwatch_iam_role_arn`.

@@ -4,7 +4,7 @@
 # RouteAdvertisements (bgp-cc-route-advertisements), so they ride the same BGP
 # sessions to the same VPC Route Server.
 #
-# spec.network.name must be unique across all BGPRouting CRs — the operator
+# spec.network.name must be unique across all BGPRouting CRs: the operator
 # reports DuplicateNetwork otherwise. Subnets must not overlap each other or
 # the VPC CIDR; the operator does not check that for you.
 apiVersion: networking.openshift.io/v1beta1

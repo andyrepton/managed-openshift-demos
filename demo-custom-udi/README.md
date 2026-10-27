@@ -43,8 +43,8 @@ Python 3.9.25 / Node 22 / .NET 8, and neither image ships `nvm`, `pyenv` or
 container runs as an arbitrary non-root UID, so `dnf install` fails, and
 user-local installs would add several hundred MB to every workspace start.
 
-Python 3.14 and .NET 10 are already packaged for RHEL 9.8. Node 24 is not —
-the module stream stops at 22 — so it comes from nodejs.org.
+Python 3.14 and .NET 10 are already packaged for RHEL 9.8. Node 24 is not
+(the module stream stops at 22), so it comes from nodejs.org.
 
 ## Setup
 
@@ -84,7 +84,7 @@ oc patch checluster devspaces -n openshift-operators --type=merge \
 ```
 
 This covers workspaces created without their own devfile. **A devfile that
-names its own container image still wins** — that is by design, so update any
+names its own container image still wins**. That is by design, so update any
 devfile you want on the new image.
 
 ### 4. Verify
@@ -142,12 +142,12 @@ Most of this is not obvious, and getting it wrong fails quietly.
 
 `/opt/extensions`, outside the persisted home, group-0 readable for the
 arbitrary UID. A `.vsix` under `/home/user` would vanish on first start when
-the PVC mounts over it — the same trap as any other tool.
+the PVC mounts over it (the same trap as any other tool).
 
 ### Never install into `/home/user`
 
-With `persistUserHome` enabled — check with
-`oc get checluster devspaces -n openshift-operators -o jsonpath='{.spec.devEnvironments.persistUserHome}'` —
+With `persistUserHome` enabled (check with
+`oc get checluster devspaces -n openshift-operators -o jsonpath='{.spec.devEnvironments.persistUserHome}'`),
 a PVC is mounted over `/home/user`, **replacing whatever the image put
 there**. A binary installed to `/home/user/bin` at build time simply
 disappears on first start.
@@ -169,7 +169,7 @@ they are copied rather than symlinked.
 
 An `init-persistent-home` init container stows the first time a volume is
 mounted. **Rebuilding the image does not re-stow an existing workspace.**
-After changing the image, delete the workspace *and its PVC* — reopening a
+After changing the image, delete the workspace *and its PVC*. Reopening a
 stopped workspace keeps the old contents. Check `/home/user/.stow.log` when
 debugging a tool that "vanished".
 
@@ -188,7 +188,7 @@ in `/usr/bin` is the only reliable option.
 ### Repointing `python3` is safe, but check first
 
 `dnf` pins `#!/usr/bin/python3.9`, so it keeps working when `/usr/bin/python3`
-moves to 3.14 — verified, `dnf --version` still responds. A few unrelated RHEL
+moves to 3.14 (verified, `dnf --version` still responds). A few unrelated RHEL
 tools (`cockpit-bridge`, `udica`, flatpak helpers) do follow the symlink and
 are untested on 3.14; none is used in a workspace.
 
