@@ -21,8 +21,12 @@ components:
       cpuLimit: "2"
       mountSources: true
       env:
-        - name: NODE_TLS_REJECT_UNAUTHORIZED
-          value: "0"
+        # NODE_TLS_REJECT_UNAUTHORIZED is deliberately NOT set here, for the
+        # same reason as demo-opencode-devspaces/devfile.yaml: "0" switches off
+        # certificate verification for every Node process in the workspace,
+        # including the assistants that send API keys to model endpoints. If
+        # an endpoint's CA is not trusted, mount it and point
+        # NODE_EXTRA_CA_CERTS at it instead.
         # che-code installs these at editor startup. postStart only downloads
         # them: the remote-cli code-oss needs VSCODE_IPC_HOOK_CLI from a live
         # editor terminal, so --install-extension always fails from postStart.
