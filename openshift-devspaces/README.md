@@ -52,8 +52,11 @@ From the Dev Spaces dashboard you can create workspaces from any Git
 repository. You can also use a factory URL to open a workspace directly:
 
 ```
-https://<devspaces-url>/f?url=<git-repo-url>
+https://<devspaces-url>#<git-repo-url>
 ```
+
+Parameters go on the git URL, after the `#`, for example
+`#https://github.com/<org>/<repo>?devfilePath=<path>`.
 
 ## Alternative: GitOps
 
