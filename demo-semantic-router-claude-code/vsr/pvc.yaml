@@ -1,0 +1,11 @@
+# Classifier and embedding models the router downloads at startup.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: semantic-router-models
+  namespace: semantic-router
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 10Gi

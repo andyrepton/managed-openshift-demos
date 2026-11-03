@@ -1,0 +1,16 @@
+# JSON patch that adds the external model to the prerequisite demo's
+# MaaSSubscription. A MaaS key is bound to one subscription, so the local and
+# external models must share one for a single key to reach both tiers.
+#
+#   oc patch maassubscription claude-code-demo-subscription \
+#     -n models-as-a-service --type json --patch-file external-model/subscription-patch.yaml
+- op: add
+  path: /spec/modelRefs/-
+  value:
+    name: gpt-oss-120b
+    namespace: claude-code-demo
+    billingRate:
+      perToken: "0.001"
+    tokenRateLimits:
+      - limit: 1000000
+        window: "1h"

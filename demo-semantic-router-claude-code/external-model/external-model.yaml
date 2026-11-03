@@ -1,0 +1,14 @@
+# The frontier tier. apiFormat "messages" makes the MaaS gateway pass Claude
+# Code's Anthropic Messages requests through unchanged.
+apiVersion: inference.opendatahub.io/v1alpha1
+kind: ExternalModel
+metadata:
+  name: gpt-oss-120b
+  namespace: claude-code-demo
+spec:
+  externalProviderRefs:
+    - ref:
+        name: external-frontier
+      targetModel: gpt-oss-120b
+      apiFormat: messages
+      path: /v1/messages

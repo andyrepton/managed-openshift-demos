@@ -1,0 +1,9 @@
+apiVersion: maas.opendatahub.io/v1alpha1
+kind: MaaSModelRef
+metadata:
+  name: gpt-oss-120b
+  namespace: claude-code-demo
+spec:
+  modelRef:
+    kind: ExternalModel
+    name: gpt-oss-120b

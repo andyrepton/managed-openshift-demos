@@ -1,0 +1,13 @@
+# Adds the router's virtual model to the prerequisite demo's subscription.
+#   oc patch maassubscription claude-code-demo-subscription \
+#     -n models-as-a-service --type json --patch-file maas-wiring/user-subscription-patch.yaml
+- op: add
+  path: /spec/modelRefs/-
+  value:
+    name: vllm-sr-auto
+    namespace: claude-code-demo
+    billingRate:
+      perToken: "0.0001"
+    tokenRateLimits:
+      - limit: 100000000
+        window: "1h"

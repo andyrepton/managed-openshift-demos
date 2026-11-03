@@ -1,0 +1,42 @@
+# The router calls each tier through MaaS as its own ServiceAccount, with its
+# own key and subscription.
+apiVersion: maas.opendatahub.io/v1alpha1
+kind: MaaSAuthPolicy
+metadata:
+  name: semantic-router-tiers
+  namespace: models-as-a-service
+spec:
+  modelRefs:
+    - name: qwen3-8-27b
+      namespace: claude-code-demo
+    - name: gpt-oss-120b
+      namespace: claude-code-demo
+  subjects:
+    users:
+      - system:serviceaccount:semantic-router:semantic-router
+---
+apiVersion: maas.opendatahub.io/v1alpha1
+kind: MaaSSubscription
+metadata:
+  name: semantic-router-tiers
+  namespace: models-as-a-service
+spec:
+  owner:
+    users:
+      - system:serviceaccount:semantic-router:semantic-router
+  modelRefs:
+    - name: qwen3-8-27b
+      namespace: claude-code-demo
+      billingRate:
+        perToken: "0.0001"
+      tokenRateLimits:
+        - limit: 100000000
+          window: "1h"
+    - name: gpt-oss-120b
+      namespace: claude-code-demo
+      billingRate:
+        perToken: "0.001"
+      tokenRateLimits:
+        - limit: 1000000
+          window: "1h"
+  priority: 5

@@ -1,0 +1,21 @@
+# Only the two gateways may reach the router's Envoy; both authenticate
+# users before forwarding. This is the router's only access control.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: semantic-router-from-gateways
+  namespace: semantic-router
+spec:
+  podSelector: {matchLabels: {app: semantic-router}}
+  policyTypes: ["Ingress"]
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels: {kubernetes.io/metadata.name: openshift-ingress}
+      podSelector:
+        matchExpressions:
+        - key: gateway.networking.k8s.io/gateway-name
+          operator: In
+          values: [maas-default-gateway, semantic-router-gateway]
+    ports:
+    - {port: 8443, protocol: TCP}

@@ -1,0 +1,14 @@
+# Grants the prerequisite demo's claude-code-users group access to the
+# external model. Kept separate from that demo's own MaaSAuthPolicy.
+apiVersion: maas.opendatahub.io/v1alpha1
+kind: MaaSAuthPolicy
+metadata:
+  name: semantic-router-external-auth
+  namespace: models-as-a-service
+spec:
+  modelRefs:
+    - name: gpt-oss-120b
+      namespace: claude-code-demo
+  subjects:
+    groups:
+      - name: claude-code-users

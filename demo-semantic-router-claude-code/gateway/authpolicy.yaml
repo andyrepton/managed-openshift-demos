@@ -1,0 +1,52 @@
+# Validates the user's MaaS API key with maas-api, the same call the MaaS
+# gateway's own AuthPolicy makes, and requires the claude-code-users group.
+# The validation endpoint is internal to MaaS (RHOAI 3.5.2) and may change
+# between releases.
+apiVersion: kuadrant.io/v1
+kind: AuthPolicy
+metadata:
+  name: semantic-router
+  namespace: semantic-router
+spec:
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: semantic-router
+  rules:
+    authentication:
+      maas-api-key:
+        plain:
+          selector: request.headers.authorization
+        when:
+          - selector: request.headers.authorization
+            operator: matches
+            value: "^Bearer sk-oai-.*"
+    metadata:
+      apiKeyValidation:
+        http:
+          url: https://maas-api.redhat-ai-gateway-infra.svc.cluster.local:8443/internal/v1/api-keys/validate
+          method: POST
+          contentType: application/json
+          body:
+            expression: '{"key": request.headers.authorization.replace("Bearer ", "")}'
+        cache:
+          key:
+            selector: request.headers.authorization
+          ttl: 60
+    authorization:
+      valid-key-in-group:
+        opa:
+          rego: |
+            allow {
+              input.auth.metadata.apiKeyValidation.valid == true
+              input.auth.metadata.apiKeyValidation.groups[_] == "claude-code-users"
+            }
+    response:
+      unauthenticated:
+        code: 401
+        message:
+          value: Authentication required
+      unauthorized:
+        code: 403
+        message:
+          value: Access denied

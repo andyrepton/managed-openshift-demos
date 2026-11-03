@@ -1,0 +1,96 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: semantic-router
+  namespace: semantic-router
+spec:
+  replicas: 1
+  # One replica on a ReadWriteOnce models volume: a rolling update can land the
+  # new pod on another node, where the volume cannot attach.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: {app: semantic-router}
+  template:
+    metadata:
+      labels: {app: semantic-router}
+    spec:
+      serviceAccountName: semantic-router
+      # OpenShift assigns the UID (restricted-v2 SCC); no fixed runAsUser.
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+      - name: router
+        image: ghcr.io/vllm-project/semantic-router/vllm-sr@sha256:f6037c06796d6b6f678b2289b4fd618c6fa22b1487b276241f9382f9557ac690  # v0.4.0
+        # The image entrypoint (/app/start-router.sh) takes the config path.
+        args: ["/app/config/config.yaml"]
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities: {drop: ["ALL"]}
+        env:
+        - {name: HOME, value: /tmp}
+        - {name: TMPDIR, value: /tmp}
+        - {name: HF_HOME, value: /app/models/.cache/huggingface}
+        # The router's own MaaS key, used for every tier call.
+        - name: MAAS_API_KEY
+          valueFrom: {secretKeyRef: {name: semantic-router-maas-key, key: api-key}}
+        ports:
+        - {containerPort: 50051, name: grpc}
+        - {containerPort: 9190, name: metrics}
+        volumeMounts:
+        - {name: tmp, mountPath: /tmp}
+        - {name: config, mountPath: /app/config/config.yaml, subPath: config.yaml, readOnly: true}
+        - {name: models, mountPath: /app/models}
+        startupProbe:
+          grpc: {port: 50051}
+          periodSeconds: 10
+          failureThreshold: 90
+        readinessProbe:
+          grpc: {port: 50051}
+          periodSeconds: 15
+        resources:
+          requests: {cpu: "1", memory: 3Gi}
+          limits: {cpu: "2", memory: 7Gi}
+      - name: envoy
+        image: docker.io/envoyproxy/envoy@sha256:4d496918618a7ebd6c71ae8285e31ebff092f3a0a5ad642d50decf4a54eb2456  # v1.35.3
+        command: ["envoy", "-c", "/etc/envoy/envoy.yaml", "--log-level", "info"]
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities: {drop: ["ALL"]}
+        ports:
+        - {containerPort: 8443, name: https}
+        volumeMounts:
+        - {name: envoy-config, mountPath: /etc/envoy, readOnly: true}
+        - {name: tls, mountPath: /etc/tls, readOnly: true}
+        readinessProbe:
+          tcpSocket: {port: 8443}
+          periodSeconds: 10
+        resources:
+          requests: {cpu: 100m, memory: 128Mi}
+          limits: {cpu: "1", memory: 512Mi}
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: config
+        configMap: {name: semantic-router-config}
+      - name: models
+        persistentVolumeClaim: {claimName: semantic-router-models}
+      - name: envoy-config
+        configMap: {name: semantic-router-envoy}
+      - name: tls
+        secret: {secretName: semantic-router-tls}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: semantic-router
+  namespace: semantic-router
+  annotations:
+    # OpenShift issues the TLS certificate for this Service.
+    service.beta.openshift.io/serving-cert-secret-name: semantic-router-tls
+spec:
+  selector: {app: semantic-router}
+  ports:
+  - {name: https, port: 443, targetPort: 8443}

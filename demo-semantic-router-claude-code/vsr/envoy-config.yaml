@@ -1,0 +1,103 @@
+# Envoy in front of the router: the HTTPS endpoint the gateways call.
+# No credential check here: the NetworkPolicy admits only the MaaS gateway
+# and the semantic-router gateway, and both authenticate users first.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: semantic-router-envoy
+  namespace: semantic-router
+data:
+  envoy.yaml: |
+    admin:
+      address:
+        socket_address: {address: 127.0.0.1, port_value: 19000}
+    static_resources:
+      listeners:
+      - name: https
+        address:
+          socket_address: {address: 0.0.0.0, port_value: 8443}
+        filter_chains:
+        - transport_socket:
+            name: envoy.transport_sockets.tls
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+              common_tls_context:
+                tls_certificates:
+                - certificate_chain: {filename: /etc/tls/tls.crt}
+                  private_key: {filename: /etc/tls/tls.key}
+          filters:
+          - name: envoy.filters.network.http_connection_manager
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+              stat_prefix: ingress_https
+              access_log:
+              - name: envoy.access_loggers.stdout
+                typed_config:
+                  "@type": type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+                  log_format:
+                    json_format:
+                      time: "%START_TIME%"
+                      path: "%REQ(:PATH)%"
+                      code: "%RESPONSE_CODE%"
+                      flags: "%RESPONSE_FLAGS%"
+                      duration_ms: "%DURATION%"
+                      selected_model: "%REQ(X-SELECTED-MODEL)%"
+                      request_id: "%REQ(X-REQUEST-ID)%"
+              # Long model responses stream for minutes; no request timeout.
+              stream_idle_timeout: 900s
+              request_timeout: 0s
+              route_config:
+                virtual_hosts:
+                - name: maas
+                  domains: ["*"]
+                  routes:
+                  - match: {prefix: "/"}
+                    route: {cluster: maas_gateway, timeout: 0s}
+              http_filters:
+              - name: envoy.filters.http.ext_proc
+                typed_config:
+                  "@type": type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExternalProcessor
+                  grpc_service:
+                    envoy_grpc: {cluster_name: router_extproc}
+                  allow_mode_override: true
+                  processing_mode:
+                    request_header_mode: SEND
+                    response_header_mode: SEND
+                    request_body_mode: BUFFERED
+                    response_body_mode: BUFFERED
+                    request_trailer_mode: SKIP
+                    response_trailer_mode: SKIP
+                  # Fail closed: if the router is down, reject rather than
+                  # forward unrouted requests.
+                  failure_mode_allow: false
+                  message_timeout: 300s
+              - name: envoy.filters.http.router
+                typed_config:
+                  "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+                  suppress_envoy_headers: true
+      clusters:
+      - name: router_extproc
+        connect_timeout: 10s
+        type: STATIC
+        typed_extension_protocol_options:
+          envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+            "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+            explicit_http_config: {http2_protocol_options: {}}
+        load_assignment:
+          cluster_name: router_extproc
+          endpoints:
+          - lb_endpoints:
+            - endpoint: {address: {socket_address: {address: 127.0.0.1, port_value: 50051}}}
+      - name: maas_gateway
+        connect_timeout: 10s
+        type: STRICT_DNS
+        dns_lookup_family: V4_ONLY
+        load_assignment:
+          cluster_name: maas_gateway
+          endpoints:
+          - lb_endpoints:
+            - endpoint:
+                address:
+                  socket_address:
+                    address: maas-default-gateway-data-science-gateway-class.openshift-ingress.svc.cluster.local
+                    port_value: 80
