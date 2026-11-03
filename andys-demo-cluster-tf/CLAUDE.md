@@ -40,6 +40,16 @@ In a multi-AZ cluster `ai_gpu_subnet_index` follows AZ order (0 = `a`,
 `-var ai_gpu_subnet_index=N` rather than editing the preset. GPU pool size is
 `-var ai_gpu_replicas=N` (default 1).
 
+## Logging in to a new ROSA cluster
+
+Terraform creates no identity provider. After apply, run
+`rosa create admin --cluster <name>` with its output redirected to a mode-600
+temp file, because it prints the generated password. Log in by piping the
+password to `oc login -u cluster-admin` on stdin, never with `--password`
+(flags show in process listings). Use a per-cluster kubeconfig
+(`KUBECONFIG=~/.kube/<cluster>`) so other contexts are untouched. Access takes
+a few minutes to activate; until then the login returns 401.
+
 ## ROSA HCP teardown
 
 `terraform destroy` removes the cluster (about 30 minutes) but then **hangs on
