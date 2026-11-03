@@ -34,6 +34,14 @@ since a missing entry is the usual reason the same fix gets worked out twice.
 Put a lesson in the `CLAUDE.md` of the folder it applies to. Use this root file
 only for rules that apply across the repo.
 
+### When you break a rule
+
+If you notice you have broken a rule in this file, in agent memory or in an
+instruction from the user, **undo the change first**, then ask permission with
+an overview of what you wanted to add and why. Do not leave it in place while
+asking, and do not only report it afterwards. If the undo is itself
+destructive, ask before running it.
+
 ## Working on demos
 
 ### Verify before assuming
@@ -67,6 +75,16 @@ choices, sizing, ordering) before starting.
 A demo that combines capabilities lists the existing demos as prerequisites and
 contains only the new glue. Do not copy another demo's operator subscriptions or
 base setup.
+
+When a demo lists another as a prerequisite, check that it does not reinstall an
+operator or recreate a resource (for example a `DataScienceCluster` of the same
+name) that the prerequisite already owns. Before removing a duplicate, check the
+git history and the docs around it: some are deliberate, usually to fix install
+ordering.
+
+When you add a deliberate duplicate, say why in a comment next to **every** copy
+(which other file it duplicates, and what breaks without it), so the next reader
+does not remove it as a leftover.
 
 ### Test before commit
 

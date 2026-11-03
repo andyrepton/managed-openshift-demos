@@ -115,9 +115,16 @@ Ensure your ARO cluster has a GPU machine pool. For ARO HCP, use `../andys-demo-
 ```bash
 # cert-manager (required by RHOAI v3)
 oc apply -f cluster-setup/operators/cert-manager.yaml
+# Wait for the CSV first: until it installs there is no deployment to wait on,
+# and `oc wait --all` fails at once with "no matching resources"
+until oc get csv -n cert-manager-operator 2>/dev/null | grep -q Succeeded; do sleep 10; done
 oc wait --for=condition=Available deployment -n cert-manager-operator --all --timeout=300s
 
-# Red Hat Connectivity Link (provides Kuadrant + Authorino for MaaS)
+# Red Hat Connectivity Link (provides Kuadrant + Authorino for MaaS).
+# Installed here, early: testing in September 2026 found KServe's
+# llmisvc-controller-manager cached CRD discovery at startup and missed the
+# AuthPolicy CRD if RHCL arrived later (see maas/README.md, Troubleshooting).
+# On RHOAI 3.5.2 (November 2026) a later install was picked up without a restart.
 oc apply -f cluster-setup/operators/rhcl.yaml
 
 # Cluster Observability Operator (required for MaaS usage dashboards)
@@ -138,12 +145,30 @@ oc get csv -n redhat-ods-operator
 
 ### Step 4: Configure OpenShift AI
 
+Deploy PostgreSQL first. MaaS stores API keys and subscriptions in it, and
+reads its connection Secret (`maas-db-config`, in `redhat-ai-gateway-infra`)
+when MaaS is enabled below; created afterwards, `maas-api` needs a restart.
+
+```bash
+# Generate a password and substitute it for BOTH REPLACE_ME placeholders.
+# It is only stored in the Secret; nothing needs it later, so it is not printed.
+PG_PASSWORD=$(openssl rand -base64 16 | tr -d '=+/')
+sed "s/REPLACE_ME/$PG_PASSWORD/g" maas/postgres.yaml | oc apply -f -
+unset PG_PASSWORD
+oc wait --for=condition=Available deployment/postgres \
+  -n redhat-ods-applications --timeout=120s
+```
+
+Then enable MaaS:
+
 ```bash
 # Create the project namespace
 oc apply -f cluster-setup/ai-project/namespace.yaml
 
-# Deploy the DataScienceCluster (enables KServe + MaaS via aigateway)
-oc apply -f cluster-setup/ai-project/data-science-cluster.yaml
+# Enable MaaS (aigateway) on the DataScienceCluster that openshift-ai/ created.
+# Patch it: applying a full DSC would switch off components other demos use.
+oc patch datasciencecluster default-dsc --type merge \
+  --patch-file cluster-setup/ai-project/data-science-cluster-patch.yaml
 ```
 
 Wait for KServe to be fully ready (this can take several minutes on first install):
@@ -167,10 +192,10 @@ MaaS provides Red Hat-native API key authentication, per-user token quotas, and 
 # Enable User Workload Monitoring (for Prometheus metrics)
 oc apply -f maas/monitoring.yaml
 
-# Install Red Hat Connectivity Link (provides Kuadrant + Authorino)
-oc apply -f maas/operator.yaml
-oc get csv -n openshift-operators -w
-# Wait for rhcl-operator to show "Succeeded"
+# Red Hat Connectivity Link (Kuadrant + Authorino) was installed in Step 2.
+# Check it is ready:
+oc get csv -n openshift-operators | grep rhcl-operator
+# Should show "Succeeded"
 
 # Create Kuadrant instance
 # Note: Kuadrant requires the Gateway API provider (Istio) that KServe installs.
@@ -181,18 +206,6 @@ oc wait --for=condition=Ready kuadrant/kuadrant -n kuadrant-system --timeout=300
 
 # Set up Authorino (API key validation)
 oc apply -f maas/authorino.yaml
-```
-
-Deploy PostgreSQL (MaaS stores API keys and subscriptions here):
-
-```bash
-# Generate a password and update postgres.yaml
-PG_PASSWORD=$(openssl rand -base64 16 | tr -d '=+/')
-echo "PostgreSQL password: $PG_PASSWORD"
-# Replace BOTH instances of REPLACE_ME in maas/postgres.yaml with the password
-sed "s/REPLACE_ME/$PG_PASSWORD/g" maas/postgres.yaml | oc apply -f -
-oc wait --for=condition=Available deployment/postgres \
-  -n redhat-ods-applications --timeout=120s
 ```
 
 Create the MaaS gateway:
@@ -251,19 +264,31 @@ oc logs -f job/download-qwen3-8-27b -n claude-code-demo
 Once downloads complete, deploy the chat template and LLMInferenceServices:
 
 ```bash
+# The LLMInferenceService baseRefs name versioned configs (for example
+# v3-5-2-kserve-config-llm-router-route) that change with RHOAI patch releases.
+# Look up the newest names on this cluster and substitute them when applying.
+CONFIGS=$(oc get llminferenceserviceconfig -n redhat-ods-applications -o name | sed 's#.*/##' | sort -V)
+TEMPLATE_CONFIG=$(echo "$CONFIGS" | grep -- '-kserve-config-llm-single-node-template-nvidia-cuda$' | tail -1)
+ROUTE_CONFIG=$(echo "$CONFIGS" | grep -- '-kserve-config-llm-router-route$' | tail -1)
+echo "Using $TEMPLATE_CONFIG and $ROUTE_CONFIG"
+apply_model() {
+  sed -e "s/REPLACE_LLM_TEMPLATE_CONFIG/$TEMPLATE_CONFIG/" \
+      -e "s/REPLACE_LLM_ROUTE_CONFIG/$ROUTE_CONFIG/" "$1" | oc apply -f -
+}
+
 # Qwen needs a custom chat template because the default rejects system
 # messages mid-conversation (which Claude Code sends for tool context).
 # Granite uses its built-in template and needs no override.
 oc apply -f models/qwen-chat-template.yaml
-oc apply -f models/granite-llm-inference-service.yaml
-oc apply -f models/qwen3-8-llm-inference-service.yaml
+apply_model models/granite-llm-inference-service.yaml
+apply_model models/qwen3-8-llm-inference-service.yaml
 ```
 
-**Single GPU node?** Skip Granite:
+**Single GPU node?** Skip Granite (run the config lookup above first):
 
 ```bash
 oc apply -f models/qwen-chat-template.yaml
-oc apply -f models/qwen3-8-llm-inference-service.yaml
+apply_model models/qwen3-8-llm-inference-service.yaml
 ```
 
 Wait for models to load:
@@ -308,6 +333,10 @@ oc patch maassubscription claude-code-demo-subscription -n models-as-a-service \
   --type=merge -p "{\"spec\":{\"owner\":{\"users\":[\"${SA_USER}\"]}}}"
 ```
 
+On a single GPU node (Qwen only), Granite's MaaSModelRef stays `Pending` and the
+subscription reports `Degraded` (`1 of 2 model references are invalid or
+unavailable`). Qwen still works.
+
 Verify:
 
 ```bash
@@ -336,7 +365,7 @@ MAAS_KEY=$(curl -sS \
   "${MAAS_API}/v1/api-keys" | jq -r .key)
 
 echo "Your MaaS API key: $MAAS_KEY"
-echo "Save this — it is only shown once."
+echo "Save this: it is only shown once."
 ```
 
 **On ARO HCP**: `oc whoami -t` returns no token (client certificate auth). Use a ServiceAccount token instead:
@@ -353,7 +382,7 @@ MAAS_KEY=$(curl -sS \
   "${MAAS_API}/v1/api-keys" | jq -r .key)
 
 echo "Your MaaS API key: $MAAS_KEY"
-echo "Save this — it is only shown once."
+echo "Save this: it is only shown once."
 ```
 
 ### Step 8: Deploy the LiteLLM Gateway
@@ -365,7 +394,7 @@ Generate a LiteLLM API key and deploy:
 ```bash
 export LITELLM_KEY="sk-$(openssl rand -hex 24)"
 echo "Your LiteLLM API key: $LITELLM_KEY"
-echo "Save this — you'll need it for Claude Code configuration."
+echo "Save this: you'll need it for Claude Code configuration."
 
 # Create the secret with both the LiteLLM master key and MaaS API key
 oc create secret generic litellm-api-key \
@@ -683,21 +712,20 @@ oc delete -f maas/gateway.yaml
 oc delete -f maas/postgres.yaml
 oc delete -f maas/authorino.yaml
 oc delete -f maas/kuadrant.yaml
-oc delete -f maas/operator.yaml
 
-# Remove AI project
+# Remove AI project, and switch MaaS off on the shared DataScienceCluster
 oc delete -f cluster-setup/ai-project/serving-runtime.yaml
-oc delete -f cluster-setup/ai-project/data-science-cluster.yaml
+oc patch datasciencecluster default-dsc --type merge \
+  -p '{"spec":{"components":{"aigateway":{"managementState":"Removed"}}}}'
 oc delete -f cluster-setup/ai-project/namespace.yaml
 
-# Remove operators (optional: other workloads may depend on these)
-oc delete -f cluster-setup/operators/nvidia-cluster-policy.yaml
-oc delete -f cluster-setup/operators/nvidia-gpu-operator.yaml
-oc delete -f cluster-setup/operators/nfd-instance.yaml
-oc delete -f cluster-setup/operators/nfd.yaml
+# Remove this demo's operators (optional: other workloads may depend on these)
+oc delete -f cluster-setup/operators/rhcl.yaml
 oc delete -f cluster-setup/operators/opentelemetry.yaml
 oc delete -f cluster-setup/operators/cluster-observability-operator.yaml
-oc delete -f cluster-setup/operators/rhoai.yaml
+oc delete -f cluster-setup/operators/cert-manager.yaml
+
+# GPU operators and RHOAI itself: see the Cleanup section of ../openshift-ai/
 
 # Tear down the cluster (if using terraform)
 cd ../andys-demo-cluster-tf
@@ -717,13 +745,13 @@ oc get nodes --show-labels | grep gpu
 
 ### LLMInferenceService shows ConfigNotFound
 
-The `baseRefs` in the LLMInferenceService yaml files reference specific versioned config names (e.g. `v3-5-1-kserve-config-llm-single-node-template-nvidia-cuda`). These names change between RHOAI versions. Check what's available on your cluster:
+The `baseRefs` reference versioned config names (e.g. `v3-5-2-kserve-config-llm-single-node-template-nvidia-cuda`) that change between RHOAI versions. Step 6 looks them up and substitutes them for the `REPLACE_LLM_*_CONFIG` placeholders; if it picked the wrong ones, or a placeholder was applied unsubstituted, check what's available on your cluster:
 
 ```bash
 oc get llminferenceserviceconfig -A
 ```
 
-Update the `baseRefs` in the model yaml files to match the names on your cluster.
+Set `TEMPLATE_CONFIG` and `ROUTE_CONFIG` to the right names by hand and re-run `apply_model`.
 
 ### Model download fails
 
