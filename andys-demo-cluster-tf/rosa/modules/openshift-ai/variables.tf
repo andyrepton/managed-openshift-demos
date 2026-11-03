@@ -42,3 +42,9 @@ variable "gpu_instance_type" {
   default     = "g7e.2xlarge"
   description = "AWS instance type for the GPU machine pool."
 }
+
+variable "gpu_replicas" {
+  type        = number
+  default     = 1
+  description = "Number of nodes in the GPU machine pool."
+}

@@ -9,6 +9,7 @@ module "rosa-rhoai-machine-pool" {
   gpu_subnet_id     = local.gpu_private_subnet_id
   aws_region        = var.aws_region
   gpu_instance_type = var.ai_gpu_instance_type
+  gpu_replicas      = var.ai_gpu_replicas
 }
 
 output "aws_iam_access_key" {

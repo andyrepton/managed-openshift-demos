@@ -33,7 +33,7 @@ Both models are downloaded from HuggingFace to PVCs via Kubernetes Jobs, then se
 
 ## Cluster provisioning
 
-Use `../andys-demo-cluster-tf` with `ai_rosa.tfvars` for ROSA. GPU machine pool needs `replicas: 2` for both models simultaneously (g7e.2xlarge with RTX PRO 6000, 96GB VRAM). For ARO, check the `aro/` module and ensure GPU quota is available.
+Use `../andys-demo-cluster-tf` with `ai_rosa.tfvars` for ROSA. GPU machine pool needs `-var ai_gpu_replicas=2` for both models simultaneously (g7e.2xlarge with RTX PRO 6000, 96GB VRAM). For ARO, check the `aro/` module and ensure GPU quota is available.
 
 ## Namespace
 

@@ -35,6 +35,11 @@ lands in: test that AZ, and keep it in the same AZ as any existing model PVC
 (EBS volumes are zonal). The AWS script launches a real instance in a temporary
 VPC, stops at the first AZ with capacity, and cleans up after itself.
 
+In a multi-AZ cluster `ai_gpu_subnet_index` follows AZ order (0 = `a`,
+1 = `b`, 2 = `c`). When the capacity test finds capacity in another AZ, pass
+`-var ai_gpu_subnet_index=N` rather than editing the preset. GPU pool size is
+`-var ai_gpu_replicas=N` (default 1).
+
 ## ROSA HCP teardown
 
 `terraform destroy` removes the cluster (about 30 minutes) but then **hangs on
