@@ -11,7 +11,7 @@ Test campaign started 2026-11-04: one cluster build at a time.
 |:---|:---|:---|:---|:---|:---|
 | andys-demo-cluster-tf | 1 | ROSA HCP 4.22.12 | passed | 2026-11-04 | Build 1 (`ai_rosa.tfvars`, `-var ai_gpu_replicas=2`): 76 resources, both GPU nodes Ready; later builds add more presets |
 | openshift-ai | 1. ROSA AI | ROSA HCP 4.22.12, RHOAI 3.5.2 | passed | 2026-11-04 | Tested from branch prereq-readme-fixes (fix 3) |
-| demo-vllm-model-serving | 1. ROSA AI | ROSA HCP | pending | | |
+| demo-vllm-model-serving | 1. ROSA AI | ROSA HCP 4.22.12, RHOAI 3.5.2 | passed | 2026-11-04 | Devstral serves and answers (fixes 11, 33, 34) |
 | demo-claude-via-open-source-models | 1. ROSA AI | ROSA HCP 4.22.12, RHOAI 3.5.2 | passed | 2026-11-04 | Tested from branch prereq-readme-fixes, both models (fixes 1, 2, 14, 16, 18, 21-24). Not tested: Cursor, interactive `/model`, cleanup |
 | openshift-devspaces | 1. ROSA AI | ROSA HCP 4.22.12, Dev Spaces 3.31.2 | passed | 2026-11-04 | Workspaces opened in dependent demos (fix 17) |
 | demo-opencode-devspaces | 1. ROSA AI | ROSA HCP | pending | | |
@@ -67,7 +67,7 @@ not yet changed), **not fixable yet** (with the reason).
 | 8 | demo-autonode-on-rosa | demo-readme-summaries | README says `OpenShiftEC2NodeClass`, the manifest uses `EC2NodeClass` | | to fix (cluster build 5) |
 | 9 | demo-graviton-on-rosa | demo-readme-summaries | Namespace inconsistent (`multiarch-demo` vs `multiarch-demo-proj`) | | to fix (cluster build 2) |
 | 10 | demo-object-detection-on-rosa | demo-readme-summaries | Lists OpenShift AI and a GPU as prerequisites, but the steps use neither | Prerequisites now say it runs on CPU with no GPU or OpenShift AI (verified: no GPU request, scheduled on a CPU node) | fixed |
-| 11 | demo-vllm-model-serving | demo-readme-summaries | Prerequisites say `HF_TOKEN`, the commands use `HUGGING_FACE_HUB_TOKEN` | | to fix (cluster build 1) |
+| 11 | demo-vllm-model-serving | demo-readme-summaries | Prerequisites say `HF_TOKEN`, the commands use `HUGGING_FACE_HUB_TOKEN`; the token was passed with `--from-literal` | `read -rs` and stdin | fixed |
 | 12 | demo-maas-on-rosa | demo-readme-summaries | Notebooks use `verify=False` and a hardcoded cluster URL; one had saved outputs naming an old cluster | Verify TLS (the ROSA ingress certificate is trusted), require `MAAS_URL`, clear saved outputs | fixed |
 | 13 | several | demo-readme-summaries | Personal values left in (cluster prefixes, an email address in tags, presenter domains) | | to fix as each demo is tested |
 | 14 | demo-claude-via-open-source-models | prereq-readme-fixes | Step 6 applies `models/hf-token-secret.yaml`, which is gitignored and so missing from any fresh clone | Create the `hf-token` Secret with `read -rs` and stdin; update the models/README file tree | fixed |
@@ -89,3 +89,5 @@ not yet changed), **not fixable yet** (with the reason).
 | 30 | demo-maas-on-rosa | demo-readme-summaries | The demo ran on a laptop and got its token from `oc whoami -t`, which does not exist in a workbench | Run in an OpenShift AI workbench, authenticate with its ServiceAccount token, and add that ServiceAccount to the MaaS subscription and auth policy | fixed |
 | 31 | demo-maas-on-rosa | demo-readme-summaries | The notebook always used the first listed model, which the key may not be allowed to use (403) | Choose the model with `MAAS_MODEL` | fixed |
 | 32 | demo-maas-on-rosa | demo-readme-summaries | Model URLs end in `/`, so the chat URL had `//v1/...` and returned 404 | Strip the trailing slash | fixed |
+| 33 | demo-vllm-model-serving | demo-readme-summaries | `oc wait ... pod -l ...` right after creating the InferenceService fails with "no matching resources" | Wait on `inferenceservice/devstral` instead | fixed |
+| 34 | demo-vllm-model-serving | demo-readme-summaries | Verify uses `oc run --rm -i` curl pods, which race the attach: output is lost, pods are left behind, and they trip PodSecurity warnings | `oc exec` curl inside the predictor pod, piped to `jq` | fixed |
