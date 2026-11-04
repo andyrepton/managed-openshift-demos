@@ -3,7 +3,8 @@
 Each demo is tested by following its README word for word on a real cluster,
 to the end state a user sees. A tested README also carries a `Tested:` line
 under its summary. Status values: **passed**, **failed**, **not tested** (with
-the reason), **pending** (planned, not run yet).
+the reason), **partial** (some steps verified, the rest named in the notes),
+**pending** (planned, not run yet).
 
 Test campaign started 2026-11-04: one cluster build at a time.
 
@@ -18,11 +19,11 @@ Test campaign started 2026-11-04: one cluster build at a time.
 | demo-object-detection-on-rosa | 1. ROSA AI | ROSA HCP 4.22.12 | passed | 2026-11-04 | Runs on CPU (fixes 10, 15); cleanup not run |
 | demo-lightspeed-tuning | 1. ROSA AI | ROSA HCP 4.22.12, Lightspeed 2.0.0 | passed | 2026-11-04 | Live tool-call answer as cluster-admin; devuser in the bound group gets access and tools respect its RBAC (fixes 26-28). External MCP servers not tested (example URLs) |
 | demo-maas-on-rosa | 1. ROSA AI | ROSA HCP 4.22.12, RHOAI 3.5.2 | passed | 2026-11-04 | Run by a person in an in-cluster workbench as devuser; key, model list and chat completion all work (fixes 12, 29-32). Simulator notebook not tested |
-| demo-custom-udi | 1. ROSA AI | ROSA HCP 4.22.12, Dev Spaces 3.31.2 | passed | 2026-11-04 | Image built (from the local folder: the BuildConfig reads GitHub main, which lacks the fix until pushed); a no-devfile workspace runs on it with Python 3.14.8, Node 24.22.0, .NET 10.0.114 (fixes 35, 39, 40) |
+| demo-custom-udi | 1. ROSA AI | ROSA HCP 4.22.12, Dev Spaces 3.31.2 | passed | 2026-11-04 | Image built (from the local folder: the BuildConfig reads GitHub main, which lacks the fix until pushed); a no-devfile workspace runs on it with Python 3.14.8, Node 24.22.0, .NET 10.0.114; extension check and capabilities ConfigMap published (fixes 35, 39, 40, 44) |
 | demo-source2image | 1. ROSA AI | ROSA HCP 4.22.12, Dev Spaces 3.31.2 | passed | 2026-11-04 | Steps 5-6 run inside a real workspace; edit, rebuild and live change confirmed (fixes 19, 20); cleanup not run |
-| demo-developer-hub | 1. ROSA AI | ROSA HCP | pending | | |
-| demo-rhdh-cluster-planner | 1. ROSA AI | ROSA HCP | pending | | |
-| demo-rhdh-devspaces-self-service | 1. ROSA AI | ROSA HCP | pending | | |
+| demo-developer-hub | 1. ROSA AI | ROSA HCP 4.22.12, RHDH 1.10.6 | partial | 2026-11-04 | Install, operator and plugin loader work (fixes 36-38). GitHub sign-in and Catalog skipped: no GitHub App callback for this cluster |
+| demo-rhdh-cluster-planner | 1. ROSA AI | ROSA HCP 4.22.12, RHDH 1.10.6 | partial | 2026-11-04 | 219 + 61 tests pass, CLI estimate matches the README, published plugins load (fix 41). Page needs sign-in (skipped); own-image build not tested |
+| demo-rhdh-devspaces-self-service | 1. ROSA AI | ROSA HCP 4.22.12, RHDH 1.10.6 | partial | 2026-11-04 | Boundary checks deny and allow as documented, 107 tests pass, published plugins load and pick up the provisioner credential (fixes 42-43). Form needs sign-in (skipped); own-image build not tested |
 | demo-semantic-router-claude-code | 1. ROSA AI | ROSA HCP 4.22.12, RHOAI 3.5.2 | passed (partly) | 2026-11-04 | On branch demo-semantic-router-claude-code. All steps and Claude Code pass; the frontier tier awaits a canonical Anthropic model (fix 25) |
 | logging-operator-lokistack | 2. ROSA logging | ROSA HCP | pending | | |
 | demo-openshift-logging | 2. ROSA logging | ROSA HCP | pending | | |
@@ -97,3 +98,7 @@ not yet changed), **not fixable yet** (with the reason).
 | 38 | demo-developer-hub | demo-readme-summaries | `backstage.yaml` mounts `devspaces-provisioner-token`, a Secret only the later self-service demo creates, so the base install never started (FailedMount) | Mark the Secret volume `optional: true` | fixed |
 | 39 | demo-custom-udi | demo-readme-summaries | The Containerfile builds `FROM udi-rhel9:latest`; the current UDI (3.31.2) has no `dnf`, so the build failed, and the README script still patched the CheCluster to the missing image | Pin the base to `3.31.2` and use `microdnf` | fixed |
 | 40 | demo-custom-udi | demo-readme-summaries | README expected .NET 10.0.112 and said `dnf` pins python3.9 (there is no dnf now) | Show 10.0.114 as a floating patch; say microdnf is a compiled binary (verified) | fixed |
+| 41 | demo-rhdh-cluster-planner | demo-readme-summaries | The build pushed to `quay.io/<you>/aro-planner:0.1.0` while the plugin entry loads `quay.io/andyrepton/rhdh-plugins:aro-planner-1.5.9`, so a reader's build was never used; the Quay token was a command-line flag; step 2's `cd` broke step 4's relative path; the sidebar item is "Deployment Planner", not "ARO Planner"; test counts were stale; composing one demo's entry silently drops the other's | Main path loads the public published image; building your own is an optional section (shared `rhdh-plugins` repo, push secret from stdin, `sed` to repoint the entry); subshells for `cd`; note to pass both entry files | fixed |
+| 42 | demo-rhdh-devspaces-self-service | demo-readme-summaries | The "denied" boundary check is a real create; run straight after applying the policy, it created namespace `not-a-workspace` because the policy takes seconds to be enforced | Both checks are `--dry-run=server`; the first loops until refused | fixed |
+| 43 | demo-rhdh-devspaces-self-service | demo-readme-summaries | Step 3 runs `oc start-build devspaces-self-service`, but no BuildConfig is defined anywhere | Main path loads the public published image; optional build section defines the BuildConfig | fixed |
+| 44 | demo-custom-udi | demo-readme-summaries | `scripts/check-extensions.py` uses `str \| None`, which fails on macOS's stock Python 3.9 | `from __future__ import annotations` | fixed |

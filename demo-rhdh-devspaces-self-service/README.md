@@ -12,6 +12,8 @@ admission policy. It is here to show safe, governed self-service on OpenShift.
 Sibling to [demo-rhdh-cluster-planner](../demo-rhdh-cluster-planner), with one
 important difference: **that one shows you what it would do, this one does it.**
 
+Tested: 2026-11-04, ROSA HCP 4.22.12, RHDH 1.10.6, Dev Spaces 3.31.2: partial. The RBAC boundary checks, tests, and loading the published plugins with the provisioner credential work; the form was not checked, as GitHub sign-in was not set up for this run. Building your own image was not tested.
+
 ## Overview
 
 * **Sized, not guessed**: totals divide across the workspaces asked for, with
@@ -89,12 +91,17 @@ oc get --raw /apis/admissionregistration.k8s.io/v1 \
 On an older cluster the policy will not apply and the in-code check is your
 only control, which is worth knowing deliberately rather than discovering.
 
-Verify the boundary is live. The refusal *is* the test:
+Verify the boundary is live. The refusal *is* the test. A new policy takes a
+few seconds to reach the API server, and until then the provisioner's own RBAC
+lets the request through, so both checks are server-side dry runs (nothing is
+created either way) and the first one waits for the refusal:
 
 ```bash
-# denied
+# denied (loops until the policy is enforced, usually a few seconds)
+until ! oc --as=system:serviceaccount:rhdh:devspaces-provisioner \
+  create namespace not-a-workspace --dry-run=server 2>/dev/null; do sleep 2; done
 oc --as=system:serviceaccount:rhdh:devspaces-provisioner \
-  create namespace not-a-workspace
+  create namespace not-a-workspace --dry-run=server
 
 # allowed
 oc --as=system:serviceaccount:rhdh:devspaces-provisioner \
@@ -127,12 +134,56 @@ Without that key the plugin falls back to the pod's own ServiceAccount, which
 cannot create namespaces, and **says so at startup** rather than failing on
 first submit.
 
-### 3. Build and load the plugins
+### 3. Load the plugins
+
+Run the tests, then compose this demo's entry into RHDH's plugin config and
+apply it. Both plugins ship in one published image,
+`quay.io/andyrepton/rhdh-plugins:devspaces-self-service-0.2.5`, which is
+public, so no build and no registry credentials are needed. To use your own
+build instead, see [Building your own plugin image](#building-your-own-plugin-image)
+first. Run these from this folder:
 
 ```bash
 yarn install
 yarn workspace @devspaces/backstage-plugin-devspaces-self-service-backend test
 
+(cd ../demo-developer-hub && python3 -I scripts/compose-dynamic-plugins.py \
+  ../demo-rhdh-devspaces-self-service/rhdh/dynamic-plugins-entry.yaml --apply)
+
+oc -n rhdh rollout restart deployment/backstage-developer-hub
+oc -n rhdh rollout status deployment/backstage-developer-hub --timeout=10m
+```
+
+The compose script writes the whole plugin list, so it keeps only the entries
+it is given. If [demo-rhdh-cluster-planner](../demo-rhdh-cluster-planner) is
+also deployed, pass both entry files in one command:
+
+```bash
+(cd ../demo-developer-hub && python3 -I scripts/compose-dynamic-plugins.py \
+  ../demo-rhdh-cluster-planner/rhdh/dynamic-plugins-entry.yaml \
+  ../demo-rhdh-devspaces-self-service/rhdh/dynamic-plugins-entry.yaml --apply)
+```
+
+The entry lives in [`rhdh/dynamic-plugins-entry.yaml`](rhdh/dynamic-plugins-entry.yaml)
+rather than in demo-developer-hub so that the base demo deploys on its own. The
+plugin installer runs as an **init container** with no top-level exception
+handler, so an image it cannot pull is not a missing plugin -- it is a pod stuck
+in `Init:Error`. Listing this plugin there meant anyone deploying just Developer
+Hub got one that never started, because of a plugin they had never built.
+
+### 4. Verify
+
+Sign in to Developer Hub and open **Request a Dev Space** in the sidebar. The form should list the
+assistants your image actually carries, with their versions, and show your
+namespace name in the panel on the right.
+
+### Building your own plugin image
+
+Only needed if you change the plugins. Both plugins ship in one image; see
+[demo-rhdh-cluster-planner](../demo-rhdh-cluster-planner) for the
+`FROM scratch` and `!<plugin-path>` requirements, which apply here too.
+
+```bash
 for p in devspaces-self-service devspaces-self-service-backend; do
   (cd plugins/$p && yarn build && \
      npx @red-hat-developer-hub/cli@release-1.10 plugin export --clean)
@@ -147,37 +198,35 @@ printf 'FROM scratch\nCOPY . /\n' > plugin-registry/Containerfile
 # containing links to the build machine's home directory - published in a
 # public image. The installer skips them anyway, so nothing is lost.
 find plugin-registry -name .bin -type d -prune -exec rm -rf {} +
-
-oc start-build devspaces-self-service -n rhdh --from-dir=plugin-registry --follow
 ```
 
-Both plugins ship in one image, pushed to `quay.io/<you>/rhdh-plugins` with a
+Build it on the cluster and push it to your own repository, with a
 `<plugin>-<version>` tag so several demos' plugins can share one repository.
-See [demo-rhdh-cluster-planner](../demo-rhdh-cluster-planner) for the
-`FROM scratch` and `!<plugin-path>` requirements, which apply here too.
-
-Then compose this demo's entry into RHDH's plugin config and apply it:
+The `quay-push` Secret is the one created in
+[demo-rhdh-cluster-planner](../demo-rhdh-cluster-planner#building-your-own-plugin-image);
+create it the same way if it does not exist yet.
 
 ```bash
-cd ../demo-developer-hub
-python3 -I scripts/compose-dynamic-plugins.py \
-  ../demo-rhdh-devspaces-self-service/rhdh/dynamic-plugins-entry.yaml --apply
+IMAGE=quay.io/<you>/rhdh-plugins:devspaces-self-service-0.1.0
 
-oc -n rhdh rollout restart deployment/backstage-developer-hub
+oc apply -f - <<EOF
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata: { name: devspaces-self-service, namespace: rhdh }
+spec:
+  source: { type: Binary, binary: {} }
+  strategy: { type: Docker, dockerStrategy: { dockerfilePath: Containerfile } }
+  output:
+    to: { kind: DockerImage, name: ${IMAGE} }
+    pushSecret: { name: quay-push }
+EOF
+
+oc start-build devspaces-self-service -n rhdh --from-dir=plugin-registry --follow
+
+# Point this demo's entry at your image, then go back to step 3
+sed -i.bak "s#quay.io/andyrepton/rhdh-plugins:devspaces-self-service-0.2.5#${IMAGE}#" \
+  rhdh/dynamic-plugins-entry.yaml && rm rhdh/dynamic-plugins-entry.yaml.bak
 ```
-
-The entry lives in [`rhdh/dynamic-plugins-entry.yaml`](rhdh/dynamic-plugins-entry.yaml)
-rather than in demo-developer-hub so that the base demo deploys on its own. The
-plugin installer runs as an **init container** with no top-level exception
-handler, so an image it cannot pull is not a missing plugin -- it is a pod stuck
-in `Init:Error`. Listing this plugin there meant anyone deploying just Developer
-Hub got one that never started, because of a plugin they had never built.
-
-### 4. Verify
-
-Open **Request a Dev Space** in the sidebar. The form should list the
-assistants your image actually carries, with their versions, and show your
-namespace name in the panel on the right.
 
 ## Who can provision
 
@@ -397,9 +446,14 @@ adds is the real API key.
 # Everything the plugin ever created, by one label
 oc get ns -l app.kubernetes.io/managed-by=devspaces-self-service
 
+# Recompose without this demo's entry (list any other plugin demos still deployed)
+(cd ../demo-developer-hub && python3 -I scripts/compose-dynamic-plugins.py --apply)
+oc -n rhdh rollout restart deployment/backstage-developer-hub
+
 oc delete -f rbac/provisioner-scope.yaml
 oc delete -f rbac/provisioner.yaml
-oc -n rhdh delete bc/devspaces-self-service is/devspaces-self-service
+# Only if you built your own image:
+oc -n rhdh delete bc/devspaces-self-service
 ```
 
 Remove the scope policy *before* the ClusterRole, not after. The other order

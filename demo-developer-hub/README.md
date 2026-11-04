@@ -8,6 +8,8 @@ token is needed. It is here to give the repo a provider-agnostic internal
 developer portal on managed OpenShift that other demos, such as the Deployment
 Planner, can extend without changing the base install.
 
+Tested: 2026-11-04, ROSA HCP 4.22.12, RHDH 1.10.6: partial. The install and the dynamic plugin loader work; GitHub sign-in and the Catalog were not checked (no GitHub App callback was set up for this run).
+
 ## Overview
 
 * **RHDH 1.10** (the newest 1.10 release, from channel `fast-1.10`) -- installed via OLM from the standard `redhat-operators` catalog.
