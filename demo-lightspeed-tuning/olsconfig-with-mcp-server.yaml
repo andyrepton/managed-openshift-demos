@@ -8,17 +8,17 @@ spec:
     providers:
       - name: rhoai-maas
         type: openai
-        url: REPLACE_ME
+        url: REPLACE_WITH_ENDPOINT_URL
         credentialsSecretRef:
           name: llm-credentials
         models:
-          - name: REPLACE_ME
+          - name: REPLACE_WITH_MODEL_NAME
             contextWindowSize: 32768
             parameters:
               maxTokensForResponse: 4096
               toolBudgetRatio: 0.3
   ols:
-    defaultModel: REPLACE_ME
+    defaultModel: REPLACE_WITH_MODEL_NAME
     defaultProvider: rhoai-maas
     logLevel: INFO
     querySystemPrompt: |
@@ -89,5 +89,5 @@ spec:
           valueFrom:
             type: client
   featureGates:
-    - name: MCPServer
-    - name: ToolFiltering
+    - MCPServer
+    - ToolFiltering

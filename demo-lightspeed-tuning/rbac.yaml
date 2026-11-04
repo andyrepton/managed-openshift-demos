@@ -1,5 +1,5 @@
 # Grant Lightspeed access to specific AD groups.
-# The operator creates the lightspeed-operator-ols-user ClusterRole but does
+# The operator creates the lightspeed-operator-query-access ClusterRole but does
 # not bind it to any users or groups by default.
 #
 # Option 1: Bind specific AD groups (recommended)
@@ -11,11 +11,11 @@ metadata:
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: lightspeed-operator-ols-user
+  name: lightspeed-operator-query-access
 subjects:
   - apiGroup: rbac.authorization.k8s.io
     kind: Group
-    name: REPLACE_ME # AD group name (must match the group claim from your IDP)
+    name: REPLACE_WITH_GROUP # group name (must match the group claim from your IDP)
 ---
 # Option 2: Grant access to all authenticated users (uncomment to use)
 # apiVersion: rbac.authorization.k8s.io/v1
@@ -25,7 +25,7 @@ subjects:
 # roleRef:
 #   apiGroup: rbac.authorization.k8s.io
 #   kind: ClusterRole
-#   name: lightspeed-operator-ols-user
+#   name: lightspeed-operator-query-access
 # subjects:
 #   - apiGroup: rbac.authorization.k8s.io
 #     kind: Group

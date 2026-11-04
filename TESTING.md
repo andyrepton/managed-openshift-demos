@@ -16,13 +16,14 @@ Test campaign started 2026-11-04: one cluster build at a time.
 | openshift-devspaces | 1. ROSA AI | ROSA HCP 4.22.12, Dev Spaces 3.31.2 | passed | 2026-11-04 | Workspaces opened in dependent demos (fix 17) |
 | demo-opencode-devspaces | 1. ROSA AI | ROSA HCP | pending | | |
 | demo-object-detection-on-rosa | 1. ROSA AI | ROSA HCP 4.22.12 | passed | 2026-11-04 | Runs on CPU (fixes 10, 15); cleanup not run |
-| demo-lightspeed-tuning | 1. ROSA AI | ROSA HCP | pending | | |
+| demo-lightspeed-tuning | 1. ROSA AI | ROSA HCP 4.22.12, Lightspeed 2.0.0 | passed | 2026-11-04 | Live tool-call answer as cluster-admin; devuser in the bound group gets access and tools respect its RBAC (fixes 26-28). External MCP servers not tested (example URLs) |
 | demo-maas-on-rosa | 1. ROSA AI | ROSA HCP | pending | | |
 | demo-custom-udi | 1. ROSA AI | ROSA HCP | pending | | |
 | demo-source2image | 1. ROSA AI | ROSA HCP 4.22.12, Dev Spaces 3.31.2 | passed | 2026-11-04 | Steps 5-6 run inside a real workspace; edit, rebuild and live change confirmed (fixes 19, 20); cleanup not run |
 | demo-developer-hub | 1. ROSA AI | ROSA HCP | pending | | |
 | demo-rhdh-cluster-planner | 1. ROSA AI | ROSA HCP | pending | | |
 | demo-rhdh-devspaces-self-service | 1. ROSA AI | ROSA HCP | pending | | |
+| demo-semantic-router-claude-code | 1. ROSA AI | ROSA HCP 4.22.12, RHOAI 3.5.2 | passed (partly) | 2026-11-04 | On branch demo-semantic-router-claude-code. All steps and Claude Code pass; the frontier tier awaits a canonical Anthropic model (fix 25) |
 | logging-operator-lokistack | 2. ROSA logging | ROSA HCP | pending | | |
 | demo-openshift-logging | 2. ROSA logging | ROSA HCP | pending | | |
 | demo-forward-logs-to-aws-cloudwatch | 2. ROSA logging | ROSA HCP | pending | | |
@@ -80,3 +81,7 @@ not yet changed), **not fixable yet** (with the reason).
 | 22 | demo-claude-via-open-source-models | both | Step 10 sends the LiteLLM key as a curl argument and pretty-prints with Python | `ask` function using `curl -H @-` and `jq` (on prereq-readme-fixes; the summaries branch keeps only its summary paragraph for this README to avoid a merge conflict) | fixed |
 | 23 | demo-claude-via-open-source-models | prereq-readme-fixes | Usage Monitoring check greps the DSCI YAML, which prints the condition types but not reliably their statuses | Print each condition's status with jsonpath | fixed |
 | 24 | demo-claude-via-open-source-models | prereq-readme-fixes | "Accessing the Dashboard" says the dashboard flag was enabled in Step 6; it is Step 5 | Say Step 5 | fixed |
+| 25 | demo-semantic-router-claude-code | demo-semantic-router-claude-code | Step 4 checks AuthPolicy Enforced immediately after creating it, before it has been enforced (prints nothing) | `oc wait --for=condition=Enforced` | fixed |
+| 26 | demo-lightspeed-tuning | demo-readme-summaries | The three OLSConfig files list feature gates as objects (`- name: MCPServer`); Lightspeed operator v2.0.0 rejects them and requires plain strings | List them as strings (`- MCPServer`) | fixed |
+| 27 | demo-lightspeed-tuning | demo-readme-summaries | `rbac.yaml` binds `lightspeed-operator-ols-user`, which no longer exists in operator v2.0.0, so users get 403 | Bind `lightspeed-operator-query-access` | fixed |
+| 28 | demo-lightspeed-tuning | demo-readme-summaries | The token and MCP credentials went into YAML files, and one `REPLACE_ME` stood for both the endpoint URL and the model | Secrets from stdin; distinct placeholders filled with `sed` at apply time | fixed |
