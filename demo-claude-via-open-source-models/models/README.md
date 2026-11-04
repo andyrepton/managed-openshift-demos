@@ -15,7 +15,6 @@ This directory contains model downloads, storage, and InferenceService configura
 ```
 models/
 ├── README.md                            # This file
-├── hf-token-secret.yaml                 # HuggingFace token for gated models
 ├── granite-pvc.yaml                     # Storage for Granite model
 ├── granite-download-job.yaml            # HuggingFace download job
 ├── granite-llm-inference-service.yaml   # LLMInferenceService (MaaS)
@@ -27,6 +26,9 @@ models/
 ├── qwen3-8-download-job.yaml            # HuggingFace download job
 └── qwen3-8-llm-inference-service.yaml   # LLMInferenceService (MaaS)
 ```
+
+The HuggingFace token is not a file: Step 6 of the main README creates the
+`hf-token` Secret from stdin.
 
 ## Deploying Models
 

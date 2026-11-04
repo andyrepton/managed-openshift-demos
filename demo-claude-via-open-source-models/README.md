@@ -115,9 +115,11 @@ Ensure your ARO cluster has a GPU machine pool. For ARO HCP, use `../andys-demo-
 ```bash
 # cert-manager (required by RHOAI v3)
 oc apply -f cluster-setup/operators/cert-manager.yaml
-# Wait for the CSV first: until it installs there is no deployment to wait on,
-# and `oc wait --all` fails at once with "no matching resources"
-until oc get csv -n cert-manager-operator 2>/dev/null | grep -q Succeeded; do sleep 10; done
+# Wait for the cert-manager CSV first: until it installs there is no deployment
+# to wait on, and `oc wait --all` fails at once with "no matching resources".
+# Match it by name: CSVs of operators installed for all namespaces (such as
+# RHOAI) are copied into every namespace and would match "Succeeded" too.
+until oc get csv -n cert-manager-operator 2>/dev/null | grep cert-manager-operator | grep -q Succeeded; do sleep 10; done
 oc wait --for=condition=Available deployment -n cert-manager-operator --all --timeout=300s
 
 # Red Hat Connectivity Link (provides Kuadrant + Authorino for MaaS).
@@ -145,21 +147,11 @@ oc get csv -n redhat-ods-operator
 
 ### Step 4: Configure OpenShift AI
 
-Deploy PostgreSQL first. MaaS stores API keys and subscriptions in it, and
-reads its connection Secret (`maas-db-config`, in `redhat-ai-gateway-infra`)
-when MaaS is enabled below; created afterwards, `maas-api` needs a restart.
-
-```bash
-# Generate a password and substitute it for BOTH REPLACE_ME placeholders.
-# It is only stored in the Secret; nothing needs it later, so it is not printed.
-PG_PASSWORD=$(openssl rand -base64 16 | tr -d '=+/')
-sed "s/REPLACE_ME/$PG_PASSWORD/g" maas/postgres.yaml | oc apply -f -
-unset PG_PASSWORD
-oc wait --for=condition=Available deployment/postgres \
-  -n redhat-ods-applications --timeout=120s
-```
-
-Then enable MaaS:
+Enable MaaS, then deploy PostgreSQL, where MaaS stores API keys and
+subscriptions. MaaS creates its infrastructure namespace
+(`redhat-ai-gateway-infra`) when it is enabled, and PostgreSQL's connection
+Secret (`maas-db-config`) must go there, so PostgreSQL has to come second. MaaS
+waits for that Secret and starts once it exists.
 
 ```bash
 # Create the project namespace
@@ -169,6 +161,17 @@ oc apply -f cluster-setup/ai-project/namespace.yaml
 # Patch it: applying a full DSC would switch off components other demos use.
 oc patch datasciencecluster default-dsc --type merge \
   --patch-file cluster-setup/ai-project/data-science-cluster-patch.yaml
+
+# Wait for MaaS to create its infrastructure namespace
+until oc get namespace redhat-ai-gateway-infra >/dev/null 2>&1; do sleep 10; done
+
+# Generate a password and substitute it for BOTH REPLACE_ME placeholders.
+# It is only stored in the Secrets; nothing needs it later, so it is not printed.
+PG_PASSWORD=$(openssl rand -base64 16 | tr -d '=+/')
+sed "s/REPLACE_ME/$PG_PASSWORD/g" maas/postgres.yaml | oc apply -f -
+unset PG_PASSWORD
+oc wait --for=condition=Available deployment/postgres \
+  -n redhat-ods-applications --timeout=120s
 ```
 
 Wait for KServe to be fully ready (this can take several minutes on first install):
@@ -230,11 +233,15 @@ oc patch odhdashboardconfig odh-dashboard-config \
 
 ### Step 6: Download and Deploy Models
 
-Create a HuggingFace token secret (this file is gitignored to prevent accidental credential leaks):
+Create the HuggingFace token Secret the download Jobs use. `read -rs` keeps
+the token off the screen and out of your shell history, and piping it keeps it
+out of the process list:
 
 ```bash
-# Edit models/hf-token-secret.yaml and replace REPLACE_WITH_YOUR_HF_TOKEN
-oc apply -f models/hf-token-secret.yaml
+read -rs HF_TOKEN                     # paste your HuggingFace token, then Enter
+printf '%s' "$HF_TOKEN" | oc create secret generic hf-token \
+  -n claude-code-demo --from-file=token=/dev/stdin
+unset HF_TOKEN
 
 # Create PVCs and start downloads (both models)
 oc apply -f models/granite-pvc.yaml
@@ -243,10 +250,10 @@ oc apply -f models/granite-download-job.yaml
 oc apply -f models/qwen3-8-download-job.yaml
 ```
 
-**Single GPU node?** If you only have 1 GPU, deploy Qwen only:
+**Single GPU node?** If you only have 1 GPU, create the same `hf-token` Secret,
+then deploy Qwen only:
 
 ```bash
-oc apply -f models/hf-token-secret.yaml
 oc apply -f models/qwen3-8-pvc.yaml
 oc apply -f models/qwen3-8-download-job.yaml
 ```
@@ -254,10 +261,10 @@ oc apply -f models/qwen3-8-download-job.yaml
 Monitor download progress:
 
 ```bash
-# Granite (~30-45 minutes, BF16 weights are ~60GB)
+# Granite (about 10 minutes, BF16 weights are ~60GB)
 oc logs -f job/download-granite-4-1-30b -n claude-code-demo
 
-# Qwen (~5-10 minutes, INT4 weights are ~15GB)
+# Qwen (about 3 minutes, INT4 weights are ~15GB)
 oc logs -f job/download-qwen3-8-27b -n claude-code-demo
 ```
 
@@ -357,8 +364,8 @@ sed "s/REPLACE_WITH_CLUSTER_DOMAIN/${CLUSTER_DOMAIN}/" maas/maas-api-external-ro
 ```bash
 MAAS_API="https://maas.${CLUSTER_DOMAIN}"
 
-MAAS_KEY=$(curl -sS \
-  -H "Authorization: Bearer $(oc whoami -t)" \
+# The token goes to curl on stdin (-H @-), not as an argument
+MAAS_KEY=$(printf 'Authorization: Bearer %s\n' "$(oc whoami -t)" | curl -sS -H @- \
   -H "Content-Type: application/json" \
   -X POST \
   -d '{"name": "litellm-gateway"}' \
@@ -374,8 +381,7 @@ echo "Save this: it is only shown once."
 MAAS_API="https://maas.${CLUSTER_DOMAIN}"
 SA_TOKEN=$(oc create token maas-client -n claude-code-demo --duration=8760h)
 
-MAAS_KEY=$(curl -sS \
-  -H "Authorization: Bearer ${SA_TOKEN}" \
+MAAS_KEY=$(printf 'Authorization: Bearer %s\n' "$SA_TOKEN" | curl -sS -H @- \
   -H "Content-Type: application/json" \
   -X POST \
   -d '{"name": "litellm-gateway"}' \
@@ -396,11 +402,10 @@ export LITELLM_KEY="sk-$(openssl rand -hex 24)"
 echo "Your LiteLLM API key: $LITELLM_KEY"
 echo "Save this: you'll need it for Claude Code configuration."
 
-# Create the secret with both the LiteLLM master key and MaaS API key
-oc create secret generic litellm-api-key \
-  --from-literal=master-key="$LITELLM_KEY" \
-  --from-literal=maas-api-key="$MAAS_KEY" \
-  -n claude-code-demo
+# Create the secret with both the LiteLLM master key and MaaS API key.
+# <(...) hands oc a file descriptor, so neither key appears as an argument.
+oc create secret generic litellm-api-key -n claude-code-demo \
+  --from-env-file=<(printf 'master-key=%s\nmaas-api-key=%s\n' "$LITELLM_KEY" "$MAAS_KEY")
 
 oc apply -f litellm-gateway/litellm-config.yaml
 oc apply -f litellm-gateway/litellm-deployment.yaml
@@ -429,46 +434,31 @@ The first request to each model may be slow (30-60s) while vLLM compiles CUDA gr
 ```bash
 export GATEWAY_URL=$(oc get route litellm-gateway -n claude-code-demo -o jsonpath='{.spec.host}')
 
-# Warm up (ignore errors on first attempt)
-curl -s -X POST "https://$GATEWAY_URL/v1/messages" \
-  -H "x-api-key: $LITELLM_KEY" \
-  -H "anthropic-version: 2023-06-01" \
-  -H "Content-Type: application/json" \
-  -d '{"model": "claude-sonnet-4-20250514", "max_tokens": 16, "messages": [{"role": "user", "content": "Hi"}]}'
+# Send a Messages request to LiteLLM. The key goes to curl on stdin (-H @-),
+# not as an argument.
+ask() {
+  printf 'x-api-key: %s\n' "$LITELLM_KEY" \
+    | curl -s -X POST "https://$GATEWAY_URL/v1/messages" -H @- \
+        -H "anthropic-version: 2023-06-01" -H "Content-Type: application/json" -d "$1"
+}
 
-curl -s -X POST "https://$GATEWAY_URL/v1/messages" \
-  -H "x-api-key: $LITELLM_KEY" \
-  -H "anthropic-version: 2023-06-01" \
-  -H "Content-Type: application/json" \
-  -d '{"model": "claude-opus-4-20250514", "max_tokens": 16, "messages": [{"role": "user", "content": "Hi"}]}'
+# Warm up (ignore errors on first attempt)
+ask '{"model": "claude-sonnet-4-20250514", "max_tokens": 16, "messages": [{"role": "user", "content": "Hi"}]}'
+ask '{"model": "claude-opus-4-20250514", "max_tokens": 16, "messages": [{"role": "user", "content": "Hi"}]}'
 ```
 
 **Test Granite:**
 
 ```bash
-curl -s -X POST "https://$GATEWAY_URL/v1/messages" \
-  -H "x-api-key: $LITELLM_KEY" \
-  -H "anthropic-version: 2023-06-01" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "granite-4-1-30b",
-    "max_tokens": 256,
-    "messages": [{"role": "user", "content": "Write a Python hello world program"}]
-  }' | python3 -m json.tool
+ask '{"model": "granite-4-1-30b", "max_tokens": 256,
+      "messages": [{"role": "user", "content": "Write a Python hello world program"}]}' | jq .
 ```
 
 **Test Qwen:**
 
 ```bash
-curl -s -X POST "https://$GATEWAY_URL/v1/messages" \
-  -H "x-api-key: $LITELLM_KEY" \
-  -H "anthropic-version: 2023-06-01" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "qwen3-8-27b",
-    "max_tokens": 256,
-    "messages": [{"role": "user", "content": "Write a Python function to reverse a linked list"}]
-  }' | python3 -m json.tool
+ask '{"model": "qwen3-8-27b", "max_tokens": 256,
+      "messages": [{"role": "user", "content": "Write a Python function to reverse a linked list"}]}' | jq .
 ```
 
 Both should return responses from their respective local models.
@@ -643,8 +633,10 @@ spec:
 Wait for the monitoring stack and Perses to become available:
 
 ```bash
-oc get dsci default-dsci -o yaml | grep -A 3 'MonitoringStackAvailable\|PersesAvailable'
-# Both should show status: "True"
+for c in MonitoringStackAvailable PersesAvailable; do
+  echo "$c: $(oc get dsci default-dsci -o jsonpath="{.status.conditions[?(@.type==\"$c\")].status}")"
+done
+# Both should show True
 ```
 
 ### Enable MaaS Telemetry
@@ -666,7 +658,7 @@ spec:
 
 ### Accessing the Dashboard
 
-The `observabilityDashboard` flag was enabled in Step 6. The MaaS usage dashboard is available in the OpenShift AI console at **Observe & monitor → Dashboard**. It shows:
+The `observabilityDashboard` flag was enabled in Step 5. The MaaS usage dashboard is available in the OpenShift AI console at **Observe & monitor → Dashboard**. It shows:
 
 - **Authorized calls** per model and user
 - **Token usage** (input/output) per model
