@@ -10,18 +10,20 @@
 # /home/user, so anything installed there at build time disappears on first
 # start. Tools go in /opt and /usr, never /home/user.
 
-FROM registry.redhat.io/devspaces/udi-rhel9:latest
+# Pinned to the Dev Spaces release in use; bump it with Dev Spaces. 'latest'
+# changes under you (3.31 dropped dnf, leaving only microdnf).
+FROM registry.redhat.io/devspaces/udi-rhel9:3.31.2
 
 USER root
 
 # Python 3.14 and .NET 10 are both packaged for RHEL 9.8 already.
 # openssl and libbrotli come from the base image and must stay: Code - OSS
 # refuses to start without them.
-RUN dnf -y install --setopt=install_weak_deps=False \
+RUN microdnf -y install --setopt=install_weak_deps=0 \
       python3.14 python3.14-pip python3.14-devel \
       dotnet-sdk-10.0 \
- && dnf clean all \
- && rm -rf /var/cache/dnf
+ && microdnf clean all \
+ && rm -rf /var/cache/dnf /var/cache/yum
 
 # Node 24 is not in the RHEL 9 module streams, which stop at 22. Install the
 # upstream build into /opt, which is outside the persisted home directory.
@@ -41,8 +43,8 @@ RUN curl -fsSL "https://nodejs.org/dist/${NODE_VERSION}/node-${NODE_VERSION}-lin
 # which a PVC mounts over when persistUserHome is enabled. /usr/bin is the
 # only place that reliably wins.
 #
-# Repointing python3 is safe for package management because dnf pins
-# "#!/usr/bin/python3.9" rather than following this symlink. A handful of
+# Repointing python3 is safe for package management: microdnf is a compiled
+# binary, not a Python script, so it does not follow this symlink. A handful of
 # unrelated RHEL tools (cockpit-bridge, udica, flatpak helpers) do follow it
 # and are untested on 3.14; none is used in a workspace.
 RUN ln -sf python3.14 /usr/bin/python3 \

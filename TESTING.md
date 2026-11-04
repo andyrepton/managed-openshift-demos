@@ -18,7 +18,7 @@ Test campaign started 2026-11-04: one cluster build at a time.
 | demo-object-detection-on-rosa | 1. ROSA AI | ROSA HCP 4.22.12 | passed | 2026-11-04 | Runs on CPU (fixes 10, 15); cleanup not run |
 | demo-lightspeed-tuning | 1. ROSA AI | ROSA HCP 4.22.12, Lightspeed 2.0.0 | passed | 2026-11-04 | Live tool-call answer as cluster-admin; devuser in the bound group gets access and tools respect its RBAC (fixes 26-28). External MCP servers not tested (example URLs) |
 | demo-maas-on-rosa | 1. ROSA AI | ROSA HCP 4.22.12, RHOAI 3.5.2 | passed | 2026-11-04 | Run by a person in an in-cluster workbench as devuser; key, model list and chat completion all work (fixes 12, 29-32). Simulator notebook not tested |
-| demo-custom-udi | 1. ROSA AI | ROSA HCP | pending | | |
+| demo-custom-udi | 1. ROSA AI | ROSA HCP 4.22.12, Dev Spaces 3.31.2 | passed | 2026-11-04 | Image built (from the local folder: the BuildConfig reads GitHub main, which lacks the fix until pushed); a no-devfile workspace runs on it with Python 3.14.8, Node 24.22.0, .NET 10.0.114 (fixes 35, 39, 40) |
 | demo-source2image | 1. ROSA AI | ROSA HCP 4.22.12, Dev Spaces 3.31.2 | passed | 2026-11-04 | Steps 5-6 run inside a real workspace; edit, rebuild and live change confirmed (fixes 19, 20); cleanup not run |
 | demo-developer-hub | 1. ROSA AI | ROSA HCP | pending | | |
 | demo-rhdh-cluster-planner | 1. ROSA AI | ROSA HCP | pending | | |
@@ -91,3 +91,9 @@ not yet changed), **not fixable yet** (with the reason).
 | 32 | demo-maas-on-rosa | demo-readme-summaries | Model URLs end in `/`, so the chat URL had `//v1/...` and returned 404 | Strip the trailing slash | fixed |
 | 33 | demo-vllm-model-serving | demo-readme-summaries | `oc wait ... pod -l ...` right after creating the InferenceService fails with "no matching resources" | Wait on `inferenceservice/devstral` instead | fixed |
 | 34 | demo-vllm-model-serving | demo-readme-summaries | Verify uses `oc run --rm -i` curl pods, which race the attach: output is lost, pods are left behind, and they trip PodSecurity warnings | `oc exec` curl inside the predictor pod, piped to `jq` | fixed |
+| 35 | demo-custom-udi | demo-readme-summaries | Step 1 writes the cluster pull secret to /tmp/pull.json before creating the build Secret | Pipe it straight into `oc create secret --from-file=.dockerconfigjson=/dev/stdin` | fixed |
+| 36 | demo-developer-hub | demo-readme-summaries | Step 3 passes the GitHub App client secret and generated secrets with `--from-literal`, as command-line arguments | `--from-env-file=<(printf ...)` | fixed |
+| 37 | demo-developer-hub | demo-readme-summaries | Step 5 runs `oc rollout status` straight after creating the Backstage CR, before the operator has created the deployment (NotFound) | Wait for the deployment to exist first | fixed |
+| 38 | demo-developer-hub | demo-readme-summaries | `backstage.yaml` mounts `devspaces-provisioner-token`, a Secret only the later self-service demo creates, so the base install never started (FailedMount) | Mark the Secret volume `optional: true` | fixed |
+| 39 | demo-custom-udi | demo-readme-summaries | The Containerfile builds `FROM udi-rhel9:latest`; the current UDI (3.31.2) has no `dnf`, so the build failed, and the README script still patched the CheCluster to the missing image | Pin the base to `3.31.2` and use `microdnf` | fixed |
+| 40 | demo-custom-udi | demo-readme-summaries | README expected .NET 10.0.112 and said `dnf` pins python3.9 (there is no dnf now) | Show 10.0.114 as a floating patch; say microdnf is a compiled binary (verified) | fixed |

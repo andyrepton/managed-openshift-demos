@@ -10,13 +10,15 @@ to show how a platform team can update and govern developer tooling centrally,
 and it documents the Dev Spaces pitfalls that break custom images. It builds on
 `openshift-devspaces`.
 
+Tested: 2026-11-04, ROSA HCP 4.22.12, Dev Spaces 3.31.2 (UDI 3.31.2 base; image built from the local folder, workspace opened by a person in the browser).
+
 The UDI tracks RHEL 9, so its runtimes lag:
 
 | Tool | Shipped UDI | This image |
 |:---|:---|:---|
 | Python | 3.9.25 | **3.14.8** |
 | Node | 22.23.2 | **24.22.0** |
-| .NET SDK | 8.0.131 | **10.0.112** |
+| .NET SDK | 8.0.131 | **10.0.114** (the newest 10.0 package at build time) |
 
 Java 17, Go, Maven, Git, podman and the rest are inherited unchanged.
 
@@ -46,7 +48,7 @@ There is no newer base to switch to. The community image
 (`quay.io/devfile/universal-developer-image:ubi9-latest`) carries the same
 Python 3.9.25 / Node 22 / .NET 8, and neither image ships `nvm`, `pyenv` or
 `sdkman`. Installing at workspace start is not an option either: the
-container runs as an arbitrary non-root UID, so `dnf install` fails, and
+container runs as an arbitrary non-root UID, so `microdnf install` fails, and
 user-local installs would add several hundred MB to every workspace start.
 
 Python 3.14 and .NET 10 are already packaged for RHEL 9.8. Node 24 is not
@@ -62,13 +64,13 @@ cluster's global pull secret**. Copy it into the build namespace first:
 ```bash
 oc apply -f buildconfig.yaml
 
+# Piped straight through: the pull secret is never written to disk
 oc get secret/pull-secret -n openshift-config \
-  -o jsonpath='{.data.\.dockerconfigjson}' | base64 -d > /tmp/pull.json
-oc create secret generic redhat-registry -n custom-udi \
-  --from-file=.dockerconfigjson=/tmp/pull.json \
-  --type=kubernetes.io/dockerconfigjson
+  -o jsonpath='{.data.\.dockerconfigjson}' | base64 -d \
+  | oc create secret generic redhat-registry -n custom-udi \
+      --from-file=.dockerconfigjson=/dev/stdin \
+      --type=kubernetes.io/dockerconfigjson
 oc secrets link builder redhat-registry -n custom-udi --for=pull
-rm -f /tmp/pull.json
 
 oc start-build custom-udi -n custom-udi --follow
 ```
@@ -108,7 +110,7 @@ Or create a workspace with no devfile at all, which is what exercises the
 ```bash
 python3 --version   # 3.14.8
 node --version      # v24.22.0
-dotnet --version    # 10.0.112
+dotnet --version    # 10.0.114 (or a newer 10.0 patch)
 ```
 
 Workspaces must be **new**. Reopening a stopped workspace keeps the old
@@ -193,8 +195,9 @@ in `/usr/bin` is the only reliable option.
 
 ### Repointing `python3` is safe, but check first
 
-`dnf` pins `#!/usr/bin/python3.9`, so it keeps working when `/usr/bin/python3`
-moves to 3.14 (verified, `dnf --version` still responds). A few unrelated RHEL
+The package manager in the Dev Spaces 3.31 UDI is `microdnf`, a compiled
+binary rather than a Python script, so repointing `/usr/bin/python3` to 3.14
+cannot affect it (checked: `/usr/bin/microdnf` is an ELF executable). A few unrelated RHEL
 tools (`cockpit-bridge`, `udica`, flatpak helpers) do follow the symlink and
 are untested on 3.14; none is used in a workspace.
 
