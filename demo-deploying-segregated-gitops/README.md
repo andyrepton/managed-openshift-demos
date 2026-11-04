@@ -1,5 +1,14 @@
 # Deploying segregated GitOps instances for developer teams
 
+This demo shows a platform team using the central Argo CD instance from Red Hat
+OpenShift GitOps to set up application teams on a Red Hat OpenShift Service on
+AWS (ROSA) cluster. Argo CD Applications create a project and admin access for
+each team, then deploy a separate Argo CD instance inside that team's namespace.
+Each team gets its own GitOps instance, so a mistake in one team's repository
+can only affect that team, and normal OpenShift RBAC controls who can reach it.
+It is here to show how one central team can hand out isolated, self-managed
+GitOps environments on demand. It needs `openshift-gitops` first.
+
 ## Rationale
 
 When deploying OpenShift GitOps, the operator will automatically make an ArgoCD Instance for you. This instance is typically referred to as the "Cluster" ArgoCD, though in practise it is identical to any other ArgoCD instance.

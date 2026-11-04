@@ -1,6 +1,12 @@
 # Red Hat Developer Hub on ROSA/ARO
 
-Install Red Hat Developer Hub (RHDH) 1.10 as the base other demos plug into: the software catalog, the dynamic-plugin loader, and GitHub sign-in restricted to a named list of people.
+This demo installs Red Hat Developer Hub (RHDH) 1.10 on ROSA, ARO or OSD as the
+base that other demos in this repo plug into. It sets up a software catalog
+loaded from git, the dynamic plugin loader, and sign-in through a GitHub App,
+with the catalog's user list deciding who gets in, so no GitHub personal access
+token is needed. It is here to give the repo a provider-agnostic internal
+developer portal on managed OpenShift that other demos, such as the Deployment
+Planner, can extend without changing the base install.
 
 ## Overview
 

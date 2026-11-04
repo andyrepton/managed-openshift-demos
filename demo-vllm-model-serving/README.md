@@ -1,6 +1,13 @@
 # vLLM Model Serving with Devstral
 
-Serve [Devstral Small 2 24B](https://huggingface.co/mistralai/Devstral-Small-2-24B-Instruct-2512) (AWQ 4-bit) via vLLM on OpenShift AI, exposing an OpenAI-compatible API.
+This demo serves Mistral's [Devstral Small 2
+24B](https://huggingface.co/mistralai/Devstral-Small-2-24B-Instruct-2512) coding
+model with vLLM on Red Hat OpenShift AI, in its 4-bit AWQ form that fits on a
+single 24 GB A10G GPU. A Job downloads the weights to a persistent volume and
+KServe serves them as an OpenAI-compatible API inside the cluster, which other
+workloads, such as coding assistants in OpenShift Dev Spaces, can then use. It
+is here to show OpenShift AI hosting open-weight models on GPU nodes in a
+managed cluster; other demos build on it. It needs the `openshift-ai` base demo.
 
 Devstral is Mistral's agentic coding model: 68% SWE-bench Verified, Apache 2.0, with native tool-calling support. The AWQ 4-bit quantized variant fits on a single A10G (24GB) GPU.
 

@@ -1,5 +1,13 @@
 # Demo of Lokistack on ROSA
 
+This presenter-led demo builds OpenShift Logging with LokiStack step by step on
+Red Hat OpenShift Service on AWS (ROSA). Starting from an S3 bucket and AWS
+roles prepared for Loki, it creates a LokiStack, then a logging instance with
+Vector collectors and the OpenShift console as the viewer, and finally forwards
+application logs from a chosen namespace. The audience sees infrastructure and
+then application logs arrive in the console. It is here to show that logging on
+ROSA can be customised and kept in the customer's own S3 storage.
+
 ## Ahead of time
 
 - Ensure you've built a cluster than has lokistack capacity, a bucket for loki to use, and the loki AWS roles set up. You can use the terraform in ../andys-demo-cluster-tf to achieve this 

@@ -1,9 +1,14 @@
 # Cross-Cluster VM Migration with MTV
 
-Bidirectional VM migration between an on-prem OpenShift cluster and
-ROSA HCP using MTV (Migration Toolkit for Virtualization). The VM keeps its
-IP address after migration thanks to the stretched L2 network: clients
-can reach it at the same address regardless of which cluster hosts it.
+This demo moves a virtual machine both ways between an on-premises OpenShift
+cluster and Red Hat OpenShift Service on AWS (ROSA) with hosted control planes,
+using the Migration Toolkit for Virtualization (MTV) with OpenShift
+Virtualization on both sides. It is a warm migration: the disk is copied while
+the VM runs, followed by a short stop and restart on the other cluster. The VM
+keeps its IP address because both clusters share the stretched Layer 2 network
+from the `demo-stretched-layer2-onto-rosa` demo, so clients keep using the same
+address wherever it runs. It is here to show ROSA as a hybrid cloud target that
+workloads can move to and come back from.
 
 This is a **warm migration** (cold switchover): MTV copies the disk while the
 VM runs, then stops the source VM and recreates it on the destination. There
@@ -422,4 +427,3 @@ proportionally longer.
 
 - [Stretched L2 onto ROSA](../demo-stretched-layer2-onto-rosa/): the L2 network foundation
 - [Multi-Cloud VM Migration with MTV](../demo-mtv-migration-multi-cloud/): cold migration between clusters
-- [OpenShift Virtualization on ROSA](../demo-openshift-virt-on-rosa/)

@@ -242,7 +242,7 @@ curl -s -X POST "https://$GATEWAY_URL/v1/messages" \
     "model": "your-model-alias",
     "max_tokens": 256,
     "messages": [{"role": "user", "content": "Write a Python hello world"}]
-  }' | python3 -m json.tool
+  }' | jq .
 ```
 
 ## Model Selection Guide

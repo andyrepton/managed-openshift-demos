@@ -1,6 +1,12 @@
 # Deploy S3 Buckets with AWS Controllers for Kubernetes (ACK)
 
-This demo provisions AWS S3 buckets directly from OpenShift using the AWS Controllers for Kubernetes (ACK). Instead of managing AWS resources through the console or CLI, you declare them as Kubernetes custom resources and let ACK handle the lifecycle.
+This demo creates an Amazon S3 bucket from inside a Red Hat OpenShift Service on
+AWS (ROSA) cluster using AWS Controllers for Kubernetes (ACK). After installing
+the ACK S3 controller and giving it AWS credentials, you apply a `Bucket` custom
+resource with `oc apply`, and ACK creates and then manages the bucket in AWS.
+Teams can declare the cloud resources their applications need as Kubernetes
+YAML, next to the applications themselves. It is here to show ROSA acting as a
+control plane for native AWS services as well as for containers.
 
 ## Overview
 

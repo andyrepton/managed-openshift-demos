@@ -1,6 +1,15 @@
 # BGP Direct Routing on ROSA HCP
 
-Demonstrates Layer 3 direct (non-NAT) routing for pod networks on ROSA HCP using the [bgp-cloud-connector](https://github.com/openshift/bgp-cloud-connector) operator and AWS VPC Route Server.
+This demo gives pods and virtual machines on Red Hat OpenShift Service on AWS
+(ROSA) with hosted control planes IP addresses that the rest of the VPC can
+reach directly, with no NAT, NodePort or load balancer in the path. The
+[bgp-cloud-connector](https://github.com/openshift/bgp-cloud-connector) operator
+peers the cluster with AWS VPC Route Server over BGP and advertises user-defined
+network prefixes into the VPC route tables, creating two networks that the VPC
+can reach but that cannot reach each other. It is here to show layer 3
+integration with AWS networking on a managed cluster, which matters most for
+OpenShift Virtualization VMs that need to be addressed like ordinary hosts. It
+is a proof of concept for a throwaway cluster.
 
 Pods and VMs on a Cluster User-Defined Network (CUDN) get IPs that are directly routable from within the VPC: no NodePort, no LoadBalancer, no NAT. This is particularly useful for OpenShift Virtualization VMs that need to be addressed as native hosts on the network.
 
@@ -77,6 +86,7 @@ failing over.
 - OpenShift 4.21+ (for CUDN and RouteAdvertisements APIs)
 - AWS region with VPC Route Server support (eu-west-2, us-east-1, us-east-2, etc.)
 - `oc` CLI logged into the cluster
+- `jq`, to pretty-print JSON output
 
 ## Step 1: Deploy Infrastructure
 
@@ -246,7 +256,7 @@ configuration.
 
 Check operator status (all conditions should be True):
 ```bash
-oc get bgpcloudconfiguration cluster -o jsonpath='{.status.conditions}' | python3 -m json.tool
+oc get bgpcloudconfiguration cluster -o jsonpath='{.status.conditions}' | jq .
 oc get bgprouting
 ```
 
@@ -278,8 +288,8 @@ Pods and VMs on a CUDN get two IPs:
 - **Cluster (infrastructure)**: 10.131.x.x on `eth0`, marked `infrastructure-locked`, carries kubelet probe traffic only
 
 ```bash
-oc get pod -n vms-red client-red -o jsonpath='{.metadata.annotations.k8s\.ovn\.org/pod-networks}' | python3 -m json.tool
-oc get vmi -n vms-red vm-red -o jsonpath='{.status.interfaces}' | python3 -m json.tool
+oc get pod -n vms-red client-red -o jsonpath='{.metadata.annotations.k8s\.ovn\.org/pod-networks}' | jq .
+oc get vmi -n vms-red vm-red -o jsonpath='{.status.interfaces}' | jq .
 ```
 
 ### Reachability

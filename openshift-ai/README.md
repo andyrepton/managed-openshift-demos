@@ -1,6 +1,11 @@
 # OpenShift AI Base Demo
 
-GPU infrastructure for all AI demos: Node Feature Discovery, NVIDIA GPU drivers, and Red Hat OpenShift AI.
+This is the shared base install for the AI demos in this repo, not a demo on its
+own. On a cluster with GPU nodes, it installs Node Feature Discovery to detect
+the GPUs, the NVIDIA GPU Operator to load drivers and make them schedulable, and
+Red Hat OpenShift AI with a DataScienceCluster, then verifies that GPUs are
+allocatable and OpenShift AI is ready. Model-serving demos build on it, so the
+GPU and OpenShift AI setup is written once instead of in every demo.
 
 ## Prerequisites
 

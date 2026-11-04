@@ -1,8 +1,13 @@
 # Forward Logs to AWS CloudWatch
 
-Forward OpenShift infrastructure and audit logs to AWS CloudWatch using
-the Cluster Logging Operator 6.x with a Vector collector and IRSA
-(IAM Roles for Service Accounts) authentication.
+This demo sends the infrastructure and audit logs of a Red Hat OpenShift Service
+on AWS (ROSA) cluster with hosted control planes to Amazon CloudWatch, using the
+Cluster Logging Operator 6.x with a Vector collector and one
+`ClusterLogForwarder` resource. The collector authenticates with IAM Roles for
+Service Accounts, so no long-lived AWS credentials are stored on the cluster.
+Customers can keep OpenShift logs with the rest of their AWS logging, without
+running Elasticsearch or Loki on the cluster. It is here to show ROSA using
+native AWS services with short-lived, role-based credentials.
 
 ## Overview
 

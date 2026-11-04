@@ -1,5 +1,13 @@
 # Graviton demo
 
+This demo runs the same application on x86 (AMD64) and AWS Graviton (ARM64)
+worker nodes in one Red Hat OpenShift Service on AWS (ROSA) cluster. Two
+OpenShift source-to-image builds compile a sample Go app from the same Git
+repository, one per architecture, into one image stream with `amd64` and `arm64`
+tags; node selectors place each deployment on the matching nodes, and each app's
+route shows the architecture it runs on. Developers do no extra work to target
+ARM. It is here to show that ROSA supports mixed-architecture clusters.
+
 ## Ahead of time
 
 - Ensure you've built a cluster than has Graviton nodes. You can use the terraform in ../andys-demo-cluster-tf to achieve this 

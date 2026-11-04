@@ -1,6 +1,12 @@
 # OpenShift Virtualization on OpenShift Dedicated (GCP)
 
-This demo deploys OpenShift Virtualization on an OpenShift Dedicated cluster running on Google Cloud Platform, using bare-metal instance types (`c3-standard-192-metal`) for full nested virtualization support.
+This demo runs OpenShift Virtualization on Red Hat OpenShift Dedicated (OSD) on
+Google Cloud. It adds bare-metal workers with hyperdisk storage, tainted so only
+virtualization workloads land on them, pins OpenShift Virtualization to those
+nodes, sets up hyperdisk for VM disks, and then creates a virtual machine from
+the console or a manifest. It is here to show that a managed OpenShift cluster
+on Google Cloud can run virtual machines next to containers on dedicated
+bare-metal capacity. The operator comes from `openshift-virt`.
 
 ## Overview
 

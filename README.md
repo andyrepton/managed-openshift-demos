@@ -20,6 +20,7 @@ In a managed environment, the cloud provider and Red Hat handle the cluster's li
 
 * **[S3 Buckets via ACK](./demo-deploy-s3-buckets-with-ack):** Kubernetes-native S3 bucket provisioning with AWS Controllers for Kubernetes.
 * **[CloudWatch Metrics](./demo-forward-metrics-to-aws-cloudwatch):** Export Prometheus metrics to AWS CloudWatch dashboards.
+* **[CloudWatch Logs](./demo-forward-logs-to-aws-cloudwatch):** Forward infrastructure and audit logs to CloudWatch with Logging 6.x, using IAM roles instead of stored credentials.
 
 ### Observability & Logging
 
@@ -61,17 +62,6 @@ In a managed environment, the cloud provider and Red Hat handle the cluster's li
 * **[Segregated GitOps](./demo-deploying-segregated-gitops):** Per-team ArgoCD instances managed by a central platform team.
 * **[Source-to-Image & Dev Spaces](./demo-source2image):** Build and deploy from source with S2I and browser-based IDEs.
 * **[Service Mesh App Deployment](./demo-deploying-an-app-with-service-mesh):** Enroll applications in OpenShift Service Mesh.
-
-### Deprecated
-
-* **[Cluster Logging with Elasticsearch](./demo-deploying-cluster-logging-with-elasticsearch):** _(Deprecated)_ Legacy EFK stack. See [OpenShift Logging](./demo-openshift-logging) instead.
-* **[Forward Logs to CloudWatch](./demo-forward-logs-to-aws-cloudwatch):** _(Deprecated)_ Legacy log forwarding with Fluentd. See [OpenShift Logging](./demo-openshift-logging) instead.
-
-### Work in Progress
-
-* **[GitLab on OpenShift](./demo-gitlab-on-openshift):** Basic GitLab operator deployment (WIP -- see [GitLab Duo on ROSA](./demo-gitlab-duo-on-rosa) for a complete setup).
-* **[OpenShift Virt on ROSA](./demo-openshift-virt-on-rosa):** OpenShift Virtualization on ROSA (WIP).
-* **[Continue on ROSA](./demo-continue-on-rosa):** Continue AI code assistant against an in-cluster LLM (WIP -- see [GitLab Duo on ROSA](./demo-gitlab-duo-on-rosa) for a working Continue setup).
 
 -----
 

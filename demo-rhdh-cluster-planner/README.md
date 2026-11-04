@@ -1,6 +1,14 @@
 # Deployment Planner
 
-A self-service wizard where a team names an application, says how much capacity it needs and what it must talk to, and gets back a live Azure-priced comparison of where it could run, a recommended node pool, and the NetworkPolicies to go with it. Runs as a Red Hat Developer Hub dynamic plugin.
+This demo adds a self-service deployment planner to Red Hat Developer Hub
+(RHDH). A team describes its application's capacity and connectivity needs and
+gets back a comparison of a namespace on a shared cluster, a dedicated Azure Red
+Hat OpenShift (ARO) cluster or on-premises, with ARO costs taken live from the
+Azure Retail Prices API and every figure labelled as a live price, an override
+or an assumption. It also produces a recommended node pool, NetworkPolicies and
+request artifacts such as a Terraform tfvars file. It is here to show platform
+engineering on RHDH, turning sizing and costing into self-service. It builds on
+`demo-developer-hub`.
 
 ## Overview
 

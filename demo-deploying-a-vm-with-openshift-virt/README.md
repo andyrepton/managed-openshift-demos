@@ -1,6 +1,13 @@
 # Deploying a VM with OpenShift Virtualization
 
-This demo walks through deploying and managing a virtual machine on a managed OpenShift cluster using OpenShift Virtualization (KubeVirt). It is designed as a live presenter demo with preparation and cleanup steps.
+This presenter-led demo creates and manages a virtual machine on a managed
+OpenShift cluster (ROSA, ARO or OSD) with OpenShift Virtualization, which runs
+VMs as native Kubernetes workloads next to containers. Everything happens in the
+OpenShift web console: create a VM from a template, open its console, watch its
+resource use, and show live migration, snapshots or pause and resume. It is here
+to show that teams can run existing VM workloads and containers on one managed
+platform with one set of tools. It needs metal-capable workers and the operator
+from `openshift-virt`.
 
 ## Overview
 

@@ -1,3 +1,13 @@
+# OpenShift Virtualization
+
+This folder installs OpenShift Virtualization on a managed OpenShift cluster
+from the command line: one `oc apply` creates the namespace, OperatorGroup and
+Subscription and a default HyperConverged resource that turns the feature on.
+The cluster can then run virtual machines alongside containers, so existing VM
+workloads can move onto the same platform. On Red Hat OpenShift Service on AWS
+(ROSA) it needs a bare-metal machine pool. It is here as the base for the repo's
+virtualization demos.
+
 ## Deploying OpenShift Virtualization  onto a Managed OpenShift Cluster using the command line
 
 ### Option 1: Manually

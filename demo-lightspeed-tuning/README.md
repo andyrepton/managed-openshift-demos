@@ -1,6 +1,13 @@
 # Tuning OpenShift Lightspeed for Better Tool Calling
 
-Lightspeed's out-of-the-box config works for basic Q&A, but tool calling (MCP tools, Kubernetes API queries) often underperforms. This demo shows how to tune the OLSConfig operand to improve it.
+This demo tunes Red Hat OpenShift Lightspeed, the AI assistant in the OpenShift
+console, so it gets better at tool calling (MCP tools and live Kubernetes API
+queries). Comparing a default `OLSConfig` with a tuned one shows which settings
+matter, from token budgets and iteration limits to tool filtering, timeouts and
+a system prompt that tells the model to check live cluster state. It also adds
+external MCP servers with three authentication modes and RBAC for users, with
+the model served by Red Hat OpenShift AI. It is here to show Lightspeed
+answering from live cluster data when backed by a self-hosted model.
 
 ## Why Tool Calls Fail
 

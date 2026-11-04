@@ -1,6 +1,12 @@
 # Multi-Cloud VM Migration with MTV
 
-This demo sets up the source-side resources for migrating virtual machines between OpenShift clusters using the Migration Toolkit for Virtualization (MTV/Forklift). It deploys a Fedora 42 VM with an httpd-based dashboard, creates a service account with migration permissions, and prepares the cluster for remote VM export.
+This demo prepares the source side of a virtual machine migration between two
+OpenShift clusters with the Migration Toolkit for Virtualization (MTV). It runs
+a Fedora VM with a small web dashboard on OpenShift Virtualization and creates a
+ServiceAccount, scoped to migration, whose token the destination cluster uses to
+register this cluster as an MTV source. It is here to show VMs moving between
+OpenShift clusters, for example across clouds, with the same tooling at both
+ends.
 
 ## Overview
 

@@ -1,6 +1,12 @@
 # ROSA AutoNode Demo (Karpenter-based Scaling)
 
-This demo demonstrates **AutoNode**, the autoscaling solution for Red Hat OpenShift Service on AWS (ROSA) with Hosted Control Planes (HCP). 
+This demo shows AutoNode, the Karpenter-based node autoscaler for Red Hat
+OpenShift Service on AWS (ROSA) with hosted control planes. Instead of fixed
+machine pools, AutoNode watches for pods that cannot be scheduled and launches
+EC2 instances that fit them, from on-demand or Spot capacity, then removes empty
+or underused nodes when the work goes away. A stress-test workload makes this
+visible. It is here to show that ROSA can size its compute to what workloads
+actually request, scaling quickly and without paying for idle nodes.
 
 By utilizing **Karpenter** logic, AutoNode moves away from static MachineSets, allowing the cluster to provision nodes based on actual pod requirements. This improves scaling speed and cost efficiency by selecting the most appropriate AWS instance types dynamically.
 

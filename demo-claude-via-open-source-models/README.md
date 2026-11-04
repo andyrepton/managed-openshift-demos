@@ -1,6 +1,14 @@
 # Claude Code with Open Source Models on ROSA / ARO
 
-Run Claude Code against open-source LLMs hosted on your own OpenShift cluster, keeping code and prompts within your infrastructure. Swap to Anthropic's Claude API with a single environment variable change when you need maximum quality.
+This demo runs Claude Code against open-source coding models (IBM Granite 4.1
+30B and Qwen3.8-27B) served by vLLM on Red Hat OpenShift AI, on Red Hat
+OpenShift Service on AWS (ROSA) or Azure Red Hat OpenShift (ARO). Developers
+keep the tool they know, while code and prompts stay on your own infrastructure
+and you pay only for compute; one environment variable switches back to
+Anthropic's Claude. OpenShift AI Models-as-a-Service adds API keys, per-user
+token quotas and usage dashboards, and also serves tools such as Cursor
+directly. It is here to show OpenShift AI as a governed, self-hosted model
+platform for AI coding assistants, building on the `openshift-ai` base demo.
 
 ## Architecture
 
@@ -425,7 +433,7 @@ curl -s -X POST "https://$GATEWAY_URL/v1/messages" \
     "model": "granite-4-1-30b",
     "max_tokens": 256,
     "messages": [{"role": "user", "content": "Write a Python hello world program"}]
-  }' | python3 -m json.tool
+  }' | jq .
 ```
 
 **Test Qwen:**
@@ -439,7 +447,7 @@ curl -s -X POST "https://$GATEWAY_URL/v1/messages" \
     "model": "qwen3-8-27b",
     "max_tokens": 256,
     "messages": [{"role": "user", "content": "Write a Python function to reverse a linked list"}]
-  }' | python3 -m json.tool
+  }' | jq .
 ```
 
 Both should return responses from their respective local models.

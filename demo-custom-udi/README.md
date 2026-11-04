@@ -1,8 +1,14 @@
 # Custom Universal Developer Image for Dev Spaces
 
-Build a Dev Spaces workspace image with newer language runtimes than the
-shipped Universal Developer Image (UDI) carries, and make it the cluster
-default.
+This demo builds a custom workspace image for OpenShift Dev Spaces and makes it
+the cluster default. The stock Universal Developer Image follows RHEL 9's
+language versions; this one moves to newer Python, Node.js and .NET runtimes,
+keeps the rest of the toolchain, and bakes in pinned, digest-verified AI coding
+assistants that each project can switch on in its devfile, with nothing
+downloaded when a workspace starts (so it also works disconnected). It is here
+to show how a platform team can update and govern developer tooling centrally,
+and it documents the Dev Spaces pitfalls that break custom images. It builds on
+`openshift-devspaces`.
 
 The UDI tracks RHEL 9, so its runtimes lag:
 

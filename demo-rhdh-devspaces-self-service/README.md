@@ -1,8 +1,13 @@
 # Dev Spaces Self-Service
 
-A developer asks for a Dev Space in Red Hat Developer Hub (how many, how big,
-which AI assistant, where its model lives) and gets a namespace, a quota and a
-workspace definition, created on the cluster in their name.
+This demo adds a "Request a Dev Space" form to Red Hat Developer Hub. A
+developer picks how many workspaces they need, how big, and which AI assistant
+and model to use; a custom plugin then creates their namespace with quotas and
+limits, stores any third-party API key as a Secret, and creates the OpenShift
+Dev Spaces workspace in their name. Developers get correctly sized, bounded
+environments without filing a ticket, while the platform team keeps control
+through a narrowly scoped ServiceAccount (it can create but never delete) and an
+admission policy. It is here to show safe, governed self-service on OpenShift.
 
 Sibling to [demo-rhdh-cluster-planner](../demo-rhdh-cluster-planner), with one
 important difference: **that one shows you what it would do, this one does it.**

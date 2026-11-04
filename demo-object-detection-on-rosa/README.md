@@ -1,6 +1,11 @@
 # Object Detection on ROSA
 
-Serve a YOLO-based object detection model on ROSA using OpenShift AI. Upload images via a REST API and get back detected objects.
+This demo deploys a YOLO-based object detection service on Red Hat OpenShift
+Service on AWS (ROSA), built straight from GitHub with OpenShift source-to-image
+and exposed with a Route. Users upload images through a web page or a REST
+`/predictions` endpoint and get back the objects detected in them, with no
+client-side tooling. It is here as a quick, visual AI example running next to
+regular applications, on a cluster prepared with the `openshift-ai` base demo.
 
 ## Prerequisites
 

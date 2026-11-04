@@ -1,8 +1,12 @@
 # OpenShift Dev Spaces
 
-Browser-based cloud development environment powered by Eclipse Che.
-Provides on-demand, pre-configured workspaces that run entirely on the
-cluster: no local IDE setup required.
+This folder installs Red Hat OpenShift Dev Spaces, the browser-based development
+environment built on Eclipse Che, on a managed OpenShift cluster such as ROSA or
+ARO. Developers can then open ready-made workspaces for any Git repository from
+the dashboard or from a factory URL pointing at a devfile, with nothing to set
+up on their laptop. A GitOps install through OpenShift GitOps is included too.
+It is here as the base for the repo's in-cluster development demos, such as
+`demo-source2image`, `demo-custom-udi` and `demo-opencode-devspaces`.
 
 ## Prerequisites
 

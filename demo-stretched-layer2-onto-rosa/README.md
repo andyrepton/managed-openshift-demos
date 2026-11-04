@@ -1,5 +1,14 @@
 # Stretched layer 2 example with ROSA
 
+This demo extends a Layer 2 network from a site such as a factory floor into
+OpenShift Virtualization VMs on Red Hat OpenShift Service on AWS (ROSA), so
+legacy industrial systems using protocols like Profinet and BACnet can talk to
+them. AWS VPCs carry only Layer 3 traffic, so a hub pod terminates an OpenVPN
+TAP tunnel from the site and passes frames over VXLAN to spoke pods on each
+worker, where VMs attach through Multus, with no extra network interfaces,
+custom images or node changes. It came from a real customer request and is here
+to show that ROSA can host workloads that need Layer 2 adjacency.
+
 ## Goal
 
 A customer approached the Black Belt team looking for a way for legacy systems, using protocols such as Profinet, BACNet etc could be connected to Virtual Machines running in OpenShift Virt on ROSA. This is an example way to do this without needing to edit ec2 instance NICs

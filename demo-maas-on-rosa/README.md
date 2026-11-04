@@ -1,6 +1,13 @@
 # Model as a Service (MaaS) on ROSA
 
-This demo showcases Red Hat's Model as a Service (MaaS) capability on ROSA, using Jupyter notebooks to generate API keys, discover available LLM models, and run chat completion requests through an OpenAI-compatible API.
+This demo shows Model as a Service (MaaS) on Red Hat OpenShift Service on AWS
+(ROSA) from a consumer's point of view. Two Jupyter notebooks create a
+time-limited API key for a subscription tier, list the models it can use, and
+send chat completion requests to an OpenAI-compatible endpoint, one against a
+GPT OSS 20B model and one against a simulator. Teams can use self-hosted models
+through a familiar API with per-key access control. It is here to show ROSA
+running shared, governed model endpoints for internal users. It assumes MaaS is
+already deployed.
 
 ## Overview
 

@@ -1,6 +1,14 @@
 # Multi-Namespace Log and Metrics Forwarding Demo
 
-This demo showcases a **Multi-Tenant Observability** model on Red Hat OpenShift Service on AWS (ROSA). It demonstrates how individual development teams can self-serve their observability needs by forwarding logs and metrics to a third-party backend (New Relic) without requiring constant Cluster Admin intervention.
+This demo shows self-service observability for several teams on one Red Hat
+OpenShift Service on AWS (ROSA) cluster. Two development teams each send their
+own logs and metrics to New Relic from their own namespace, without asking a
+cluster admin for every change: both use a namespaced `ClusterLogForwarder` for
+logs, while for metrics one runs its own Prometheus through the Cluster
+Observability Operator and the other uses a Red Hat build of OpenTelemetry
+collector. The platform team only installs the operators and grants permissions.
+It is here to show OpenShift supporting multi-tenant observability with each
+team's choice of tooling.
 
 ## Architecture Overview
 

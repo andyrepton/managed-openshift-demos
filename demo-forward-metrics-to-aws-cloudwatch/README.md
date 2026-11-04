@@ -1,6 +1,12 @@
 # Forward Metrics to AWS CloudWatch
 
-This demo deploys the Amazon CloudWatch agent on an OpenShift cluster to scrape Prometheus metrics from the Kubernetes API server and forward them to AWS CloudWatch Container Insights. It includes pre-built CloudWatch dashboard definitions for visualizing API server health.
+This demo runs the Amazon CloudWatch agent on a Red Hat OpenShift Service on AWS
+(ROSA) cluster to scrape Prometheus metrics from the Kubernetes API server and
+send them to CloudWatch Container Insights, with ready-made dashboards for API
+server health. Teams that already monitor AWS with CloudWatch can see OpenShift
+control-plane metrics next to their other AWS resources. It is here to show that
+metrics from a managed OpenShift cluster can flow into the cloud provider's own
+monitoring service.
 
 ## Overview
 
