@@ -1,10 +1,16 @@
 # Claude Code with vLLM Semantic Router on OpenShift AI
 
-Point Claude Code at one model name, `vllm-sr-auto`, and let
+This demo lets developers use Claude Code without picking a model. Every
+request goes to one model name, and
 [vLLM Semantic Router](https://github.com/vllm-project/semantic-router) (vSR)
-pick the model for each request: simple requests stay on a local open-source
-model, complex ones go to a frontier model. Users authenticate with their
-Models-as-a-Service (MaaS) API key, and every model call stays governed by MaaS.
+decides where it should run: everyday coding goes to an open-source model on
+your own OpenShift AI GPUs, and only hard reasoning goes to a paid frontier
+model. That cuts token costs and keeps most work on infrastructure you control,
+while every request is still authenticated, rate limited and metered by
+OpenShift AI Models-as-a-Service (MaaS). It is here to show OpenShift AI acting
+as the control point between AI coding tools and many models, building on the
+[Claude Code with open-source models](../demo-claude-via-open-source-models/)
+demo.
 
 > **Status: working with temporary workarounds.** Read
 > [Decisions and temporary workarounds](#decisions-and-temporary-workarounds)
@@ -140,7 +146,7 @@ MaaS gateway's pods.
 - A **frontier model that returns canonical Anthropic Messages responses**
   (for example the Anthropic API, or Claude on Vertex AI). A LiteLLM-fronted
   endpoint does **not** work: see [upstream issue 1](#upstream-issues).
-- `oc` logged in as cluster-admin, `openssl`, `python3`.
+- `oc` logged in as cluster-admin, `curl`, `jq` and `openssl`.
 
 ## Installation
 
@@ -153,15 +159,17 @@ model ID, and `external-model/external-provider.yaml`: set `provider` to match
 it (`anthropic` for the Anthropic API). The ExternalModel's name is what vSR
 and users call it.
 
-Create the provider credential from an environment variable (never a file).
-MaaS only reads Secrets carrying the `inference.llm-d.ai/ipp-managed` label,
-and the data key must be `api-key`:
+Create the provider credential. `read -rs` keeps the key off the screen and out
+of your shell history, and piping it in keeps it out of the process list. MaaS
+only reads Secrets carrying the `inference.llm-d.ai/ipp-managed` label, and the
+data key must be `api-key`:
 
 ```bash
-export FRONTIER_API_KEY=REPLACE_ME          # your provider API key
-python3 -c 'import json,os; print(json.dumps({"apiVersion":"v1","kind":"Secret","metadata":{"name":"external-provider-api-key","namespace":"claude-code-demo","labels":{"inference.llm-d.ai/ipp-managed":"true"}},"type":"Opaque","stringData":{"api-key":os.environ["FRONTIER_API_KEY"]}}))' \
-  | oc apply -f -
+read -rs FRONTIER_API_KEY            # paste your provider API key, then Enter
+printf '%s' "$FRONTIER_API_KEY" | oc create secret generic external-provider-api-key \
+  -n claude-code-demo --from-file=api-key=/dev/stdin
 unset FRONTIER_API_KEY
+oc label secret external-provider-api-key -n claude-code-demo inference.llm-d.ai/ipp-managed=true
 
 # ExternalProvider.spec.endpoint is a bare hostname: no scheme, no path
 sed "s/REPLACE_WITH_PROVIDER_HOSTNAME/api.anthropic.com/" external-model/external-provider.yaml | oc apply -f -
@@ -196,21 +204,26 @@ oc apply -f vsr/namespace.yaml
 oc apply -f maas-wiring/router-access.yaml
 
 MAAS_API="https://maas.$(oc get ingresses.config.openshift.io cluster -o jsonpath='{.spec.domain}')"
-export SA_TOKEN=$(oc create token semantic-router -n semantic-router --duration=8760h)
-export MAAS_API
-python3 - <<'EOF' | oc apply -f -
-import os, json, urllib.request
-req = urllib.request.Request(
-    os.environ["MAAS_API"] + "/maas-api/v1/api-keys",
-    data=json.dumps({"name": "semantic-router", "subscription": "semantic-router-tiers"}).encode(),
-    headers={"Authorization": "Bearer " + os.environ["SA_TOKEN"], "Content-Type": "application/json"},
-    method="POST")
-key = json.load(urllib.request.urlopen(req))["key"]
-print(json.dumps({"apiVersion": "v1", "kind": "Secret",
-                  "metadata": {"name": "semantic-router-maas-key", "namespace": "semantic-router"},
-                  "type": "Opaque", "stringData": {"api-key": key}}))
-EOF
-unset SA_TOKEN
+
+# Create a MaaS key as the router's ServiceAccount, bound to its subscription,
+# and store it in a Secret. The token goes to curl on stdin (-H @-) and the key
+# goes to oc on stdin, so neither shows up in the process list. If MaaS returns
+# no key, jq fails and no Secret is created.
+VSR_KEY=$(printf 'Authorization: Bearer %s\n' "$(oc create token semantic-router -n semantic-router --duration=8760h)" \
+  | curl -sS -H @- -H 'Content-Type: application/json' \
+      -d '{"name": "semantic-router", "subscription": "semantic-router-tiers"}' \
+      "$MAAS_API/maas-api/v1/api-keys" \
+  | jq -er .key) \
+  && printf '%s' "$VSR_KEY" | oc create secret generic semantic-router-maas-key \
+       -n semantic-router --from-file=api-key=/dev/stdin
+unset VSR_KEY
+```
+
+Verify the Secret holds a MaaS key (prints only the public prefix):
+
+```bash
+oc get secret semantic-router-maas-key -n semantic-router -o jsonpath='{.data.api-key}' | base64 -d | cut -c1-7
+# sk-oai-
 ```
 
 ### Step 3: Deploy vSR
@@ -262,10 +275,10 @@ architecture](#target-once-maas-is-fixed). Today it only works for
 non-streaming requests, so Claude Code cannot use it yet.
 
 ```bash
-export VSR_INBOUND_KEY=$(openssl rand -hex 32)
-python3 -c 'import json,os; print(json.dumps({"apiVersion":"v1","kind":"Secret","metadata":{"name":"semantic-router-inbound-key","namespace":"claude-code-demo","labels":{"inference.llm-d.ai/ipp-managed":"true"}},"type":"Opaque","stringData":{"api-key":os.environ["VSR_INBOUND_KEY"]}}))' \
-  | oc apply -f -
-unset VSR_INBOUND_KEY
+# A random key that MaaS injects when it calls vSR
+openssl rand -hex 32 | tr -d '\n' | oc create secret generic semantic-router-inbound-key \
+  -n claude-code-demo --from-file=api-key=/dev/stdin
+oc label secret semantic-router-inbound-key -n claude-code-demo inference.llm-d.ai/ipp-managed=true
 oc apply -f maas-wiring/vsr-external-model.yaml
 oc apply -f maas-wiring/user-auth-policy.yaml
 oc patch maassubscription claude-code-demo-subscription -n models-as-a-service \
@@ -293,21 +306,23 @@ An easy prompt stays local, a hard one goes to the frontier tier. The response
 header `x-vsr-selected-model` shows the choice:
 
 ```bash
-for p in "Give a brief definition of a hash map." \
-         "Compare several approaches to designing a distributed rate limiter across regions and justify the trade-offs."; do
-  python3 - "$p" <<'EOF'
-import os, sys, json, urllib.request
-req = urllib.request.Request(os.environ["SR_URL"] + "/v1/messages",
-    data=json.dumps({"model": "vllm-sr-auto", "max_tokens": 300,
-                     "messages": [{"role": "user", "content": sys.argv[1]}]}).encode(),
-    headers={"Authorization": "Bearer " + os.environ["MAAS_KEY"],
-             "anthropic-version": "2023-06-01", "Content-Type": "application/json"})
-r = urllib.request.urlopen(req, timeout=300)
-print(r.status, r.headers.get("x-vsr-selected-model"))
-EOF
-done
-# 200 local-qwen
-# 200 frontier-...
+# Send one prompt to vllm-sr-auto; print the status line and the tier vSR chose
+ask() {
+  printf 'Authorization: Bearer %s\n' "$MAAS_KEY" \
+    | curl -sS -o /dev/null -D - -H @- \
+        -H 'anthropic-version: 2023-06-01' -H 'Content-Type: application/json' \
+        --data "$(jq -nc --arg p "$1" '{model: "vllm-sr-auto", max_tokens: 300, messages: [{role: "user", content: $p}]}')" \
+        "$SR_URL/v1/messages" \
+    | grep -i -E '^HTTP/|^x-vsr-selected-model'
+}
+
+ask "Give a brief definition of a hash map."
+# HTTP/1.1 200 OK
+# x-vsr-selected-model: local-qwen
+
+ask "Compare several approaches to designing a distributed rate limiter across regions and justify the trade-offs."
+# HTTP/1.1 200 OK
+# x-vsr-selected-model: frontier-...
 ```
 
 ## Running the demo
@@ -328,10 +343,8 @@ decision vSR matched and the tier it picked.
 
 ```bash
 oc logs -n semantic-router deploy/semantic-router -c router -f \
-  | grep --line-buffered '"msg":"routing_decision"' \
-  | python3 -u -c 'import sys,json
-for l in sys.stdin:
-    d=json.loads(l); print(d.get("ts","")[11:19], "decision=", d.get("decision") or "-", "->", d.get("selected_model"))'
+  | jq -R -r --unbuffered 'fromjson? | select(.msg == "routing_decision")
+      | "\(.ts[11:19]) decision=\(if (.decision // "") == "" then "-" else .decision end) -> \(.selected_model)"'
 ```
 
 ### Terminal 2: Claude Code
@@ -362,9 +375,9 @@ so you never have to refer to step numbers.
 | # | Type in Claude Code | Terminal 1 shows | Talking point |
 |:--|:---|:---|:---|
 | 1 | `/status` | nothing | One URL, one model name. The developer does not choose a model. |
-| 2 | `Create hello.py that prints today's date, then run it.` | `decision= everything_else -> local-qwen`, one line per tool call | Everyday coding runs on the open-source model on your own GPUs, at no per-token cost. |
-| 3 | `Compare three architectures for a multi-region rate limiter and justify the trade-offs.` | `decision= hard_to_frontier -> frontier-...` | The router recognised a hard reasoning task and escalated it to the frontier model, with no change on the developer's side. For Q&A: an escalated request carries the conversation so far, code included, to the frontier provider. |
-| 4 | `Summarise the rate limiter design you recommended in two sentences.` | `decision= everything_else -> local-qwen` | The local model just summarised an answer the frontier model wrote: the conversation history travels with the session across models. |
+| 2 | `Create hello.py that prints today's date, then run it.` | `decision=everything_else -> local-qwen`, one line per tool call | Everyday coding runs on the open-source model on your own GPUs, at no per-token cost. |
+| 3 | `Compare three architectures for a multi-region rate limiter and justify the trade-offs.` | `decision=hard_to_frontier -> frontier-...` | The router recognised a hard reasoning task and escalated it to the frontier model, with no change on the developer's side. For Q&A: an escalated request carries the conversation so far, code included, to the frontier provider. |
+| 4 | `Summarise the rate limiter design you recommended in two sentences.` | `decision=everything_else -> local-qwen` | The local model just summarised an answer the frontier model wrote: the conversation history travels with the session across models. |
 | 5 | `Add a --utc flag to hello.py and test both modes.` | several `-> local-qwen` lines, never switching | Inside a multi-step task the router holds one model, so tool loops are never split across models. |
 
 To close, point out that every call in Terminal 1 went through MaaS: the user
