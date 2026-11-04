@@ -1,0 +1,42 @@
+# A Gateway of its own for the router, so Claude Code bypasses the MaaS
+# gateway's payload processing (its stream-usage-enforcer injects an OpenAI
+# field into Anthropic streaming requests, which the router rejects; see
+# ../CLAUDE.md). Users still authenticate with their MaaS key (authpolicy.yaml).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: semantic-router-gateway-options
+  namespace: openshift-ingress
+data:
+  # ClusterIP: the only way in is the edge Route in route.yaml. The default
+  # (LoadBalancer) would create a public cloud load balancer.
+  service: |
+    spec:
+      type: ClusterIP
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: semantic-router-gateway
+  namespace: openshift-ingress
+  annotations:
+    # Authorino serves TLS on RHOAI; this makes RHOAI add the EnvoyFilter
+    # (<gateway>-authn-ssl) that lets this gateway's auth calls use it.
+    security.opendatahub.io/authorino-tls-bootstrap: "true"
+spec:
+  gatewayClassName: data-science-gateway-class
+  listeners:
+    - name: http
+      port: 80
+      protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: Selector
+          selector:
+            matchLabels:
+              kubernetes.io/metadata.name: semantic-router
+  infrastructure:
+    parametersRef:
+      group: ""
+      kind: ConfigMap
+      name: semantic-router-gateway-options

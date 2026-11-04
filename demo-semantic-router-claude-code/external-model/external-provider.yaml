@@ -1,0 +1,15 @@
+# An OpenAI-compatible provider outside the cluster. The API key lives in the
+# Secret "external-provider-api-key" (key "api-key"), created from an
+# environment variable in the README, never from a file.
+apiVersion: inference.opendatahub.io/v1alpha1
+kind: ExternalProvider
+metadata:
+  name: external-frontier
+  namespace: claude-code-demo
+spec:
+  provider: openai
+  endpoint: REPLACE_WITH_PROVIDER_HOSTNAME  # hostname only: no https://, no path
+  auth:
+    type: apikey
+    secretRef:
+      name: external-provider-api-key

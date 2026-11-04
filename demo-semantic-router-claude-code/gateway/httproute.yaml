@@ -1,0 +1,45 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: semantic-router
+  namespace: semantic-router
+spec:
+  parentRefs:
+    - name: semantic-router-gateway
+      namespace: openshift-ingress
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /v1/messages
+      filters:
+        # Auth (authpolicy.yaml) has already checked the user's MaaS key;
+        # don't hand it to the router.
+        - type: RequestHeaderModifier
+          requestHeaderModifier:
+            remove: ["Authorization"]
+      backendRefs:
+        - name: semantic-router
+          port: 443
+      timeouts:
+        request: 0s
+---
+# The router's Envoy serves TLS with an OpenShift service-CA certificate.
+# Verify it against the service CA bundle the gateway pod already mounts.
+# Without this host-specific rule, RHOAI's wildcard DestinationRule
+# (data-science-tls-rule) would apply, which skips verification on 443.
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: semantic-router
+  namespace: semantic-router
+spec:
+  host: semantic-router.semantic-router.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: SIMPLE
+      sni: semantic-router.semantic-router.svc
+      caCertificates: /var/run/secrets/kubernetes.io/serviceaccount/service-ca.crt
+      # Also check the hostname, not just that the service CA signed it.
+      subjectAltNames:
+        - semantic-router.semantic-router.svc

@@ -1,0 +1,43 @@
+# Users reach the router as a MaaS external model, so MaaS authenticates the
+# user and applies their quota before the router sees the request.
+# The Secret "semantic-router-inbound-key" (key "api-key", label
+# inference.llm-d.ai/ipp-managed=true) holds the key MaaS injects; the router's
+# Envoy only accepts requests carrying it. Created in the README from a
+# generated value, never from a file.
+apiVersion: inference.opendatahub.io/v1alpha1
+kind: ExternalProvider
+metadata:
+  name: semantic-router
+  namespace: claude-code-demo
+spec:
+  # "openai" makes MaaS replace Authorization with the injected key
+  # (Bearer), so the user's MaaS key never reaches the router.
+  provider: openai
+  endpoint: semantic-router.semantic-router.svc.cluster.local
+  auth:
+    type: apikey
+    secretRef:
+      name: semantic-router-inbound-key
+---
+apiVersion: inference.opendatahub.io/v1alpha1
+kind: ExternalModel
+metadata:
+  name: vllm-sr-auto
+  namespace: claude-code-demo
+spec:
+  externalProviderRefs:
+    - ref:
+        name: semantic-router
+      targetModel: vllm-sr-auto
+      apiFormat: messages
+      path: /v1/messages
+---
+apiVersion: maas.opendatahub.io/v1alpha1
+kind: MaaSModelRef
+metadata:
+  name: vllm-sr-auto
+  namespace: claude-code-demo
+spec:
+  modelRef:
+    kind: ExternalModel
+    name: vllm-sr-auto

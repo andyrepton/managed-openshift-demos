@@ -1,0 +1,130 @@
+# vLLM Semantic Router v0.4.0 configuration.
+#
+# Clients (through MaaS) send model "vllm-sr-auto". The router scores the
+# prompt's complexity and rewrites "model" to one of the tiers below, then
+# Envoy forwards the request to the MaaS gateway, which routes on that name.
+# Every tier call is made with the router's own MaaS key (MAAS_API_KEY).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: semantic-router-config
+  namespace: semantic-router
+data:
+  config.yaml: |
+    version: v0.3
+    listeners: []
+    providers:
+      defaults:
+        model: local-qwen
+      models:
+        - name: local-qwen
+          provider_model_id: publishers/claude-code-demo/models/qwen3-8-27b
+          api_format: anthropic
+          backend_refs:
+            - name: maas-gateway
+              endpoint: maas-default-gateway-data-science-gateway-class.openshift-ingress.svc.cluster.local:80
+              protocol: http
+              provider: anthropic-compatible
+              auth_header: Authorization
+              auth_prefix: Bearer
+              api_key_env: MAAS_API_KEY
+              weight: 1
+        - name: frontier-gpt-oss
+          provider_model_id: gpt-oss-120b
+          api_format: anthropic
+          backend_refs:
+            - name: maas-gateway
+              endpoint: maas-default-gateway-data-science-gateway-class.openshift-ingress.svc.cluster.local:80
+              protocol: http
+              provider: anthropic-compatible
+              auth_header: Authorization
+              auth_prefix: Bearer
+              api_key_env: MAAS_API_KEY
+              weight: 1
+    routing:
+      modelCards:
+        - name: local-qwen
+        - name: frontier-gpt-oss
+      signals:
+        complexity:
+          - name: general_reasoning
+            threshold: 0.14
+            easy:
+              candidates:
+                - brief definition
+                - quick summary
+                - simple explanation
+                - short direct answer
+                - rename a variable
+                - fix a typo
+            hard:
+              candidates:
+                - compare several approaches and justify the trade-offs
+                - synthesize constraints into a plan
+                - root-cause analysis for a complex failure
+                - design a distributed system architecture
+                - refactor a large codebase across many files
+      # Every decision admits both tiers (first one wins under "static"), so
+      # session protection (global.router.learning) can hold the session's
+      # current model; a decision that admits only one tier makes protection
+      # return 503 when the session is on the other.
+      decisions:
+        - name: hard_to_frontier
+          description: Complex reasoning prefers the frontier model
+          priority: 100
+          rules:
+            operator: AND
+            conditions:
+              - type: complexity
+                name: general_reasoning:hard
+          algorithm:
+            type: static
+          modelRefs:
+            - model: frontier-gpt-oss
+            - model: local-qwen
+        - name: everything_else
+          description: Easy and medium requests prefer the local model
+          priority: 10
+          rules:
+            operator: OR
+            conditions:
+              - type: complexity
+                name: general_reasoning:easy
+              - type: complexity
+                name: general_reasoning:medium
+          algorithm:
+            type: static
+          modelRefs:
+            - model: local-qwen
+            - model: frontier-gpt-oss
+    global:
+      router:
+        strategy: priority
+        auto_model_name: vllm-sr-auto
+        clear_route_cache: true
+        # Keep one model for a whole Claude Code session, so a multi-step task
+        # does not bounce between tiers. Claude Code sends this header on
+        # every request; without it, protection fails open (normal routing).
+        learning:
+          enabled: true
+          adaptation:
+            enabled: false
+          protection:
+            enabled: true
+            # "conversation" scope lets a changed decision move the session to
+            # another tier at a turn boundary; "session" scope never releases
+            # the first tier. Claude Code sends only a session id, so it is
+            # both identities (one Claude Code session = one conversation).
+            scope: conversation
+            identity:
+              headers:
+                session: x-claude-code-session-id
+                conversation: x-claude-code-session-id
+            tuning:
+              idle_timeout_seconds: 1800
+              # Switch whenever the matched decision prefers another tier at a
+              # turn boundary; the built-in tool-loop lock still holds the
+              # model inside a tool loop.
+              min_turns_before_switch: 1
+              switch_margin: 0.0
+              stability_weight: 0.0
