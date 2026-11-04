@@ -27,7 +27,7 @@ Test campaign started 2026-11-04: one cluster build at a time.
 | demo-semantic-router-claude-code | 1. ROSA AI | ROSA HCP 4.22.12, RHOAI 3.5.2 | passed (partly) | 2026-11-04 | On branch demo-semantic-router-claude-code. All steps and Claude Code pass; the frontier tier awaits a canonical Anthropic model (fix 25) |
 | logging-operator-lokistack | 2. ROSA logging | ROSA HCP | pending | | |
 | demo-openshift-logging | 2. ROSA logging | ROSA HCP | pending | | |
-| demo-forward-logs-to-aws-cloudwatch | 2. ROSA logging | ROSA HCP | pending | | |
+| demo-forward-logs-to-aws-cloudwatch | 2. ROSA logging | ROSA HCP 4.22.12, Logging 6.6.2 | passed | 2026-11-04 | Collectors on every node; `<cluster>.infrastructure` and `<cluster>.audit` log groups receive streams via IRSA (fix 45). Cleanup not run |
 | demo-forward-metrics-to-aws-cloudwatch | 2. ROSA logging | ROSA HCP | pending | | |
 | demo-deploy-s3-buckets-with-ack | 2. ROSA logging | ROSA HCP | pending | | |
 | demo-deploying-an-app-with-service-mesh | 2. ROSA logging | ROSA HCP | pending | | |
@@ -102,3 +102,4 @@ not yet changed), **not fixable yet** (with the reason).
 | 42 | demo-rhdh-devspaces-self-service | demo-readme-summaries | The "denied" boundary check is a real create; run straight after applying the policy, it created namespace `not-a-workspace` because the policy takes seconds to be enforced | Both checks are `--dry-run=server`; the first loops until refused | fixed |
 | 43 | demo-rhdh-devspaces-self-service | demo-readme-summaries | Step 3 runs `oc start-build devspaces-self-service`, but no BuildConfig is defined anywhere | Main path loads the public published image; optional build section defines the BuildConfig | fixed |
 | 44 | demo-custom-udi | demo-readme-summaries | `scripts/check-extensions.py` uses `str \| None`, which fails on macOS's stock Python 3.9 | `from __future__ import annotations` | fixed |
+| 45 | demo-forward-logs-to-aws-cloudwatch | demo-readme-summaries | `oc get csv -w` never returns and lists every copied CSV; step 5 was a manual edit of a tracked file; verify pointed at the console only; cleanup ran `oc delete csv --all` (removes any other operator in the namespace) and deleted `openshift-logging`, which ROSA creates with the cluster | Wait loop matched by name; `sed` with `CLUSTER_NAME`/`AWS_REGION` piped to `oc apply`; `aws logs` checks; delete only this demo's CSV and keep the namespace; log group cleanup | fixed |
