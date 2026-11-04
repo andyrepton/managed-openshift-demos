@@ -1,9 +1,14 @@
 # demo-developer-hub
 
-## RHDH version: pinned to 1.10.5
+## RHDH version: the 1.10 line
 
 Install from the stock `redhat-operators` catalog, channel `fast-1.10`. Re-check
 the catalog before assuming 2.x is available; do not plan around it.
+
+Checked 2026-11-04: still no 2.x in the `redhat-operators` catalog, on
+`registry.redhat.io` or in the docs. The `fast-1.10` channel installs the
+newest 1.10 release (1.10.6 on 2026-11-04), and that is accepted: the pin is to
+the 1.10 line, not a patch release.
 
 - 2.x images have not reached `registry.redhat.io`, and redirecting them needs
   an `ImageDigestMirrorSet`, which ROSA HCP denies (it belongs to the
