@@ -47,3 +47,11 @@ output "cloudwatch_iam_role_arn" {
   value = var.create_rosa && var.deploy_cloudwatch_logging ? module.rosa[0].cloudwatch_iam_role_arn : ""
 }
 
+output "lokistack_bucket_name" {
+  value = var.create_rosa && var.deploy_lokistack_machine_pool ? module.rosa[0].lokistack_bucket_name : ""
+}
+
+output "lokistack_iam_role_arn" {
+  value = var.create_rosa && var.deploy_lokistack_machine_pool ? module.rosa[0].lokistack_iam_role_arn : ""
+}
+
