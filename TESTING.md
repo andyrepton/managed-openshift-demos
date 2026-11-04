@@ -14,7 +14,7 @@ Test campaign started 2026-11-04: one cluster build at a time.
 | demo-vllm-model-serving | 1. ROSA AI | ROSA HCP 4.22.12, RHOAI 3.5.2 | passed | 2026-11-04 | Devstral serves and answers (fixes 11, 33, 34) |
 | demo-claude-via-open-source-models | 1. ROSA AI | ROSA HCP 4.22.12, RHOAI 3.5.2 | passed | 2026-11-04 | Tested from branch prereq-readme-fixes, both models (fixes 1, 2, 14, 16, 18, 21-24). Not tested: Cursor, interactive `/model`, cleanup |
 | openshift-devspaces | 1. ROSA AI | ROSA HCP 4.22.12, Dev Spaces 3.31.2 | passed | 2026-11-04 | Workspaces opened in dependent demos (fix 17) |
-| demo-opencode-devspaces | 1. ROSA AI | ROSA HCP | pending | | |
+| demo-opencode-devspaces | 1. ROSA AI | ROSA HCP 4.22.12, Dev Spaces 3.31.2 | passed | 2026-11-04 | Workspace from the factory URL; all three configs point at Devstral; `opencode run` returns WORKING. Continue and Kilo Code sidebar not yet confirmed |
 | demo-object-detection-on-rosa | 1. ROSA AI | ROSA HCP 4.22.12 | passed | 2026-11-04 | Runs on CPU (fixes 10, 15); cleanup not run |
 | demo-lightspeed-tuning | 1. ROSA AI | ROSA HCP 4.22.12, Lightspeed 2.0.0 | passed | 2026-11-04 | Live tool-call answer as cluster-admin; devuser in the bound group gets access and tools respect its RBAC (fixes 26-28). External MCP servers not tested (example URLs) |
 | demo-maas-on-rosa | 1. ROSA AI | ROSA HCP 4.22.12, RHOAI 3.5.2 | passed | 2026-11-04 | Run by a person in an in-cluster workbench as devuser; key, model list and chat completion all work (fixes 12, 29-32). Simulator notebook not tested |

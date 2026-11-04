@@ -10,6 +10,8 @@ model you host. It is here to show OpenShift AI model serving and Dev Spaces
 combined into a self-hosted developer platform, building on `openshift-ai`,
 `demo-vllm-model-serving` and `openshift-devspaces`.
 
+Tested: 2026-11-04, ROSA HCP 4.22.12, Dev Spaces 3.31.2, Devstral on a g7e.2xlarge (workspace opened by a person in the browser).
+
 ## Prerequisites
 
 Deploy these in order. Each one depends on the one above it:
