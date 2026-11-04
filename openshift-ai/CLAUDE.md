@@ -1,5 +1,18 @@
 # openshift-ai
 
+## DataScienceCluster
+
+RHOAI 3.5 serves `DataScienceCluster` v1 and v2 and silently drops fields
+neither knows (`codeflare`, `modelmeshserving`, `kserve.serving`,
+`datasciencepipelines`), so a stale file applies cleanly and does less than it
+says. Check every DSC change with
+`oc apply --dry-run=server --validate=strict -f <file>` before applying.
+
+This demo owns `default-dsc`. Other demos **patch** it
+(`oc patch datasciencecluster default-dsc --type merge --patch-file ...`);
+they never apply a whole one, which would switch off components other demos
+rely on.
+
 ## RHOAI scaled down to free CPU
 
 Scaling `rhods-operator` back up does **not** restore the application

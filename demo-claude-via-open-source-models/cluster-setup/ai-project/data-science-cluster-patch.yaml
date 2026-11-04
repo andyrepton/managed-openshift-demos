@@ -1,0 +1,15 @@
+# Merge patch for the DataScienceCluster created by ../../../openshift-ai/.
+# Patch rather than apply: applying a full DSC here would replace the shared
+# one and switch off components other demos rely on.
+#
+#   oc patch datasciencecluster default-dsc --type merge \
+#     --patch-file cluster-setup/ai-project/data-science-cluster-patch.yaml
+#
+# The top-level aigateway.managementState must be Managed; setting only
+# modelsAsAService is not enough.
+spec:
+  components:
+    aigateway:
+      managementState: Managed
+      modelsAsAService:
+        managementState: Managed

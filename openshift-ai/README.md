@@ -45,16 +45,7 @@ oc get csv -n nvidia-gpu-operator
 oc apply -f nvidia-cluster-policy.yaml
 ```
 
-### 5. Deploy ServiceMesh and Serverless Operators
-
-Required by KServe in RHOAI:
-
-```bash
-oc apply -f servicemesh.yaml
-oc apply -f serverless.yaml
-```
-
-### 6. Deploy RHOAI Operator
+### 5. Deploy RHOAI Operator
 
 ```bash
 oc apply -f namespace.yaml
@@ -67,7 +58,7 @@ Wait for the CSV:
 oc get csv -n redhat-ods-operator
 ```
 
-### 7. Create DataScienceCluster
+### 6. Create DataScienceCluster
 
 ```bash
 oc apply -f data-science-cluster.yaml
@@ -97,8 +88,6 @@ oc get datasciencecluster default-dsc -o jsonpath='{.status.phase}'
 oc delete datasciencecluster default-dsc
 oc delete -f subscription.yaml
 oc delete -f namespace.yaml
-oc delete -f serverless.yaml
-oc delete -f servicemesh.yaml
 oc delete clusterpolicy gpu-cluster-policy
 oc delete -f nvidia-gpu-operator.yaml
 oc delete nodefeaturediscovery nfd-instance -n openshift-nfd

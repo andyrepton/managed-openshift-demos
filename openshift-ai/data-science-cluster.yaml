@@ -1,40 +1,18 @@
-apiVersion: datasciencecluster.opendatahub.io/v1
+apiVersion: datasciencecluster.opendatahub.io/v2
 kind: DataScienceCluster
 metadata:
   name: default-dsc
-  labels:
-    app.kubernetes.io/name: datasciencecluster
-    app.kubernetes.io/instance: default-dsc
-    app.kubernetes.io/part-of: rhods-operator
-    app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/created-by: rhods-operator
 spec:
   components:
-    codeflare:
-      managementState: Managed
-    kserve:
-      serving:
-        managementState: Unmanaged
-      managementState: Managed
-    trustyai:
-      managementState: Removed
-    ray:
-      managementState: Managed
-    # RHOAI 3.x dropped the embedded Kueue; the admission webhook rejects the
-    # whole DataScienceCluster with "Managed is no longer supported as a
-    # managementState". Kueue now comes from its own operator, which this demo
-    # does not install, so leave it out.
-    kueue:
-      managementState: Removed
-    workbenches:
-      managementState: Managed
     dashboard:
       managementState: Managed
-    modelmeshserving:
+    kserve:
       managementState: Managed
-    datasciencepipelines:
+    workbenches:
       managementState: Managed
-    trainingoperator:
-      managementState: Removed
+    aipipelines:
+      managementState: Managed
+    ray:
+      managementState: Managed
     modelregistry:
       managementState: Managed

@@ -13,7 +13,10 @@ apiVersion: v1
 kind: Secret
 metadata:
   name: maas-db-config
-  namespace: redhat-ods-applications
+  # RHOAI 3.5+ reads this from the MaaS infrastructure namespace. PostgreSQL
+  # itself stays in redhat-ods-applications: RHOAI deletes the infra
+  # namespace when MaaS is removed, and the API keys should outlive that.
+  namespace: redhat-ai-gateway-infra
 type: Opaque
 stringData:
   DB_CONNECTION_URL: "postgresql://maas:REPLACE_ME@postgres.redhat-ods-applications.svc:5432/maas?sslmode=disable"
