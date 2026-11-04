@@ -23,7 +23,7 @@ module "rosa-ai-machine-pool-gpu-pool" {
     value         = "present",
     schedule_type = "NoSchedule"
   }]
-  replicas = 1
+  replicas = var.gpu_replicas
 }
 
 module "rosa-openshift-ai-machine-pool" {

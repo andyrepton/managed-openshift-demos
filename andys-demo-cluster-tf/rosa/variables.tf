@@ -153,6 +153,12 @@ variable "ai_gpu_instance_type" {
   description = "AWS instance type for the GPU machine pool."
 }
 
+variable "ai_gpu_replicas" {
+  type        = number
+  default     = 1
+  description = "Number of nodes in the GPU machine pool."
+}
+
 variable "ai_gpu_subnet_index" {
   type        = number
   default     = 0

@@ -102,8 +102,8 @@ Both models require a GPU with at least 24GB VRAM (FP8 quantisation). Running bo
 
 ```bash
 cd ../andys-demo-cluster-tf
-# Edit ai_rosa.tfvars: set GPU pool replicas to 2 for both models, or 1 for Qwen only
-terraform apply -var-file=ai_rosa.tfvars
+# One GPU node per model: 2 for Granite and Qwen, 1 (the default) for Qwen only
+terraform apply -var-file=ai_rosa.tfvars -var ai_gpu_replicas=2
 ```
 
 **ARO / ARO HCP:**
