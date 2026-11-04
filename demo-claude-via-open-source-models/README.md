@@ -433,7 +433,7 @@ curl -s -X POST "https://$GATEWAY_URL/v1/messages" \
     "model": "granite-4-1-30b",
     "max_tokens": 256,
     "messages": [{"role": "user", "content": "Write a Python hello world program"}]
-  }' | jq .
+  }' | python3 -m json.tool
 ```
 
 **Test Qwen:**
@@ -447,7 +447,7 @@ curl -s -X POST "https://$GATEWAY_URL/v1/messages" \
     "model": "qwen3-8-27b",
     "max_tokens": 256,
     "messages": [{"role": "user", "content": "Write a Python function to reverse a linked list"}]
-  }' | jq .
+  }' | python3 -m json.tool
 ```
 
 Both should return responses from their respective local models.

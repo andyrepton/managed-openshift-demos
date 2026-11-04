@@ -8,6 +8,8 @@ up on their laptop. A GitOps install through OpenShift GitOps is included too.
 It is here as the base for the repo's in-cluster development demos, such as
 `demo-source2image`, `demo-custom-udi` and `demo-opencode-devspaces`.
 
+Tested: 2026-11-04, ROSA HCP 4.22.12, Dev Spaces 3.31.2.
+
 ## Prerequisites
 
 * A managed OpenShift cluster (ROSA, ARO, or OCP).
@@ -39,7 +41,7 @@ oc get checluster devspaces -n openshift-operators -w
 ## Verify
 
 ```bash
-# CheCluster should show Available status:
+# CheCluster phase should be Active:
 oc get checluster devspaces -n openshift-operators \
   -o jsonpath='{.status.chePhase}'
 

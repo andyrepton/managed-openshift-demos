@@ -8,6 +8,8 @@ straight into a new build and deployment. It is here to show developers going
 from code to a running application on OpenShift without handling containers or
 Kubernetes manifests. It needs `openshift-devspaces`.
 
+Tested: 2026-11-04, ROSA HCP 4.22.12, Dev Spaces 3.31.2 (workspace opened by a person in the browser).
+
 ## Overview
 
 * **Source-to-Image** -- Builds a container image from source code using a builder image (`golang~`), compiles the Go application, and deploys it automatically.
@@ -59,9 +61,11 @@ Navigate to Dev Spaces in the OpenShift console and create a workspace from `htt
 
 ### 5. Set Up a Binary Build Pipeline
 
-From the Dev Spaces terminal:
+From the Dev Spaces terminal, switch to the demo project first (the terminal
+starts in your own Dev Spaces project):
 
 ```bash
+oc project s2i-demo
 oc new-build --binary --image-stream openshift/golang --name demo --strategy source
 ```
 
@@ -76,8 +80,7 @@ oc start-build demo --from-dir=. --follow
 Deploy the updated image:
 
 ```bash
-oc get imagestream demo
-oc new-app --name demo <image-from-imagestream>
+oc new-app --name demo --image-stream=demo:latest
 oc expose deployment/demo --port 8080
 oc create route edge --service=demo
 ```

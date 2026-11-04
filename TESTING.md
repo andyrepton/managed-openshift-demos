@@ -9,17 +9,17 @@ Test campaign started 2026-11-04: one cluster build at a time.
 
 | Demo | Cluster build | Platform | Status | Date | Notes |
 |:---|:---|:---|:---|:---|:---|
-| andys-demo-cluster-tf | 1 | ROSA HCP | pending | | Tested by building each cluster below |
-| openshift-ai | 1. ROSA AI | ROSA HCP | pending | | |
+| andys-demo-cluster-tf | 1 | ROSA HCP 4.22.12 | passed | 2026-11-04 | Build 1 (`ai_rosa.tfvars`, `-var ai_gpu_replicas=2`): 76 resources, both GPU nodes Ready; later builds add more presets |
+| openshift-ai | 1. ROSA AI | ROSA HCP 4.22.12, RHOAI 3.5.2 | passed | 2026-11-04 | Tested from branch prereq-readme-fixes (fix 3) |
 | demo-vllm-model-serving | 1. ROSA AI | ROSA HCP | pending | | |
-| demo-claude-via-open-source-models | 1. ROSA AI | ROSA HCP | pending | | |
-| openshift-devspaces | 1. ROSA AI | ROSA HCP | pending | | |
+| demo-claude-via-open-source-models | 1. ROSA AI | ROSA HCP 4.22.12, RHOAI 3.5.2 | passed | 2026-11-04 | Tested from branch prereq-readme-fixes, both models (fixes 1, 2, 14, 16, 18, 21-24). Not tested: Cursor, interactive `/model`, cleanup |
+| openshift-devspaces | 1. ROSA AI | ROSA HCP 4.22.12, Dev Spaces 3.31.2 | passed | 2026-11-04 | Workspaces opened in dependent demos (fix 17) |
 | demo-opencode-devspaces | 1. ROSA AI | ROSA HCP | pending | | |
-| demo-object-detection-on-rosa | 1. ROSA AI | ROSA HCP | pending | | |
+| demo-object-detection-on-rosa | 1. ROSA AI | ROSA HCP 4.22.12 | passed | 2026-11-04 | Runs on CPU (fixes 10, 15); cleanup not run |
 | demo-lightspeed-tuning | 1. ROSA AI | ROSA HCP | pending | | |
 | demo-maas-on-rosa | 1. ROSA AI | ROSA HCP | pending | | |
 | demo-custom-udi | 1. ROSA AI | ROSA HCP | pending | | |
-| demo-source2image | 1. ROSA AI | ROSA HCP | pending | | |
+| demo-source2image | 1. ROSA AI | ROSA HCP 4.22.12, Dev Spaces 3.31.2 | passed | 2026-11-04 | Steps 5-6 run inside a real workspace; edit, rebuild and live change confirmed (fixes 19, 20); cleanup not run |
 | demo-developer-hub | 1. ROSA AI | ROSA HCP | pending | | |
 | demo-rhdh-cluster-planner | 1. ROSA AI | ROSA HCP | pending | | |
 | demo-rhdh-devspaces-self-service | 1. ROSA AI | ROSA HCP | pending | | |
@@ -47,3 +47,36 @@ Test campaign started 2026-11-04: one cluster build at a time.
 | demo-hybrid-logging | | | not tested | | On-premises demos skipped for now |
 | demo-stretched-layer2-onto-rosa | | | not tested | | On-premises demos skipped for now |
 | demo-cross-cluster-live-migration | | | not tested | | On-premises demos skipped for now |
+
+## Fixes found
+
+Every README problem found while testing, and what was done about it. Status:
+**fixed** (README changed and the step re-run successfully), **to fix** (found,
+not yet changed), **not fixable yet** (with the reason).
+
+| # | Demo | Branch | Problem | Fix | Status |
+|:--|:---|:---|:---|:---|:---|
+| 1 | demo-claude-via-open-source-models | prereq-readme-fixes | Step 2: the loop waiting for the cert-manager CSV matched RHOAI's CSV, which is copied into every namespace, so `oc wait` still failed with "no matching resources" | Match the cert-manager CSV by name | fixed |
+| 2 | demo-claude-via-open-source-models | prereq-readme-fixes | Step 4 creates PostgreSQL before enabling MaaS, but its `maas-db-config` Secret targets `redhat-ai-gateway-infra`, which does not exist until MaaS is enabled | Enable MaaS first, wait for its namespace, then deploy PostgreSQL; MaaS then starts with no restart (verified: maas-api 0 restarts) | fixed |
+| 3 | openshift-ai | prereq-readme-fixes | Step 5 creates `redhat-ods-operator` twice (`namespace.yaml` and `subscription.yaml`) | Apply only `subscription.yaml`, which already contains the Namespace (shown by its "unchanged" output); `namespace.yaml` stays for Cleanup | fixed |
+| 4 | demo-gitlab-duo-on-rosa | demo-readme-summaries | No model deploy step; `rosa create machinepool` instead of Terraform; model names differ between catalog, InferenceService and Continue config; broken image links | | not fixable yet: needs a GitLab Duo licence to test |
+| 5 | demo-multi-namespace-log-metrics-forwarding | demo-readme-summaries | Says Logging 5.8+ but uses the 6.x API; wrong path `user/coo.yaml`; broken line continuations; a Secret in `clf.yaml` overwrites one created in step 2 | | not fixable yet: needs a New Relic account to test |
+| 6 | demo-openshift-logging | demo-readme-summaries | Uses the Logging 5.x API, which may not work on current versions | | to fix (cluster build 2) |
+| 7 | demo-deploy-s3-buckets-with-ack | demo-readme-summaries | Points to a `./create-demo.sh` that does not exist | | to fix (cluster build 2) |
+| 8 | demo-autonode-on-rosa | demo-readme-summaries | README says `OpenShiftEC2NodeClass`, the manifest uses `EC2NodeClass` | | to fix (cluster build 5) |
+| 9 | demo-graviton-on-rosa | demo-readme-summaries | Namespace inconsistent (`multiarch-demo` vs `multiarch-demo-proj`) | | to fix (cluster build 2) |
+| 10 | demo-object-detection-on-rosa | demo-readme-summaries | Lists OpenShift AI and a GPU as prerequisites, but the steps use neither | Prerequisites now say it runs on CPU with no GPU or OpenShift AI (verified: no GPU request, scheduled on a CPU node) | fixed |
+| 11 | demo-vllm-model-serving | demo-readme-summaries | Prerequisites say `HF_TOKEN`, the commands use `HUGGING_FACE_HUB_TOKEN` | | to fix (cluster build 1) |
+| 12 | demo-maas-on-rosa | demo-readme-summaries | Notebooks use `verify=False` and a hardcoded cluster URL | | to fix (cluster build 1) |
+| 13 | several | demo-readme-summaries | Personal values left in (cluster prefixes, an email address in tags, presenter domains) | | to fix as each demo is tested |
+| 14 | demo-claude-via-open-source-models | prereq-readme-fixes | Step 6 applies `models/hf-token-secret.yaml`, which is gitignored and so missing from any fresh clone | Create the `hf-token` Secret with `read -rs` and stdin; update the models/README file tree | fixed |
+| 15 | demo-object-detection-on-rosa | demo-readme-summaries | Verify says to open a web interface; the app has none (`/` returns a status), and the `/predictions` request format was not given | Verify with `curl` on `/status` and a POST of the repo's sample image, piped to `jq` | fixed |
+| 16 | demo-claude-via-open-source-models | prereq-readme-fixes | Download estimates were 30-45 min (Granite) and 5-10 min (Qwen); measured 7m56s and 2m49s | Say "about 10 minutes" and "about 3 minutes" | fixed |
+| 17 | openshift-devspaces | demo-readme-summaries | Verify says the CheCluster should show Available; the phase is `Active` | Say Active | fixed |
+| 18 | demo-claude-via-open-source-models | prereq-readme-fixes | Step 7 passes the OpenShift / ServiceAccount token to curl as a command-line argument | Send it on stdin with `curl -H @-` | fixed |
+| 19 | demo-source2image | demo-readme-summaries | Step 6 uses a placeholder, `oc new-app --name demo <image-from-imagestream>` | `oc new-app --name demo --image-stream=demo:latest` | fixed |
+| 20 | demo-source2image | demo-readme-summaries | Steps 5-6 run in the Dev Spaces terminal, whose current project is the user's Dev Spaces project, so the build landed outside `s2i-demo` and Cleanup would miss it | Add `oc project s2i-demo` to step 5 (README and during-your-demo.md) | fixed |
+| 21 | demo-claude-via-open-source-models | prereq-readme-fixes | Step 8 passes the LiteLLM and MaaS keys to `oc create secret` with `--from-literal`, as command-line arguments | `--from-env-file=<(printf ...)` | fixed |
+| 22 | demo-claude-via-open-source-models | both | Step 10 sends the LiteLLM key as a curl argument and pretty-prints with Python | `ask` function using `curl -H @-` and `jq` (on prereq-readme-fixes; the summaries branch keeps only its summary paragraph for this README to avoid a merge conflict) | fixed |
+| 23 | demo-claude-via-open-source-models | prereq-readme-fixes | Usage Monitoring check greps the DSCI YAML, which prints the condition types but not reliably their statuses | Print each condition's status with jsonpath | fixed |
+| 24 | demo-claude-via-open-source-models | prereq-readme-fixes | "Accessing the Dashboard" says the dashboard flag was enabled in Step 6; it is Step 5 | Say Step 5 | fixed |

@@ -63,7 +63,8 @@ https://github.com/andyrepton/hello.git
 * Now we'll again ask the cluster to set up a new build pipeline for us
 
 ```
-oc new-build --binary --image-stream openshift/golang --name demo --strategy source 
+oc project s2i-demo
+oc new-build --binary --image-stream openshift/golang --name demo --strategy source
 ```
 
 * And once that is set up, we can start a new build of our code:
