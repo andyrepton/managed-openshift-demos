@@ -12,6 +12,8 @@ as the control point between AI coding tools and many models, building on the
 [Claude Code with open-source models](../demo-claude-via-open-source-models/)
 demo.
 
+Tested: 2026-11-04, ROSA HCP 4.22.12, RHOAI 3.5.2, vSR v0.4.0, with a stand-in frontier model (hard prompts not yet verified end to end).
+
 > **Status: working with temporary workarounds.** Read
 > [Decisions and temporary workarounds](#decisions-and-temporary-workarounds)
 > before changing anything: several parts of this design exist only because of
@@ -264,8 +266,8 @@ enforced:
 oc get svc -n openshift-ingress semantic-router-gateway-data-science-gateway-class -o jsonpath='{.spec.type}{"\n"}'
 # ClusterIP
 oc get envoyfilter semantic-router-gateway-authn-ssl -n openshift-ingress
-oc get authpolicy semantic-router -n semantic-router -o jsonpath='{.status.conditions[?(@.type=="Enforced")].status}{"\n"}'
-# True
+oc wait --for=condition=Enforced authpolicy/semantic-router -n semantic-router --timeout=120s
+# authpolicy.kuadrant.io/semantic-router condition met
 ```
 
 ### Step 5 (optional): The MaaS-fronted path
