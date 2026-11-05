@@ -53,7 +53,7 @@ oc apply -f nvidia-cluster-policy.yaml
 ### 5. Deploy RHOAI Operator
 
 ```bash
-oc apply -f namespace.yaml
+# Creates the redhat-ods-operator namespace, OperatorGroup and Subscription
 oc apply -f subscription.yaml
 ```
 
