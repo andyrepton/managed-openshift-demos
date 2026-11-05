@@ -24,7 +24,7 @@ spec:
             - |
               pip install -q huggingface_hub &&
               /tmp/.local/bin/hf download \
-                cyankiwi/Devstral-Small-2-24B-Instruct-2512-AWQ-4bit \
+                RedHatAI/Devstral-Small-2-24B-Instruct-2512 \
                 --local-dir /models/devstral-awq
           env:
             - name: HOME
