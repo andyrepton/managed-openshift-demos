@@ -22,7 +22,24 @@ bare-metal capacity. The operator comes from `openshift-virt`.
 
 ## How to Run the Demo
 
-### 1. Customize the MachineSet
+### 1. Add the bare-metal workers
+
+**Preferred, not yet tested:** [andys-demo-cluster-tf](../andys-demo-cluster-tf)
+can add the bare-metal pool through OCM with `osd_deploy_virt_machine_pool = true`
+(one `c3-standard-192-metal` node, labelled `node_type=metal`, tainted
+`metal=true:NoSchedule`), instead of the hand-edited MachineSet below. This keeps
+the infrastructure in Terraform. It has not been applied yet, and it does not set
+the boot disk type, so check that OCM gives the metal node `hyperdisk-balanced`.
+
+**Known blocker when rebuilding:** the OSD module names its GCP custom roles
+from the first 8 characters of the cluster name without dashes, so `poc-andyr`,
+`poc-andyr1` and `poc-andyr2` all become `pocandyr_*`. GCP will not reuse the ID
+of a deleted custom role for about 37 days, so building an OSD cluster soon
+after destroying one with the same prefix fails with `You can't create a role_id
+... which has been marked for deletion`. Use a cluster name with a different
+first 8 characters until that is fixed.
+
+### 1a. Or customize the MachineSet
 
 Edit `virt-machine-set.yaml` and replace the following cluster-specific values:
 

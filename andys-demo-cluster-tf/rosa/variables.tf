@@ -213,6 +213,12 @@ variable "deploy_cloudwatch_metrics" {
   description = "Create IAM role for the CloudWatch metrics agent via IRSA."
 }
 
+variable "deploy_autonode" {
+  type        = bool
+  default     = false
+  description = "Create the IAM role and discovery tags for ROSA AutoNode."
+}
+
 variable "cloudwatch_namespace" {
   type        = string
   default     = "openshift-logging"

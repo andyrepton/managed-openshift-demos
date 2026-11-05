@@ -62,3 +62,7 @@ output "ack_s3_iam_role_arn" {
 output "cloudwatch_metrics_iam_role_arn" {
   value = var.create_rosa && var.deploy_cloudwatch_metrics ? module.rosa[0].cloudwatch_metrics_iam_role_arn : ""
 }
+
+output "autonode_iam_role_arn" {
+  value = var.create_rosa && var.deploy_autonode ? module.rosa[0].autonode_iam_role_arn : ""
+}
