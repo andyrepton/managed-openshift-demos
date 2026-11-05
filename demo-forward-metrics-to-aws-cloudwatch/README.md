@@ -8,79 +8,92 @@ control-plane metrics next to their other AWS resources. It is here to show that
 metrics from a managed OpenShift cluster can flow into the cloud provider's own
 monitoring service.
 
+Tested: 2026-11-05, ROSA HCP 4.22.12, CloudWatch agent 1.300074.1b2005 (including Clean Up, then a clean replay).
+
 ## Overview
 
-* **CloudWatch Agent** -- Deployed as a single-replica `Deployment` running `amazon/cloudwatch-agent:1.247348.0b251302` with Prometheus scrape configuration.
-* **Prometheus Scraping** -- Scrapes the `kubernetes-apiservers` job for metrics including `apiserver_request_total`, `etcd_object_counts`, and `workqueue_*` metrics.
-* **CloudWatch Dashboards** -- Two dashboard templates: `dashboard.json` (full API server dashboard) and `basic-dash.json` (starting template).
+* **CloudWatch agent**: a single-replica `Deployment` running
+  `amazon/cloudwatch-agent:1.300074.1b2005` with a Prometheus scrape
+  configuration.
+* **Prometheus scraping**: the `kubernetes-apiservers` job, for metrics
+  including `apiserver_request_total`, `apiserver_storage_objects` and
+  `workqueue_*`. On ROSA with hosted control planes this reaches the hosted
+  API server.
+* **No AWS keys on the cluster**: the agent assumes an IAM role with its
+  ServiceAccount token (IRSA).
+* **CloudWatch dashboards**: `dashboard.json` (API server dashboard) and
+  `basic-dash.json` (an empty starting template).
 
 ## Prerequisites
 
-* A ROSA cluster.
-* AWS CLI configured with permissions for CloudWatch (`CloudWatchAgentServerPolicy`).
+* A ROSA cluster with the agent's IAM role: apply
+  [andys-demo-cluster-tf](../andys-demo-cluster-tf) with
+  `deploy_cloudwatch_metrics = true`. The role trusts only the
+  `cwagent-prometheus` ServiceAccount in `amazon-cloudwatch` and has
+  `CloudWatchAgentServerPolicy`.
 * `oc` CLI with cluster-admin access.
-* `jq` installed.
+* AWS CLI, for the dashboard and verify steps.
 
 ## How to Run the Demo
 
-### Option A: Automated Setup
+Run these from this folder.
 
-From the repository root:
+### 1. Deploy the CloudWatch agent
 
-```bash
-./create-demo.sh
-```
-
-Select **Demo 2 (CloudWatch Metrics)** when prompted.
-
-### Option B: Manual Setup
-
-#### 1. Create AWS Credentials Secret
-
-Create an IAM user with `CloudWatchAgentServerPolicy` and store the credentials:
+Set your cluster name and region, take the role ARN from the Terraform output
+(run from the checkout that holds the Terraform state), and apply:
 
 ```bash
-oc create namespace amazon-cloudwatch
+CLUSTER_NAME=<your-cluster-name>
+AWS_REGION=<your-region>
+ROLE_ARN=$(cd ../andys-demo-cluster-tf && terraform output -raw cloudwatch_metrics_iam_role_arn)
 
-oc create secret generic aws-credentials \
-  -n amazon-cloudwatch \
-  --from-file=credentials=<path-to-aws-credentials-file>
+sed -e "s/CLUSTER_NAME_REPLACE_ME/${CLUSTER_NAME}/g" -e "s/AWS_REGION_REPLACE_ME/${AWS_REGION}/g" \
+  -e "s#ROLE_ARN_REPLACE_ME#${ROLE_ARN}#" cloud-watch.yaml | oc apply -f -
+oc rollout status deploy/cwagent-prometheus -n amazon-cloudwatch --timeout=5m
 ```
 
-#### 2. Customize the Configuration
+This creates the namespace, ConfigMaps, ServiceAccount, RBAC and Deployment.
 
-**Important:** Edit `cloud-watch.yaml` to replace the following hardcoded values:
-* `poc-andyr` -- Replace with your cluster name
-* `eu-west-1` -- Replace with your AWS region
+### 2. Verify the agent
 
-#### 3. Deploy the CloudWatch Agent
-
-```bash
-oc apply -f cloud-watch.yaml
-```
-
-This creates the namespace, ConfigMaps, ServiceAccount, RBAC, and Deployment.
-
-#### 4. Verify the Agent
+The pod is `Running` with no restarts, and within a couple of minutes the
+metrics land in a log group named after your cluster:
 
 ```bash
 oc get pods -n amazon-cloudwatch
-oc logs -n amazon-cloudwatch -l app=cwagent-prometheus
+aws logs describe-log-streams --region "$AWS_REGION" \
+  --log-group-name "/aws/containerinsights/${CLUSTER_NAME}/prometheus" \
+  --query 'logStreams[].logStreamName' --output text
 ```
 
-#### 5. Deploy the CloudWatch Dashboard
+The second command prints `kubernetes-apiservers`. The agent logs a
+`failed to read certificate` error for an EKS add-on certificate; it does not
+affect this demo.
+
+### 3. Deploy the CloudWatch dashboard
 
 ```bash
-aws cloudwatch put-dashboard \
-  --dashboard-name "OpenShift-API-Server" \
-  --dashboard-body file://dashboard.json
+aws cloudwatch put-dashboard --region "$AWS_REGION" \
+  --dashboard-name "OpenShift-API-Server-${CLUSTER_NAME}" \
+  --dashboard-body "$(sed -e "s/CLUSTER_NAME_REPLACE_ME/${CLUSTER_NAME}/g" \
+    -e "s/AWS_REGION_REPLACE_ME/${AWS_REGION}/g" dashboard.json)"
 ```
+
+It prints `"DashboardValidationMessages": []`. Open **CloudWatch > Dashboards**
+in the AWS console; the graphs fill in as CloudWatch turns the log events into
+metrics (allow up to 15 minutes the first time).
 
 ## Clean Up
 
 ```bash
-oc delete -f cloud-watch.yaml
-aws cloudwatch delete-dashboards --dashboard-names "OpenShift-API-Server"
+sed -e "s/CLUSTER_NAME_REPLACE_ME/${CLUSTER_NAME}/g" -e "s/AWS_REGION_REPLACE_ME/${AWS_REGION}/g" \
+  -e "s#ROLE_ARN_REPLACE_ME#${ROLE_ARN}#" cloud-watch.yaml | oc delete -f -
+aws cloudwatch delete-dashboards --region "$AWS_REGION" \
+  --dashboard-names "OpenShift-API-Server-${CLUSTER_NAME}"
+aws logs delete-log-group --region "$AWS_REGION" \
+  --log-group-name "/aws/containerinsights/${CLUSTER_NAME}/prometheus"
 ```
 
-To also remove the IAM user, run `./create-demo.sh` and select the clean option, or delete manually via the AWS CLI.
+Then set `deploy_cloudwatch_metrics = false` and re-apply Terraform to remove
+the IAM role.

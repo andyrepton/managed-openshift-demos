@@ -31,6 +31,8 @@ module "rosa" {
   deploy_virt_machine_pool      = var.deploy_virt_machine_pool
   deploy_bgp                    = var.deploy_bgp
   deploy_cloudwatch_logging     = var.deploy_cloudwatch_logging
+  deploy_ack_s3                 = var.deploy_ack_s3
+  deploy_cloudwatch_metrics     = var.deploy_cloudwatch_metrics
 }
 
 module "aro" {

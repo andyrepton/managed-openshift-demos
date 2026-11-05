@@ -55,3 +55,10 @@ output "lokistack_iam_role_arn" {
   value = var.create_rosa && var.deploy_lokistack_machine_pool ? module.rosa[0].lokistack_iam_role_arn : ""
 }
 
+output "ack_s3_iam_role_arn" {
+  value = var.create_rosa && var.deploy_ack_s3 ? module.rosa[0].ack_s3_iam_role_arn : ""
+}
+
+output "cloudwatch_metrics_iam_role_arn" {
+  value = var.create_rosa && var.deploy_cloudwatch_metrics ? module.rosa[0].cloudwatch_metrics_iam_role_arn : ""
+}

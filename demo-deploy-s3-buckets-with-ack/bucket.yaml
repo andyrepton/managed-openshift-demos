@@ -1,6 +1,15 @@
+# An S3 bucket, declared like any other Kubernetes object in a team's own
+# namespace. Bucket names are global across all AWS accounts, so the README
+# sets spec.name from the cluster name.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ack-demo
+---
 apiVersion: s3.services.k8s.aws/v1alpha1
 kind: Bucket
 metadata:
-  name: hello-hcp-bucket
+  name: hello-bucket
+  namespace: ack-demo
 spec:
-  name: hello-hcp-bucket
+  name: BUCKET_NAME_REPLACE_ME

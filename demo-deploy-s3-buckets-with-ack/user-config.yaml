@@ -1,0 +1,24 @@
+# Controller settings: every $(VAR) the controller's arguments reference must
+# be a key here, or it crashes on start with "invalid argument". Set AWS_REGION
+# before applying (the README does it with sed). There is deliberately no
+# ack-s3-user-secrets Secret: the controller assumes an IAM role through its
+# ServiceAccount token (IRSA) instead of using access keys.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ack-s3-user-config
+  namespace: ack-system
+data:
+  ACK_ENABLE_DEVELOPMENT_LOGGING: "false"
+  ACK_LOG_LEVEL: info
+  ACK_WATCH_NAMESPACE: ""
+  AWS_REGION: REPLACE_ME
+  AWS_ENDPOINT_URL: ""
+  ACK_RESOURCE_TAGS: services.k8s.aws/controller-version=%CONTROLLER_SERVICE%-%CONTROLLER_VERSION%,services.k8s.aws/namespace=%K8S_NAMESPACE%
+  ENABLE_LEADER_ELECTION: "true"
+  LEADER_ELECTION_NAMESPACE: ""
+  RECONCILE_DEFAULT_MAX_CONCURRENT_SYNCS: "1"
+  FEATURE_FLAGS: ""
+  FEATURE_GATES: ""
+  # Cross-account resource management, off: one account, one role.
+  ENABLE_CARM: "false"

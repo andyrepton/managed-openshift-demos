@@ -201,6 +201,18 @@ variable "deploy_cloudwatch_logging" {
   description = "Create IAM role for forwarding logs to CloudWatch via IRSA."
 }
 
+variable "deploy_ack_s3" {
+  type        = bool
+  default     = false
+  description = "Create IAM role for the ACK S3 controller via IRSA."
+}
+
+variable "deploy_cloudwatch_metrics" {
+  type        = bool
+  default     = false
+  description = "Create IAM role for the CloudWatch metrics agent via IRSA."
+}
+
 variable "cloudwatch_namespace" {
   type        = string
   default     = "openshift-logging"
