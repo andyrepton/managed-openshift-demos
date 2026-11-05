@@ -8,28 +8,32 @@ tags; node selectors place each deployment on the matching nodes, and each app's
 route shows the architecture it runs on. Developers do no extra work to target
 ARM. It is here to show that ROSA supports mixed-architecture clusters.
 
+Tested: 2026-11-05, ROSA HCP 4.22.12 with one m6g.xlarge Graviton node (the console Import from Git step was not run).
+
 ## Ahead of time
 
-- Ensure you've built a cluster than has Graviton nodes. You can use the terraform in ../andys-demo-cluster-tf to achieve this 
-
-- Clean up your existing demo:
+- Ensure you've built a cluster that has Graviton nodes: apply
+  [andys-demo-cluster-tf](../andys-demo-cluster-tf) with
+  `deploy_graviton_machine_pool = true`. Check one is Ready:
 
 ```
-$ oc delete namespace multiarch-demo-proj
+$ oc get nodes -l kubernetes.io/arch=arm64
 ```
+
+- If you have run the demo before on this cluster, run [Clean Up](#clean-up) first.
 
 ## During the demo
 
 - Talk about showing off our hello source2image option.
 
-- Deploy hello to a new namespace, go to developer view in the console and click Add, then Import from git, choose https://github.com/andyrepton/hello as the source. Show it running.
+- Deploy hello to a new namespace: in the console's developer view click Add, then Import from Git, and use https://github.com/andyrepton/hello as the source. Show it running.
 
 - Explain that we can now deploy this on different nodes, including Graviton. We'll start by making a namespace:
 
 ```
 $ oc apply -f namespace.yaml
 
-$ oc project multiarch-demo
+$ oc project multiarch-demo-proj
 ```
 
 Now, we will make an image stream that will hold our multi-arch builds:
@@ -52,7 +56,7 @@ $ oc apply -f amd64-build-config.yaml
 $ oc apply -f arm64-build-config.yaml
 ```
 
-We can check it's worked using:
+We can check it's worked using (each build takes about a minute):
 
 ```
 $ oc get builds
@@ -81,6 +85,8 @@ And expose them to the internet:
 ```
 $ oc apply -f services.yaml
 $ oc apply -f routes.yaml
+$ oc rollout status deploy/hello-amd64
+$ oc rollout status deploy/hello-arm64
 ```
 
 - Now go back to the console and open up the apps in new tabs. You should see the architecture has changed between the two, showing that the same app is running on different nodes and different arch types, with no additional work needed from the developer side.
@@ -96,3 +102,20 @@ Now we can show the arch types of the nodes:
 ```
 $ for NODE in $(oc get pods -l deployment=hello -o json | jq -r '.items[] | .spec.nodeName'); do oc get node $NODE -o json | jq .status.nodeInfo.architecture; done
 ```
+
+And from the command line, each route's page names the architecture it runs on:
+
+```
+$ for r in hello-amd64 hello-arm64; do echo "$r: $(curl -s https://$(oc get route $r -o jsonpath='{.spec.host}')/ | grep -io 'arm64\|amd64' | sort -u)"; done
+hello-amd64: amd64
+hello-arm64: arm64
+```
+
+## Clean Up
+
+```
+$ oc delete namespace multiarch-demo-proj
+```
+
+The project created through the console in the first step is separate; delete
+it the same way if you no longer need it.
