@@ -1,0 +1,52 @@
+# The ACK S3 controller from OperatorHub (community-operators). It reads its
+# settings from the ack-s3-user-config ConfigMap (user-config.yaml), which must
+# exist before the controller starts.
+#
+# AWS access is IRSA: the Subscription's config gives the controller a
+# ServiceAccount token for the audience "openshift" and the IAM role to assume
+# with it (ROLE_ARN_REPLACE_ME, set by the README from the Terraform output).
+# Setting this here, rather than annotating the ServiceAccount and restarting,
+# means OLM rolls it out itself; OLM reverts restarts of the Deployments it
+# owns.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ack-system
+---
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: ack-system
+  namespace: ack-system
+spec:
+  upgradeStrategy: Default
+---
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: ack-s3-controller
+  namespace: ack-system
+spec:
+  channel: alpha
+  installPlanApproval: Automatic
+  name: ack-s3-controller
+  source: community-operators
+  sourceNamespace: openshift-marketplace
+  config:
+    env:
+    - name: AWS_ROLE_ARN
+      value: ROLE_ARN_REPLACE_ME
+    - name: AWS_WEB_IDENTITY_TOKEN_FILE
+      value: /var/run/secrets/openshift/serviceaccount/token
+    volumes:
+    - name: aws-token
+      projected:
+        sources:
+        - serviceAccountToken:
+            audience: openshift
+            expirationSeconds: 3600
+            path: token
+    volumeMounts:
+    - name: aws-token
+      mountPath: /var/run/secrets/openshift/serviceaccount
+      readOnly: true

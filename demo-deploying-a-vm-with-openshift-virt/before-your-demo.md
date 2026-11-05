@@ -2,26 +2,23 @@
 
 ## Install OpenShift virt
 
-Go to ../openshift-virt and follow the instructions there
+Go to [../openshift-virt](../openshift-virt) and follow the instructions there,
+including its verify step: the metal node must offer KVM (`1k` in the
+`KVM` column).
 
-## Cleanup
+## Check the golden images
 
+The console's templates and the command-line path both clone their disk from a
+golden image. They are imported once, a few minutes after OpenShift
+Virtualization is turned on:
+
+```bash
+oc get datavolume -n openshift-virtualization-os-images
 ```
-oc project s2i-demo
-oc delete buildconfig demo
-oc delete deployment demo
-oc delete imagestream demo
-oc delete service demo
-oc delete route demo
-oc delete project s2i-demo
-```
 
-# Cleanup Dev Space
+Wait until the `fedora-...` DataVolume shows `Succeeded`.
 
-- Go to Dev Spaces
-- Click Create WorkSpace
-- Put in your github repo: https://github.com/andyrepton/hello (this is to pre-warm the pulling of the workspace images, which can take up to 5 minutes on the first go)
+## Clear the previous run
 
-- Go to Dev Spaces
-- Click on WorkSpaces
-- Delete workspace
+If you have given this demo on the cluster before, run the README's
+[Clean Up](README.md#clean-up) first.

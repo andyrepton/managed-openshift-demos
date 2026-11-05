@@ -1,0 +1,36 @@
+# The bgp-cloud-connector operator from the redhat-operators catalog.
+#
+# AWS access uses OpenShift's token-based authentication: ROLEARN on the
+# Subscription makes the operator request short-lived credentials for the IAM
+# role from the Cloud Credential Operator. The README sets the role ARN from
+# the Terraform output (bgp_iam_role_arn).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: openshift-bgp-cloud-connector
+---
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: openshift-bgp-cloud-connector
+  namespace: openshift-bgp-cloud-connector
+spec:
+  targetNamespaces:
+  - openshift-bgp-cloud-connector
+  upgradeStrategy: Default
+---
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: bgp-cloud-connector
+  namespace: openshift-bgp-cloud-connector
+spec:
+  channel: stable
+  installPlanApproval: Automatic
+  name: bgp-cloud-connector
+  source: redhat-operators
+  sourceNamespace: openshift-marketplace
+  config:
+    env:
+    - name: ROLEARN
+      value: ROLE_ARN_REPLACE_ME

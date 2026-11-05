@@ -32,3 +32,15 @@ variable "compute_machine_type" {
   default     = "custom-4-16384"
   description = "GCP machine type for compute nodes."
 }
+
+variable "deploy_virt_machine_pool" {
+  type        = bool
+  default     = false
+  description = "Add a bare-metal machine pool for OpenShift Virtualization."
+}
+
+variable "virt_machine_type" {
+  type        = string
+  default     = "c3-standard-192-metal"
+  description = "GCP bare-metal machine type for the virtualization pool."
+}

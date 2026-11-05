@@ -1,6 +1,16 @@
 # OpenCode AI Coding Assistant in Dev Spaces
 
-Run [OpenCode](https://github.com/opencode-ai/opencode), an AI-powered coding assistant, inside OpenShift Dev Spaces, backed by a self-hosted Devstral model served via vLLM.
+This demo runs AI coding assistants inside OpenShift Dev Spaces against a
+Devstral model that vLLM serves on the same cluster. One devfile installs and
+configures three tools, the [OpenCode](https://github.com/opencode-ai/opencode)
+CLI and the Continue and Kilo Code editor extensions, all pointing at the
+in-cluster OpenAI-compatible endpoint, so no external API key or sign-in is
+needed. Developers get AI assistance in a browser-based workspace backed by a
+model you host. It is here to show OpenShift AI model serving and Dev Spaces
+combined into a self-hosted developer platform, building on `openshift-ai`,
+`demo-vllm-model-serving` and `openshift-devspaces`.
+
+Tested: 2026-11-04, ROSA HCP 4.22.12, Dev Spaces 3.31.2, Devstral on a g7e.2xlarge (workspace opened by a person in the browser).
 
 ## Prerequisites
 

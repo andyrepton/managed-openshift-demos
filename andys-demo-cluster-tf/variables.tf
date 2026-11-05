@@ -249,6 +249,24 @@ variable "deploy_cloudwatch_logging" {
   description = "Create IAM role for forwarding logs to CloudWatch via IRSA."
 }
 
+variable "deploy_ack_s3" {
+  type        = bool
+  default     = false
+  description = "Create IAM role for the ACK S3 controller via IRSA."
+}
+
+variable "deploy_cloudwatch_metrics" {
+  type        = bool
+  default     = false
+  description = "Create IAM role for the CloudWatch metrics agent via IRSA."
+}
+
+variable "deploy_autonode" {
+  type        = bool
+  default     = false
+  description = "Create the IAM role and discovery tags for ROSA AutoNode."
+}
+
 variable "domain" {
   type        = string
   default     = ""
@@ -360,6 +378,12 @@ variable "osd_compute_nodes" {
   type        = number
   default     = 4
   description = "Number of compute nodes for the OSD cluster. Minimum 4."
+}
+
+variable "osd_deploy_virt_machine_pool" {
+  type        = bool
+  default     = false
+  description = "Add a bare-metal machine pool to the OSD cluster for OpenShift Virtualization."
 }
 
 variable "osd_compute_machine_type" {

@@ -15,6 +15,8 @@ Run with -I. This reads untrusted network data, and -I keeps the interpreter
 from loading anything out of the working directory.
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import sys

@@ -1,8 +1,12 @@
+# Named to match demo-forward-logs-to-aws-cloudwatch, which installs the same
+# operator into the same namespace. A namespace with two OperatorGroups stops
+# OLM installing anything in it, so both demos must use this one name.
 apiVersion: operators.coreos.com/v1
 kind: OperatorGroup
 metadata:
-  name: cluster-logging
-  namespace: openshift-logging 
+  name: openshift-logging
+  namespace: openshift-logging
 spec:
   targetNamespaces:
   - openshift-logging
+  upgradeStrategy: Default

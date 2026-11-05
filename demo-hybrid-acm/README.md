@@ -1,6 +1,13 @@
 # Hybrid Multi-Cluster Management with ACM
 
-Manage an on-premises OpenShift cluster from a ROSA hub using Advanced Cluster Management (ACM). Demonstrates cluster import, governance policies, and application deployment via ManifestWork.
+This demo uses Red Hat Advanced Cluster Management (ACM) on a Red Hat OpenShift
+Service on AWS (ROSA) hub to manage an on-premises OpenShift cluster. It imports
+the on-premises cluster, applies governance policies (some enforced, such as
+installing the Cluster Logging Operator and setting ResourceQuotas, others
+report-only), deploys a sample app to both clusters, and optionally adds
+multi-cluster observability backed by S3. Customers get one place to manage and
+audit cloud and on-premises clusters. It is here to show a managed cloud cluster
+working as the control point for a hybrid estate.
 
 ## Architecture
 

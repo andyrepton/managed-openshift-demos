@@ -1,5 +1,14 @@
 # Multi region ROSA example
 
+This demo runs the same application on two Red Hat OpenShift Service on AWS
+(ROSA) clusters in different AWS regions behind one hostname. Each cluster gets
+an extra ingress controller behind an AWS Network Load Balancer for a custom
+domain, and traffic is spread with weighted Amazon Route 53 records or AWS
+Global Accelerator. The demo shifts traffic by changing the weights, then breaks
+one cluster's ingress so its health checks fail and traffic moves to the other
+region. It is here to show how ROSA works with standard AWS services to give an
+application regional failover.
+
 ![Diagram](rosa-multi-region-r53.jpg)
 
 ## Ahead of time

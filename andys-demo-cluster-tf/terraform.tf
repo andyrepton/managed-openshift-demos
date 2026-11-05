@@ -43,8 +43,11 @@ provider "rhcs" {}
 
 provider "aws" {
   region = var.aws_region
+  # Tags the cluster (kubernetes.io/) and ROSA AutoNode (karpenter.sh/) put on
+  # Terraform-managed subnets and security groups; ignore them so plans do not
+  # try to remove them.
   ignore_tags {
-    key_prefixes = ["kubernetes.io/"]
+    key_prefixes = ["kubernetes.io/", "karpenter.sh/"]
   }
   default_tags {
     tags = var.default_aws_tags

@@ -31,6 +31,9 @@ module "rosa" {
   deploy_virt_machine_pool      = var.deploy_virt_machine_pool
   deploy_bgp                    = var.deploy_bgp
   deploy_cloudwatch_logging     = var.deploy_cloudwatch_logging
+  deploy_ack_s3                 = var.deploy_ack_s3
+  deploy_cloudwatch_metrics     = var.deploy_cloudwatch_metrics
+  deploy_autonode               = var.deploy_autonode
 }
 
 module "aro" {
@@ -61,12 +64,13 @@ module "aro_hcp" {
 }
 
 module "osd" {
-  count                = var.create_osd ? 1 : 0
-  source               = "./osd"
-  cluster_name         = coalesce(var.osd_cluster_name, var.cluster_name)
-  openshift_version    = var.osd_openshift_version
-  gcp_project_id       = var.gcp_project_id
-  cloud_region         = var.osd_cloud_region
-  compute_nodes        = var.osd_compute_nodes
-  compute_machine_type = var.osd_compute_machine_type
+  count                    = var.create_osd ? 1 : 0
+  source                   = "./osd"
+  cluster_name             = coalesce(var.osd_cluster_name, var.cluster_name)
+  openshift_version        = var.osd_openshift_version
+  gcp_project_id           = var.gcp_project_id
+  cloud_region             = var.osd_cloud_region
+  compute_nodes            = var.osd_compute_nodes
+  compute_machine_type     = var.osd_compute_machine_type
+  deploy_virt_machine_pool = var.osd_deploy_virt_machine_pool
 }

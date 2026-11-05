@@ -1,17 +1,44 @@
-apiVersion: "logging.openshift.io/v1"
-kind: "ClusterLogging"
+# Infrastructure logs into the LokiStack, and the console's Logs view over it.
+#
+# The forwarder is named `lokistack` rather than `instance` so it can sit next
+# to demo-forward-logs-to-aws-cloudwatch's forwarder in the same namespace.
+apiVersion: observability.openshift.io/v1
+kind: ClusterLogForwarder
 metadata:
-  name: "instance"
-  namespace: "openshift-logging"
+  name: lokistack
+  namespace: openshift-logging
 spec:
-  managementState: "Managed"
-  logStore:
-    type: "lokistack"
-    lokistack:
+  serviceAccount:
+    name: logging-collector
+  outputs:
+  - name: lokistack-out
+    type: lokiStack
+    lokiStack:
+      target:
+        name: logging-loki
+        namespace: openshift-logging
+      authentication:
+        token:
+          from: serviceAccount
+    # Required when the LokiStack is in the same cluster.
+    tls:
+      ca:
+        key: service-ca.crt
+        configMapName: logging-loki-gateway-ca-bundle
+  pipelines:
+  - name: infrastructure-logs
+    inputRefs:
+    - infrastructure
+    outputRefs:
+    - lokistack-out
+---
+# Observe > Logs in the console. Needs the Cluster Observability Operator.
+apiVersion: observability.openshift.io/v1alpha1
+kind: UIPlugin
+metadata:
+  name: logging
+spec:
+  type: Logging
+  logging:
+    lokiStack:
       name: logging-loki
-  collection:
-    type: "vector"
-    vector: {}
-  visualization:
-    type: "ocp-console"
-    ocpConsole: {}

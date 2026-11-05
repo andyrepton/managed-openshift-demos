@@ -62,6 +62,15 @@ resource "aws_security_group" "rfc1918" {
   }
 }
 
+# Accepted risk (approved 2026-11-05 for the demo-bgp-on-rosa PoC): all ports
+# and protocols from 0.0.0.0/0 to the BGP router (metal) node, which also hosts
+# the CUDN pods and VMs. The node has no public IP, but this takes the cluster's
+# default security group out of the picture for it: anything that can route to
+# it (the VPC, anything peered or connected later, traffic via the IGW, since
+# the CUDN prefixes are also propagated into the public route table) reaches
+# every port. Without it, return traffic for CUDN IPs is blocked by the default
+# cluster security group. Re-examine before real data, a public endpoint, or
+# connecting another network.
 resource "aws_security_group" "allow_all" {
   name        = "${var.cluster_name}-bgp-allow-all"
   description = "Allow all traffic to enable IGW traffic for pod networks"

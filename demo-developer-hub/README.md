@@ -1,10 +1,18 @@
 # Red Hat Developer Hub on ROSA/ARO
 
-Install Red Hat Developer Hub (RHDH) 1.10 as the base other demos plug into: the software catalog, the dynamic-plugin loader, and GitHub sign-in restricted to a named list of people.
+This demo installs Red Hat Developer Hub (RHDH) 1.10 on ROSA, ARO or OSD as the
+base that other demos in this repo plug into. It sets up a software catalog
+loaded from git, the dynamic plugin loader, and sign-in through a GitHub App,
+with the catalog's user list deciding who gets in, so no GitHub personal access
+token is needed. It is here to give the repo a provider-agnostic internal
+developer portal on managed OpenShift that other demos, such as the Deployment
+Planner, can extend without changing the base install.
+
+Tested: 2026-11-04, ROSA HCP 4.22.12, RHDH 1.10.6: partial. The install and the dynamic plugin loader work; GitHub sign-in and the Catalog were not checked (no GitHub App callback was set up for this run).
 
 ## Overview
 
-* **RHDH 1.10.5** -- installed via OLM from the standard `redhat-operators` catalog.
+* **RHDH 1.10** (the newest 1.10 release, from channel `fast-1.10`) -- installed via OLM from the standard `redhat-operators` catalog.
 * **Software catalog** -- two teams, a sample system and component, loaded from this repo.
 * **Software catalog from git** -- entities read from a public repo, unauthenticated.
 * **GitHub sign-in** -- via a GitHub App, with the software catalog as the access list.
@@ -34,7 +42,7 @@ Wait for the CSV:
 ```bash
 oc get csv -n rhdh-operator
 # NAME                   DISPLAY                          VERSION   PHASE
-# rhdh-operator.v1.10.5  Red Hat Developer Hub Operator   1.10.5    Succeeded
+# rhdh-operator.v1.10.6  Red Hat Developer Hub Operator   1.10.6    Succeeded
 ```
 
 ### 2. Set up sign-in
@@ -59,14 +67,17 @@ Add yourself to `catalog/org.yaml` as a `User` whose `metadata.name` is your Git
 ```bash
 oc create namespace rhdh
 
-oc -n rhdh create secret generic rhdh-secrets \
-  --from-literal=BACKEND_SECRET="$(openssl rand -base64 24)" \
-  --from-literal=SESSION_SECRET="$(openssl rand -base64 24)" \
-  --from-literal=GITHUB_APP_CLIENT_ID="${GITHUB_APP_CLIENT_ID}" \
-  --from-literal=GITHUB_APP_CLIENT_SECRET="${GITHUB_APP_CLIENT_SECRET}" \
-  --from-literal=GITHUB_ORG="andyrepton" \
-  --from-literal=GITHUB_REPO="managed-openshift-demos" \
-  --from-literal=CATALOG_BRANCH="main"
+# GITHUB_APP_CLIENT_ID and GITHUB_APP_CLIENT_SECRET from step 2, for example:
+#   read -rs GITHUB_APP_CLIENT_SECRET
+# <(...) hands oc a file descriptor, so no secret appears as an argument.
+oc -n rhdh create secret generic rhdh-secrets --from-env-file=<(printf '%s\n' \
+  "BACKEND_SECRET=$(openssl rand -base64 24)" \
+  "SESSION_SECRET=$(openssl rand -base64 24)" \
+  "GITHUB_APP_CLIENT_ID=${GITHUB_APP_CLIENT_ID}" \
+  "GITHUB_APP_CLIENT_SECRET=${GITHUB_APP_CLIENT_SECRET}" \
+  "GITHUB_ORG=andyrepton" \
+  "GITHUB_REPO=managed-openshift-demos" \
+  "CATALOG_BRANCH=main")
 ```
 
 `secrets/rhdh-secrets.yaml` documents the shape of the Secret with `REPLACE_ME` placeholders. Do not commit a filled-in copy.
@@ -84,6 +95,8 @@ oc apply -f app-config/dynamic-plugins.yaml
 
 ```bash
 oc apply -f backstage.yaml
+# The operator creates the deployment a few seconds later
+until oc get deployment/backstage-developer-hub -n rhdh >/dev/null 2>&1; do sleep 5; done
 oc -n rhdh rollout status deployment/backstage-developer-hub --timeout=10m
 
 echo "https://$(oc get route backstage-developer-hub -n rhdh -o jsonpath='{.spec.host}')"
@@ -222,7 +235,7 @@ invite-one-person mode.
   oc -n rhdh rollout restart deployment/backstage-developer-hub
   ```
 * The operator names both the Deployment and the Route `backstage-<cr-name>`.
-* The CR uses `rhdh.redhat.com/v1alpha5`. The 1.10.5 CRD serves `v1alpha4` and `v1alpha5`; `v1alpha5` is the storage version and the one carrying `spec.flavours`.
+* The CR uses `rhdh.redhat.com/v1alpha5`. The 1.10 CRD serves `v1alpha4` and `v1alpha5`; `v1alpha5` is the storage version and the one carrying `spec.flavours`.
 * The operator enables the `lightspeed` flavour by default, adding an `init-rag-data` init container and a `lightspeed-core` sidecar. `backstage.yaml` disables it so this demo is plain RHDH.
 * `enableLocalDb: true` means the operator runs PostgreSQL. Use an external database for anything persistent.
 * **The Route's 30s default timeout is shorter than a reasoning model's reply.** Without `haproxy.router.openshift.io/timeout`, haproxy cuts the connection first and the browser gets a bare 504 with no JSON body and nothing in the backend log -- which looks like an application bug and is not. The RHDH operator does not manage Route annotations, so setting it by hand holds.

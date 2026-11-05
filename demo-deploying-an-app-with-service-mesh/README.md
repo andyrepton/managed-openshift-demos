@@ -1,6 +1,12 @@
 # Deploying an Application with OpenShift Service Mesh
 
-This demo shows how to enroll an application namespace into OpenShift Service Mesh using both `ServiceMeshMemberRoll` and `ServiceMeshMember` resources. It demonstrates two patterns for joining namespaces to the mesh.
+This demo adds an application namespace to Red Hat OpenShift Service Mesh in two
+ways: a mesh administrator adds it to the central `ServiceMeshMemberRoll`, or
+the namespace owner enrolls it with their own `ServiceMeshMember` resource. A
+sample app then shows each pod getting an Envoy sidecar. Platform teams can keep
+central control or hand onboarding to application teams, with no change to
+application code. It is here to show both enrollment models on ROSA, ARO or OSD,
+and needs the `openshift-service-mesh` setup first.
 
 ## Overview
 

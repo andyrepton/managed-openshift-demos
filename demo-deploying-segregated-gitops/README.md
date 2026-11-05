@@ -1,5 +1,16 @@
 # Deploying segregated GitOps instances for developer teams
 
+This demo shows a platform team using the central Argo CD instance from Red Hat
+OpenShift GitOps to set up application teams on a Red Hat OpenShift Service on
+AWS (ROSA) cluster. Argo CD Applications create a project and admin access for
+each team, then deploy a separate Argo CD instance inside that team's namespace.
+Each team gets its own GitOps instance, so a mistake in one team's repository
+can only affect that team, and normal OpenShift RBAC controls who can reach it.
+It is here to show how one central team can hand out isolated, self-managed
+GitOps environments on demand. It needs `openshift-gitops` first.
+
+Tested: 2026-11-05, ROSA HCP 4.22.12, OpenShift GitOps 1.22.3 (Applications synced from GitHub `main`).
+
 ## Rationale
 
 When deploying OpenShift GitOps, the operator will automatically make an ArgoCD Instance for you. This instance is typically referred to as the "Cluster" ArgoCD, though in practise it is identical to any other ArgoCD instance.
@@ -17,7 +28,7 @@ Cons:
 There are multiple ways to solve the security angle, such as having one team manage Applications, and pointing at different repositories, or using OWNERS based controls on your git repositories. However, one way to move around this is instead to have individual ArgoCD instances inside the relevant namespaces and only allow access to those. This has both pros and cons:
 
 Pros:
-- Failure protection: Each ArgoCD's blast radius is limited to it's own namespace only
+- Failure protection: Each ArgoCD's blast radius is limited to its own namespace only
 - Simplified security: Users can use OpenShift's RBAC controls to restrict access to a namespace only
 
 This demo will focus on a pattern of a Platform Engineering team, using their own ArgoCD instance (the "Cluster" one), to deploy projects and ArgoCD's into a ROSA cluster.
@@ -25,7 +36,7 @@ This demo will focus on a pattern of a Platform Engineering team, using their ow
 ## Important terms
 
 - OpenShift GitOps: An Operator capable of deploying ArgoCD instances, Application resources and more (for this demo we will focus on these two only)
-- ArgoCD: An instance of ArgoCD insid the cluster
+- ArgoCD: An instance of ArgoCD inside the cluster
 - Application: A CustomResource that defines an ArgoCD Application, which usually will point at a repository containing additional OpenShift resources (it can also point at a Helm repository, but this is out of scope for this demo)
 - Repository: A Git repository that can be reached from the cluster
 
@@ -36,8 +47,8 @@ We will start by installing the OpenShift GitOps Operator, which will install th
 You can check that ArgoCD is running by checking the status of it:
 
 ```bash
-oc describe argocd -n openshift-gitops | grep Phase
-  Phase:                       Available
+oc get argocd openshift-gitops -n openshift-gitops -o jsonpath='{.status.phase}{"\n"}'
+Available
 ```
 
 Once the cluster ArgoCD is available, you can get the route to login like so:
@@ -48,7 +59,7 @@ oc get route openshift-gitops-server -n openshift-gitops
 
 You can use this to visually follow the work we are doing on the command line
 
-## Creating an Applicaton to deploy our Application Team namespace
+## Creating an Application to deploy our Application Team namespace
 
 We will start by creating a basic application that creates a new project for our application team, and deploys a RoleBinding for this namespace to allow our team to access it (configuring an idp is outside of the scope of this demo). We are assuming that your users are in a group named `application1-team` here.
 
@@ -148,9 +159,13 @@ You should see the following in your ArgoCD if you are using the UI:
 
 ![](./assets/application1-project.png)
 
-You can test that you can access your new ArgoCD:
+Wait for the team's Argo CD to come up (a minute or two), then check you can
+reach it:
 
 ```bash
+oc wait argocd/application1-argocd -n application1-project \
+  --for=jsonpath='{.status.phase}'=Available --timeout=5m
+
 oc get project application1-project
 NAME                   DISPLAY NAME   STATUS
 application1-project                  Active
@@ -161,22 +176,33 @@ application1-argocd   39s
 
 oc get route -n application1-project application1-argocd-server
 NAME                         HOST/PORT                                                                                  PATH   SERVICES                     PORT    TERMINATION          WILDCARD
-application1-argocd-server   application1-argocd-server-application1-project.apps.poc-andyr.btk0.p1.openshiftapps.com          application1-argocd-server   https   reencrypt/Redirect   None
+application1-argocd-server   application1-argocd-server-application1-project.apps.<cluster-domain>          application1-argocd-server   https   reencrypt/Redirect   None
 ```
 
 To get the admin password for this ArgoCD Instance, you can use the following command:
 
 ```bash
-oc get secret -n application1-project application1-argocd-cluster -o jsonpath='{.data.admin\.password}' | base64 -D
+oc get secret -n application1-project application1-argocd-cluster -o jsonpath='{.data.admin\.password}' | base64 -d
 ```
 
 > Note: The secret name will be the name of your argocd cluster plus `-cluster` on the end. As we called this ArgoCD application1-argocd, this is why the secret is named thus. Please edit this for additional clusters.
 
 ## Conclusion
 
-This demo has hopefully opened up some possibitilies of how a central Platform Engineering team can manage multiple Application Projects from a central repository, giving flexibility to application teams on demand.
+This demo has hopefully opened up some possibilities of how a central Platform Engineering team can manage multiple Application Projects from a central repository, giving flexibility to application teams on demand.
 
 Ideas for next steps for users to explore:
 - Using Kustomize to make multiple Application Projects at the same time
 - Creating the Application resource yamls themselves inside a git repository rather than using `oc apply`
 - Adding namespace quotas, network policies etc to Application projects
+
+## Clean Up
+
+Delete the Applications from the cluster Argo CD. With automated pruning on,
+removing an Application does not remove what it created, so delete the projects
+too (this also removes the team's Argo CD instance):
+
+```bash
+oc delete application application1-project namespace-application-creation -n openshift-gitops
+oc delete project application1-project namespace-application
+```

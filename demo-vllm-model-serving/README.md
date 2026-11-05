@@ -1,6 +1,15 @@
 # vLLM Model Serving with Devstral
 
-Serve [Devstral Small 2 24B](https://huggingface.co/mistralai/Devstral-Small-2-24B-Instruct-2512) (AWQ 4-bit) via vLLM on OpenShift AI, exposing an OpenAI-compatible API.
+This demo serves Mistral's [Devstral Small 2
+24B](https://huggingface.co/mistralai/Devstral-Small-2-24B-Instruct-2512) coding
+model with vLLM on Red Hat OpenShift AI, in its 4-bit AWQ form that fits on a
+single 24 GB A10G GPU. A Job downloads the weights to a persistent volume and
+KServe serves them as an OpenAI-compatible API inside the cluster, which other
+workloads, such as coding assistants in OpenShift Dev Spaces, can then use. It
+is here to show OpenShift AI hosting open-weight models on GPU nodes in a
+managed cluster; other demos build on it. It needs the `openshift-ai` base demo.
+
+Tested: 2026-11-04, ROSA HCP 4.22.12, RHOAI 3.5.2, on a g7e.2xlarge GPU.
 
 Devstral is Mistral's agentic coding model: 68% SWE-bench Verified, Apache 2.0, with native tool-calling support. The AWQ 4-bit quantized variant fits on a single A10G (24GB) GPU.
 
@@ -8,7 +17,8 @@ Devstral is Mistral's agentic coding model: 68% SWE-bench Verified, Apache 2.0, 
 
 - [`openshift-ai/`](../openshift-ai/) demo deployed (NFD, NVIDIA GPU Operator, RHOAI)
 - GPU node available with `nvidia.com/gpu` taint
-- HuggingFace token available as `$HF_TOKEN`
+- A HuggingFace token
+- `jq`, for reading the test responses
 
 ## Setup
 
@@ -16,9 +26,10 @@ Devstral is Mistral's agentic coding model: 68% SWE-bench Verified, Apache 2.0, 
 
 ```bash
 oc apply -f namespace.yaml
-oc create secret generic hf-token \
-  --from-literal=token="$HUGGING_FACE_HUB_TOKEN" \
-  -n vllm-model-serving
+read -rs HF_TOKEN                   # paste your HuggingFace token, then Enter
+printf '%s' "$HF_TOKEN" | oc create secret generic hf-token \
+  -n vllm-model-serving --from-file=token=/dev/stdin
+unset HF_TOKEN
 ```
 
 ### 2. Download model weights
@@ -41,24 +52,23 @@ oc apply -f inference-service.yaml
 Wait for the predictor pod to become ready (takes 2-3 minutes to load weights):
 
 ```bash
-oc wait --for=condition=Ready pod -l serving.kserve.io/inferenceservice=devstral -n vllm-model-serving --timeout=15m
+# Wait on the InferenceService, not its pod: the pod does not exist yet
+oc wait --for=condition=Ready inferenceservice/devstral -n vllm-model-serving --timeout=15m
 ```
 
 ## Verify
 
 ```bash
-# Test from inside the cluster
-POD_IP=$(oc get pod -n vllm-model-serving -l serving.kserve.io/inferenceservice=devstral -o jsonpath='{.items[0].status.podIP}')
-
-# List models
-oc run curl-test --rm -i --restart=Never -n vllm-model-serving --image=curlimages/curl -- \
-  curl -s "http://${POD_IP}:8000/v1/models"
+# Test from inside the model's own pod (it has curl)
+oc exec -n vllm-model-serving deploy/devstral-predictor -c kserve-container -- \
+  curl -s http://localhost:8000/v1/models | jq -r '.data[].id'
+# devstral
 
 # Test chat completion
-oc run curl-chat --rm -i --restart=Never -n vllm-model-serving --image=curlimages/curl -- \
-  curl -s "http://${POD_IP}:8000/v1/chat/completions" \
-  -H "Content-Type: application/json" \
-  -d '{"model":"devstral","messages":[{"role":"user","content":"Write a Python function to reverse a linked list"}],"max_tokens":512}'
+oc exec -n vllm-model-serving deploy/devstral-predictor -c kserve-container -- \
+  curl -s http://localhost:8000/v1/chat/completions -H "Content-Type: application/json" \
+  -d '{"model":"devstral","messages":[{"role":"user","content":"Write a Python function to reverse a linked list"}],"max_tokens":512}' \
+  | jq -r '.choices[0].message.content'
 ```
 
 ## In-cluster endpoint

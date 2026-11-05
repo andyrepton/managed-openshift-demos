@@ -1,6 +1,14 @@
 # Source-to-Image (S2I) and Dev Spaces Demo
 
-This demo shows OpenShift's Source-to-Image (S2I) capability to build and deploy a Go application directly from source code, without writing a Dockerfile. It then extends the workflow using OpenShift Dev Spaces for in-browser development and rapid iteration via binary builds.
+This demo takes a Go application from a GitHub repository to a running, routed
+deployment on ROSA, ARO or OSD without writing a Dockerfile, using OpenShift
+Source-to-Image (S2I). It then opens the same code in OpenShift Dev Spaces, a
+browser-based IDE running in the cluster, and uses binary builds to push edits
+straight into a new build and deployment. It is here to show developers going
+from code to a running application on OpenShift without handling containers or
+Kubernetes manifests. It needs `openshift-devspaces`.
+
+Tested: 2026-11-04, ROSA HCP 4.22.12, Dev Spaces 3.31.2 (workspace opened by a person in the browser).
 
 ## Overview
 
@@ -53,9 +61,11 @@ Navigate to Dev Spaces in the OpenShift console and create a workspace from `htt
 
 ### 5. Set Up a Binary Build Pipeline
 
-From the Dev Spaces terminal:
+From the Dev Spaces terminal, switch to the demo project first (the terminal
+starts in your own Dev Spaces project):
 
 ```bash
+oc project s2i-demo
 oc new-build --binary --image-stream openshift/golang --name demo --strategy source
 ```
 
@@ -70,8 +80,7 @@ oc start-build demo --from-dir=. --follow
 Deploy the updated image:
 
 ```bash
-oc get imagestream demo
-oc new-app --name demo <image-from-imagestream>
+oc new-app --name demo --image-stream=demo:latest
 oc expose deployment/demo --port 8080
 oc create route edge --service=demo
 ```

@@ -1,6 +1,13 @@
 # Andys Demo cluster
 
-This is an "all in one" setup to make demo clusters of managed OpenShift. When you type Terraform init/apply you will be asked a bunch of questions, depending on what you want to make.
+This is not a demo: it is the Terraform that builds the clusters the demos run
+on. One root module with a single shared state can create Red Hat OpenShift
+Service on AWS (ROSA), Azure Red Hat OpenShift (ARO), ARO with hosted control
+planes and Red Hat OpenShift Dedicated (OSD) on Google Cloud, each from its own
+`*.tfvars` preset, with optional machine pools for GPUs, LokiStack, Graviton or
+bare-metal virtualization. Because every cluster comes from code, it can be torn
+down and rebuilt the same way each time. The README also covers the provider
+quirks this runs into, such as GPU capacity checks and the ARO HCP pull secret.
 
 If you want to skip these questions, the variables in question are:
 

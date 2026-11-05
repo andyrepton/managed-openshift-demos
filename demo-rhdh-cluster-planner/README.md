@@ -1,6 +1,16 @@
 # Deployment Planner
 
-A self-service wizard where a team names an application, says how much capacity it needs and what it must talk to, and gets back a live Azure-priced comparison of where it could run, a recommended node pool, and the NetworkPolicies to go with it. Runs as a Red Hat Developer Hub dynamic plugin.
+This demo adds a self-service deployment planner to Red Hat Developer Hub
+(RHDH). A team describes its application's capacity and connectivity needs and
+gets back a comparison of a namespace on a shared cluster, a dedicated Azure Red
+Hat OpenShift (ARO) cluster or on-premises, with ARO costs taken live from the
+Azure Retail Prices API and every figure labelled as a live price, an override
+or an assumption. It also produces a recommended node pool, NetworkPolicies and
+request artifacts such as a Terraform tfvars file. It is here to show platform
+engineering on RHDH, turning sizing and costing into self-service. It builds on
+`demo-developer-hub`.
+
+Tested: 2026-11-04, ROSA HCP 4.22.12, RHDH 1.10.6: partial. Tests, the CLI estimate, and loading the published plugins into RHDH work; the page itself was not checked, as GitHub sign-in was not set up for this run. Building your own image was not tested.
 
 ## Overview
 
@@ -31,9 +41,11 @@ Request button therefore shows a summary rather than submitting.
 
 * Node 24 and Yarn 4 via Corepack. RHDH 1.10 pins `engines.node: 24`.
 * Outbound HTTPS to `prices.azure.com`. No Azure credentials needed -- the Retail Prices API is unauthenticated.
-* For deploying: an RHDH 1.10 instance, and a container registry the cluster can pull from.
+* For deploying: the RHDH 1.10 instance from [demo-developer-hub](../demo-developer-hub). Building your own plugin image (optional) also needs a container registry the cluster can pull from.
 
 ## How to Run the Demo
+
+Run every command from this folder.
 
 ### 1. Install and test
 
@@ -41,17 +53,18 @@ Request button therefore shows a summary rather than submitting.
 yarn install
 yarn workspace @aro-planner/common build
 
-yarn workspace @aro-planner/common test                          # 132 tests
-yarn workspace @aro-planner/backstage-plugin-aro-planner-backend test   # 65 tests
+yarn workspace @aro-planner/common test
+yarn workspace @aro-planner/backstage-plugin-aro-planner-backend test
 ```
+
+Both should end with every test passed.
 
 ### 2. Price a cluster from the CLI
 
 The quickest way to see the engine work, with no cluster involved:
 
 ```bash
-cd packages/aro-planner-common
-yarn estimate --vcpu 40 --ram 160 --region westeurope
+(cd packages/aro-planner-common && yarn estimate --vcpu 40 --ram 160 --region westeurope)
 ```
 
 ```
@@ -73,12 +86,52 @@ yarn estimate --vcpu 40 --ram 160 --region westeurope
 | `--day-two` | off | Allow sizes supported only as day-2 pool additions |
 | `--hcp-fee` | unset | Hourly HCP control-plane fee |
 
-### 3. Build and deploy the plugins
+### 3. Load the plugins into RHDH
 
-Both plugins ship in one registry image. `FROM scratch` is mandatory -- see Notes.
+Both plugins ship in one published image,
+`quay.io/andyrepton/rhdh-plugins:aro-planner-1.5.9`, which is public, so no
+build and no registry credentials are needed. To use your own build instead,
+see [Building your own plugin image](#building-your-own-plugin-image) first.
+
+This demo owns its entry in RHDH's plugin config, in
+[`rhdh/dynamic-plugins-entry.yaml`](rhdh/dynamic-plugins-entry.yaml). Compose it
+into [demo-developer-hub](../demo-developer-hub), apply it, and let the backend
+see OperatorHub (see [Letting the backend see OperatorHub](#letting-the-backend-see-operatorhub)):
 
 ```bash
-# Build and export both as RHDH dynamic plugins
+(cd ../demo-developer-hub && python3 -I scripts/compose-dynamic-plugins.py \
+  ../demo-rhdh-cluster-planner/rhdh/dynamic-plugins-entry.yaml --apply)
+oc apply -f rbac/operator-catalog-reader.yaml
+
+oc -n rhdh rollout restart deployment/backstage-developer-hub
+oc -n rhdh rollout status deployment/backstage-developer-hub --timeout=10m
+```
+
+The compose script writes the whole plugin list, so it keeps only the entries
+it is given. If [demo-rhdh-devspaces-self-service](../demo-rhdh-devspaces-self-service)
+is also deployed, pass both entry files in one command, or the second compose
+removes the first demo's plugins.
+
+The entry lives here rather than in demo-developer-hub so the base deploys on
+its own: the plugin installer runs as an init container and raises on an image
+it cannot pull, so listing this plugin there left Developer Hub stuck in
+`Init:Error` for anyone who had not built it. The `!<plugin-path>` suffix is
+required (see Notes).
+
+### 4. Verify
+
+Sign in to Developer Hub and open **Deployment Planner** in the sidebar. Enter
+a capacity and region: the cost panel fills in with live Azure prices, each
+line tagged with where its figure came from, and the requested operators show
+whether this cluster's OperatorHub can install them.
+
+### Building your own plugin image
+
+Only needed if you change the plugins. Build and export both as RHDH dynamic
+plugins, then collect them into one registry directory. `FROM scratch` is
+mandatory (see Notes).
+
+```bash
 for p in aro-planner aro-planner-backend; do
   (cd plugins/$p && yarn tsc && yarn build)
 done
@@ -86,7 +139,6 @@ done
 (cd plugins/aro-planner-backend && \
    npx @red-hat-developer-hub/cli@release-1.10 plugin export --clean --embed-package @aro-planner/common)
 
-# Collect both into a registry directory
 npx @red-hat-developer-hub/cli@release-1.10 plugin package --export-to ./plugin-registry
 printf 'FROM scratch\nCOPY . /\n' > plugin-registry/Containerfile
 
@@ -99,49 +151,42 @@ printf 'FROM scratch\nCOPY . /\n' > plugin-registry/Containerfile
 find plugin-registry -name .bin -type d -prune -exec rm -rf {} +
 ```
 
-Build the image on the cluster -- no local container tooling needed:
+Build the image on the cluster (no local container tooling needed) and push it
+to your own repository. Several demos' plugins can share one repository, told
+apart by a `<plugin>-<version>` tag, which suits a Quay robot account scoped to
+that one repository. The push credential goes in on stdin, never as a flag:
 
 ```bash
-oc apply -f - <<'EOF'
-apiVersion: image.openshift.io/v1
-kind: ImageStream
-metadata: { name: aro-planner, namespace: rhdh }
----
+IMAGE=quay.io/<you>/rhdh-plugins:aro-planner-0.1.0
+
+oc apply -f - <<EOF
 apiVersion: build.openshift.io/v1
 kind: BuildConfig
 metadata: { name: aro-planner, namespace: rhdh }
 spec:
   source: { type: Binary, binary: {} }
   strategy: { type: Docker, dockerStrategy: { dockerfilePath: Containerfile } }
-  output: { to: { kind: DockerImage, name: quay.io/<you>/aro-planner:0.1.0 } }
+  output:
+    to: { kind: DockerImage, name: ${IMAGE} }
+    pushSecret: { name: quay-push }
 EOF
 
-oc -n rhdh create secret docker-registry quay-push \
-  --docker-server=quay.io --docker-username="<robot>" --docker-password="<token>"
-oc -n rhdh patch bc aro-planner --type merge \
-  -p '{"spec":{"output":{"pushSecret":{"name":"quay-push"}}}}'
+read -rp 'Quay robot username: ' QUAY_USER
+read -rsp 'Quay robot token: ' QUAY_TOKEN; echo
+printf '%s:%s' "$QUAY_USER" "$QUAY_TOKEN" | base64 | tr -d '\n' \
+  | jq -Rc '{auths: {"quay.io": {auth: .}}}' \
+  | oc -n rhdh create secret generic quay-push \
+      --type=kubernetes.io/dockerconfigjson --from-file=.dockerconfigjson=/dev/stdin
+unset QUAY_TOKEN
 
 oc start-build aro-planner -n rhdh --from-dir=plugin-registry --follow
+
+# Point this demo's entry at your image, then go back to step 3
+sed -i.bak "s#quay.io/andyrepton/rhdh-plugins:aro-planner-1.5.9#${IMAGE}#" \
+  rhdh/dynamic-plugins-entry.yaml && rm rhdh/dynamic-plugins-entry.yaml.bak
 ```
 
-### 4. Load them into RHDH
-
-This demo owns its entry in RHDH's plugin config, in
-[`rhdh/dynamic-plugins-entry.yaml`](rhdh/dynamic-plugins-entry.yaml). Compose it
-into [demo-developer-hub](../demo-developer-hub) and apply:
-
-```bash
-cd ../demo-developer-hub
-python3 -I scripts/compose-dynamic-plugins.py \
-  ../demo-rhdh-cluster-planner/rhdh/dynamic-plugins-entry.yaml --apply
-```
-
-It lives here rather than in that demo so the base deploys on its own: the
-plugin installer runs as an init container and raises on an image it cannot
-pull, so listing this plugin there left Developer Hub stuck in `Init:Error`
-for anyone who had not built it. The `!<plugin-path>` suffix is required -- see Notes.
-
-Then `oc -n rhdh rollout restart deployment/backstage-developer-hub` and open **ARO Planner** in the sidebar.
+If the repository is private, RHDH also needs a pull secret for it.
 
 ## The assistant
 
@@ -435,6 +480,11 @@ All pure logic lives in `aro-planner-common` so the wizard, the backend and the 
 ## Clean Up
 
 ```bash
-oc -n rhdh delete bc/aro-planner is/aro-planner secret/quay-push
+# Recompose without this demo's entry (list any other plugin demos still deployed)
+(cd ../demo-developer-hub && python3 -I scripts/compose-dynamic-plugins.py --apply)
+oc -n rhdh rollout restart deployment/backstage-developer-hub
+oc delete -f rbac/operator-catalog-reader.yaml
+# Only if you built your own image:
+oc -n rhdh delete bc/aro-planner secret/quay-push
 rm -rf node_modules packages/*/dist plugins/*/dist plugins/*/dist-dynamic plugin-registry dist-types
 ```

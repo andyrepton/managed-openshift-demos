@@ -1,53 +1,67 @@
 # Multi-Cloud VM Migration with MTV
 
-This demo sets up the source-side resources for migrating virtual machines between OpenShift clusters using the Migration Toolkit for Virtualization (MTV/Forklift). It deploys a Fedora 42 VM with an httpd-based dashboard, creates a service account with migration permissions, and prepares the cluster for remote VM export.
+This demo prepares the source side of a virtual machine migration between two
+OpenShift clusters with the Migration Toolkit for Virtualization (MTV). It runs
+a Fedora VM with a small web dashboard on OpenShift Virtualization and creates a
+ServiceAccount, scoped to migration, whose token the destination cluster uses to
+register this cluster as an MTV source. It is here to show VMs moving between
+OpenShift clusters, for example across clouds, with the same tooling at both
+ends.
+
+Tested: 2026-11-05, ROSA HCP 4.22.12, OpenShift Virtualization 4.22.12: source side, steps 1-4. Step 5 needs a destination cluster with MTV and was not run.
 
 ## Overview
 
-* **Fedora 42 VM** (`vm.yaml`) -- A VirtualMachine with cloud-init that installs and configures an httpd dashboard showing ISP, IP, and resource metrics.
-* **DataVolume** (`datavolume.yaml`) -- Pulls the `fedora-httpd-multicloud:v5.3` image from `quay.io` (7Gi disk).
-* **Migration ClusterRole** (`role.yaml`) -- Grants permissions for Forklift, KubeVirt, CDI, and batch API resources required for VM migration.
-* **Service Account** (`sa.yaml`, `sa-token.yaml`) -- Creates an `mtv` service account with a long-lived token for authenticating from the remote cluster.
+* **Fedora 42 VM** (`vm.yaml`, `my-multicloud-vm`): a VirtualMachine with
+  cloud-init (`vm-secret.yaml`) that serves an httpd dashboard showing ISP,
+  IP and resource metrics.
+* **DataVolume** (`datavolume.yaml`, `demo-datavolume`): imports the
+  `fedora-httpd-multicloud:v5.3` image from `quay.io` (7Gi disk).
+* **Migration ClusterRole** (`role.yaml`): the Forklift, KubeVirt, CDI and
+  batch permissions the destination cluster's MTV needs on this cluster.
+* **ServiceAccount** (`sa.yaml`, `sa-token.yaml`): an `mtv` ServiceAccount with
+  a long-lived token, which the destination cluster uses to connect.
+
+Everything is created in the `default` namespace.
 
 ## Prerequisites
 
-* Two OpenShift clusters, each with OpenShift Virtualization and MTV (Forklift) installed.
+* This (source) cluster with OpenShift Virtualization installed (see
+  [../openshift-virt](../openshift-virt)).
+* A destination OpenShift cluster with OpenShift Virtualization and the
+  Migration Toolkit for Virtualization (MTV) installed.
 * `oc` CLI with cluster-admin access on the source cluster.
 
 ## How to Run the Demo
 
-### 1. Create the Service Account
+Run these from this folder, on the source cluster.
+
+### 1. Apply all manifests
 
 ```bash
-oc create sa mtv
-```
-
-### 2. Apply All Manifests
-
-```bash
+oc apply -f sa.yaml
 oc apply -f .
 ```
 
-This creates the VM, DataVolume, ClusterRole, ServiceAccount, token secret, and VM credentials secret.
+This creates the VM, DataVolume, ClusterRole, ServiceAccount, token Secret and
+the VM's cloud-init Secret. The ServiceAccount goes first on its own: `oc
+apply -f .` works alphabetically, and a token Secret created before its
+ServiceAccount exists is deleted straight away, so `mtv-token` would never
+appear.
 
-### 3. Wait for the VM to Start
+### 2. Wait for the VM to start
 
-The DataVolume must finish importing before the VM can boot:
-
-```bash
-oc get datavolume fedora-httpd -w
-oc get vm fedora-httpd
-```
-
-### 4. Extract the Service Account Token
+The DataVolume must finish importing before the VM can boot (a few minutes):
 
 ```bash
-oc get secret mtv-token -o jsonpath='{.data.token}' | base64 --decode
+oc wait datavolume/demo-datavolume -n default --for=condition=Ready --timeout=15m
+oc wait vm/my-multicloud-vm -n default --for=condition=Ready --timeout=10m
+oc get vm my-multicloud-vm -n default
 ```
 
-Save this token -- it will be used to configure the MTV Provider on the destination cluster.
+The VM shows `Running` and `Ready` is `True`.
 
-### 5. Create the ClusterRoleBinding
+### 3. Create the ClusterRoleBinding
 
 ```bash
 oc create clusterrolebinding mtv-migration-binding \
@@ -55,17 +69,26 @@ oc create clusterrolebinding mtv-migration-binding \
   --serviceaccount=default:mtv
 ```
 
-### 6. Configure MTV on the Destination Cluster
+### 4. Get the API URL and the ServiceAccount token
 
-On the destination cluster, open the OpenShift console and navigate to **Migration > Providers**. Add a new OpenShift Virtualization provider using the source cluster's API URL and the service account token from step 4.
+The destination cluster needs both. The token grants the permissions in
+`role.yaml` across this cluster, so treat it as a secret:
+
+```bash
+oc whoami --show-server
+oc get secret mtv-token -n default -o jsonpath='{.data.token}' | base64 -d; echo
+```
+
+### 5. Configure MTV on the destination cluster
+
+On the destination cluster, open the OpenShift console and go to **Migration >
+Providers**. Add an **OpenShift Virtualization** provider
+with the source cluster's API URL and the token from step 4, then create a
+migration plan for `my-multicloud-vm`.
 
 ## Clean Up
 
 ```bash
-oc delete vm fedora-httpd
-oc delete datavolume fedora-httpd
 oc delete clusterrolebinding mtv-migration-binding
-oc delete clusterrole mtv-migration-role
-oc delete secret mtv-token vm-secret
-oc delete sa mtv
+oc delete -f .
 ```

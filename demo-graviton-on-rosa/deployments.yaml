@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   annotations:
-    image.openshift.io/triggers: '[{"from":{"kind":"ImageStreamTag","name":"hello:latest","namespace":"multiarch-demo"},"fieldPath":"spec.template.spec.containers[?(@.name==\"hello\")].image","paused":"false"}]'
+    image.openshift.io/triggers: '[{"from":{"kind":"ImageStreamTag","name":"hello:amd64","namespace":"multiarch-demo-proj"},"fieldPath":"spec.template.spec.containers[?(@.name==\"hello\")].image","paused":"false"}]'
   name: hello-amd64
   namespace: multiarch-demo-proj
 spec:
@@ -29,7 +29,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   annotations:
-    image.openshift.io/triggers: '[{"from":{"kind":"ImageStreamTag","name":"hello:latest","namespace":"multiarch-demo"},"fieldPath":"spec.template.spec.containers[?(@.name==\"hello\")].image","paused":"false"}]'
+    image.openshift.io/triggers: '[{"from":{"kind":"ImageStreamTag","name":"hello:arm64","namespace":"multiarch-demo-proj"},"fieldPath":"spec.template.spec.containers[?(@.name==\"hello\")].image","paused":"false"}]'
   name: hello-arm64
   namespace: multiarch-demo-proj
 spec:

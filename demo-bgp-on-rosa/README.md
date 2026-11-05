@@ -1,6 +1,17 @@
 # BGP Direct Routing on ROSA HCP
 
-Demonstrates Layer 3 direct (non-NAT) routing for pod networks on ROSA HCP using the [bgp-cloud-connector](https://github.com/openshift/bgp-cloud-connector) operator and AWS VPC Route Server.
+This demo gives pods and virtual machines on Red Hat OpenShift Service on AWS
+(ROSA) with hosted control planes IP addresses that the rest of the VPC can
+reach directly, with no NAT, NodePort or load balancer in the path. The
+[bgp-cloud-connector](https://github.com/openshift/bgp-cloud-connector) operator
+peers the cluster with AWS VPC Route Server over BGP and advertises user-defined
+network prefixes into the VPC route tables, creating two networks that the VPC
+can reach but that cannot reach each other. It is here to show layer 3
+integration with AWS networking on a managed cluster, which matters most for
+OpenShift Virtualization VMs that need to be addressed like ordinary hosts. It
+is a proof of concept for a throwaway cluster.
+
+Tested: 2026-11-05, ROSA HCP 4.22.12, bgp-cloud-connector 1.1.0 (catalog), OpenShift Virtualization 4.22.12, on an existing cluster with the metal pool replaced. Not run: reachability from an EC2 instance (none is provided), cleanup.
 
 Pods and VMs on a Cluster User-Defined Network (CUDN) get IPs that are directly routable from within the VPC: no NodePort, no LoadBalancer, no NAT. This is particularly useful for OpenShift Virtualization VMs that need to be addressed as native hosts on the network.
 
@@ -77,10 +88,13 @@ failing over.
 - OpenShift 4.21+ (for CUDN and RouteAdvertisements APIs)
 - AWS region with VPC Route Server support (eu-west-2, us-east-1, us-east-2, etc.)
 - `oc` CLI logged into the cluster
+- `jq`, to pretty-print JSON output
 
 ## Step 1: Deploy Infrastructure
 
-From `andys-demo-cluster-tf/`:
+From `andys-demo-cluster-tf/`, apply with `deploy_virt_machine_pool = true` and
+`deploy_bgp = true` (the `bgp_rosa.tfvars` preset sets both for a new cluster;
+for an existing cluster add `-var deploy_bgp=true` to its own preset):
 
 ```bash
 # Export your AWS and Red Hat credentials first.
@@ -92,8 +106,31 @@ This creates:
 - ROSA HCP cluster with an m5.metal worker node (labeled `bgp_router=true`)
 - AWS VPC Route Server with endpoints in each private subnet
 - Route propagation to all subnet route tables
-- RFC1918 security group on the metal node
-- IRSA role for the bgp-cloud-connector operator
+- RFC1918 and allow-all security groups on the metal node (see the comment on
+  `aws_security_group.allow_all` in `rosa/modules/bgp/bgp.tf` for what the
+  allow-all group opens and why it was accepted for this PoC)
+- An IAM role for the bgp-cloud-connector operator
+
+**Turning BGP on for a metal pool that already exists needs the pool
+replaced.** ROSA only accepts a machine pool's security groups and AWS tags
+when the pool is created: the plan shows an in-place update, but the apply
+fails with `Attribute value cannot be changed`. Replace the pool explicitly
+(this deletes the node; workloads on it restart on the new one, about 20
+minutes later):
+
+```bash
+terraform apply -var-file=<your-preset>.tfvars -var deploy_bgp=true \
+  -replace='module.rosa[0].module.rosa-virt-machine-pool[0].rhcs_hcp_machine_pool.machine_pool'
+```
+
+Stop any virtual machines on the metal node first (see
+[Replacing or removing the metal node](../openshift-virt#replacing-or-removing-the-metal-node)):
+they cannot live-migrate here, so they block the node's drain and the old pool
+never finishes deleting.
+
+If the create half fails with `A NodePool with name ... is being deleted`, the
+old node is still draining: wait until it has left `oc get nodes`, then run the
+same apply again without `-replace`.
 
 Note the outputs:
 ```bash
@@ -102,84 +139,39 @@ terraform output bgp_route_server_id
 terraform output bgp_endpoint_ips
 ```
 
-## Step 2: Build and Deploy the Operator
-
-The operator is built in-cluster using OpenShift Builds (local builds won't work on ARM Macs).
+Wait for the router node:
 
 ```bash
-# Create namespace and build resources
-oc create namespace openshift-bgp-cloud-connector --dry-run=client -o yaml | oc apply -f -
-oc create imagestream bgp-cloud-connector -n openshift-bgp-cloud-connector
-
-# Create BuildConfig
-cat <<'EOF' | oc apply -f -
-apiVersion: build.openshift.io/v1
-kind: BuildConfig
-metadata:
-  name: bgp-cloud-connector
-  namespace: openshift-bgp-cloud-connector
-spec:
-  output:
-    to:
-      kind: ImageStreamTag
-      name: bgp-cloud-connector:latest
-  source:
-    type: Git
-    git:
-      uri: https://github.com/openshift/bgp-cloud-connector.git
-      ref: main
-  strategy:
-    type: Docker
-    dockerStrategy:
-      dockerfilePath: Dockerfile
-  triggers: []
-EOF
-
-# Build the image
-oc start-build bgp-cloud-connector -n openshift-bgp-cloud-connector --follow
+oc get nodes -l bgp_router=true
 ```
 
-Deploy using the operator's kustomize config:
-```bash
-git clone https://github.com/openshift/bgp-cloud-connector.git /tmp/bgp-cloud-connector
+## Step 2: Install the Operator
 
-# Point the kustomize image to the in-cluster build
-sed -i '' 's|newName: controller|newName: image-registry.openshift-image-registry.svc:5000/openshift-bgp-cloud-connector/bgp-cloud-connector|' \
-  /tmp/bgp-cloud-connector/config/manager/kustomization.yaml
-
-oc kustomize /tmp/bgp-cloud-connector/config/default | oc apply -f -
-```
-
-## Step 3: Configure AWS Credentials (IRSA)
-
-Annotate the operator's ServiceAccount with the IAM role from Terraform:
+The bgp-cloud-connector operator is in the `redhat-operators` catalog. Its AWS
+access uses OpenShift's token-based authentication: `ROLEARN` on the
+Subscription makes the operator get short-lived credentials for the Terraform
+IAM role from the Cloud Credential Operator, so no AWS keys are stored. Run
+these from this folder (the Terraform output from the checkout that holds the
+state):
 
 ```bash
-ROLE_ARN=$(cd andys-demo-cluster-tf && terraform output -raw bgp_iam_role_arn)
+ROLE_ARN=$(cd ../andys-demo-cluster-tf && terraform output -raw bgp_iam_role_arn)
+sed "s#ROLE_ARN_REPLACE_ME#${ROLE_ARN}#" operator.yaml | oc apply -f -
 
-oc annotate serviceaccount openshift-bgp-cloud-connector-controller-manager \
-  -n openshift-bgp-cloud-connector \
-  eks.amazonaws.com/role-arn=$ROLE_ARN
-
-oc rollout restart deployment/openshift-bgp-cloud-connector-controller-manager \
-  -n openshift-bgp-cloud-connector
+until oc get csv -n openshift-bgp-cloud-connector 2>/dev/null | grep bgp-cloud-connector | grep -q Succeeded; do sleep 10; done
+oc get pods -n openshift-bgp-cloud-connector
 ```
 
-The operator picks its credential path at runtime: if the pod already has usable
-AWS credentials it uses them, otherwise it creates a `CredentialsRequest` and
-waits for the Cloud Credential Operator. Annotating the ServiceAccount puts it
-on the first path. The operator's own docs now call CCO (`ROLEARN` on the
-Subscription) the recommended path and IRSA the alternative for dev/test. IRSA
-is kept here because this demo deploys from a kustomize build rather than a
-Subscription. The Terraform IAM role trusts both the `openshift` and
-`sts.amazonaws.com` audiences, so it serves either path unchanged.
+The Terraform IAM role trusts both the `openshift` and `sts.amazonaws.com`
+audiences.
 
 ## Step 4: Apply BGP Configuration
 
-Update `bgp-cloud-configuration.yaml` with your Route Server ID:
+Update `bgp-cloud-configuration.yaml` with your Route Server ID (from this
+folder):
 
 ```bash
-RS_ID=$(cd andys-demo-cluster-tf && terraform output -raw bgp_route_server_id)
+RS_ID=$(cd ../andys-demo-cluster-tf && terraform output -raw bgp_route_server_id)
 sed "s/REPLACE_ME/$RS_ID/" bgp-cloud-configuration.yaml | oc apply -f -
 ```
 
@@ -208,31 +200,13 @@ so the shared `RouteAdvertisements` picks it up.
 
 ## Step 5: Install OpenShift Virtualization (optional)
 
-To test BGP routing with VMs:
+To test BGP routing with VMs, install OpenShift Virtualization by following
+[../openshift-virt](../openshift-virt), then create the two test VMs:
 
-```bash
-oc apply -f ../openshift-virt/namespace.yaml -f ../openshift-virt/operator-group.yaml
-oc apply -f ../openshift-virt/subscription.yaml
-# Wait for CSV to succeed
-oc get csv -n openshift-cnv -w
-oc apply -f ../openshift-virt/hyperconverged.yaml
-# Wait for Available=True
-oc get hyperconverged kubevirt-hyperconverged -n openshift-cnv -w
-```
-
-If the subscription stays in `UpgradePending` and no CSV ever appears, check
-whether it sets a `startingCSV` your cluster's catalog no longer carries.
-Remove the line and let the `stable` channel resolve to the build matching
-your cluster:
-
-```bash
-oc get packagemanifest kubevirt-hyperconverged -n openshift-marketplace \
-  -o jsonpath='{range .status.channels[*]}{.name}{" -> "}{.currentCSV}{"\n"}{end}'
-```
-
-Then create the two test VMs:
 ```bash
 oc apply -f test-vm.yaml
+oc wait vm/vm-red -n vms-red --for=condition=Ready --timeout=10m
+oc wait vm/vm-blue -n vms-blue --for=condition=Ready --timeout=10m
 ```
 
 The VMs use the `l2bridge` interface binding, which is required in a
@@ -246,7 +220,7 @@ configuration.
 
 Check operator status (all conditions should be True):
 ```bash
-oc get bgpcloudconfiguration cluster -o jsonpath='{.status.conditions}' | python3 -m json.tool
+oc get bgpcloudconfiguration cluster -o jsonpath='{.status.conditions}' | jq .
 oc get bgprouting
 ```
 
@@ -267,19 +241,24 @@ oc exec -n openshift-frr-k8s $FRR_POD -c frr -- vtysh -c "show ip bgp"
 
 Verify routes in VPC route tables:
 ```bash
-VPC_ID=$(aws ec2 describe-vpcs --region eu-west-2 --filters "Name=tag:Name,Values=poc-andyr-vpc" \
-  --query 'Vpcs[0].VpcId' --output text)
+RS_ID=$(cd ../andys-demo-cluster-tf && terraform output -raw bgp_route_server_id)
+VPC_ID=$(aws ec2 get-route-server-associations --region eu-west-2 --route-server-id "$RS_ID" \
+  --query 'RouteServerAssociations[0].VpcId' --output text)
 aws ec2 describe-route-tables --region eu-west-2 --filters "Name=vpc-id,Values=$VPC_ID" \
   --query 'RouteTables[*].Routes[?DestinationCidrBlock==`10.100.0.0/16` || DestinationCidrBlock==`10.101.0.0/16`]'
 ```
+
+Each subnet route table lists both prefixes as `active` (the VPC's main route
+table is not propagated and stays empty). A new Route Server peer takes a
+minute or two to go from `pending` to `available` before routes appear.
 
 Pods and VMs on a CUDN get two IPs:
 - **CUDN (primary)**: 10.100.x.x / 10.101.x.x on `ovn-udn1`, directly routable from the VPC
 - **Cluster (infrastructure)**: 10.131.x.x on `eth0`, marked `infrastructure-locked`, carries kubelet probe traffic only
 
 ```bash
-oc get pod -n vms-red client-red -o jsonpath='{.metadata.annotations.k8s\.ovn\.org/pod-networks}' | python3 -m json.tool
-oc get vmi -n vms-red vm-red -o jsonpath='{.status.interfaces}' | python3 -m json.tool
+oc get pod -n vms-red client-red -o jsonpath='{.metadata.annotations.k8s\.ovn\.org/pod-networks}' | jq .
+oc get vmi -n vms-red vm-red -o jsonpath='{.status.interfaces}' | jq .
 ```
 
 ### Reachability
@@ -314,8 +293,11 @@ behaviour. Nothing in this demo configures it.
 ```bash
 oc delete -f test-vm.yaml -f test-pod.yaml -f bgp-routing.yaml -f namespace.yaml
 oc delete bgpcloudconfiguration cluster
-oc kustomize /tmp/bgp-cloud-connector/config/default | oc delete -f -
-cd andys-demo-cluster-tf && terraform destroy -var-file=bgp_rosa.tfvars
+oc delete subscription bgp-cloud-connector -n openshift-bgp-cloud-connector
+oc delete csv -n openshift-bgp-cloud-connector \
+  "$(oc get csv -n openshift-bgp-cloud-connector -o name | grep bgp-cloud-connector | cut -d/ -f2)"
+oc delete namespace openshift-bgp-cloud-connector
+cd ../andys-demo-cluster-tf && terraform destroy -var-file=bgp_rosa.tfvars
 ```
 
 Delete the `BGPRouting` CRs before the `BGPCloudConfiguration`: its finalizer
@@ -384,7 +366,7 @@ goes over the serial path rather than the guest network.
 - **Single router node**: This demo uses 1 m5.metal node. VPC Route Server installs only one active route per prefix in the FIB (no ECMP), so a single router works for demo purposes. For production, use 3 across AZs for failover.
 - **Scale ceiling**: 100 routes per route server FIB, 100 per route server peer, and 100 propagated routes per route table. The last two are not adjustable. Layer2 CUDNs advertise one prefix each, so the ceiling is roughly 100 networks.
 - **VRF names**: a CUDN of 15 characters or fewer gets a VRF of the same name; longer ones get a VRF named from the network ID. `cluster-udn-red` is 15, `cluster-udn-blue` is 16, so `vtysh -c "show ip route vrf cluster-udn-red"` works but blue's VRF needs looking up. Keep `spec.network.name` to 3 characters if you want both predictable.
-- **Source/Dest Check**: The operator automatically disables source/destination checks on the router node's ENIs via the IRSA role.
+- **Source/Dest Check**: The operator automatically disables source/destination checks on the router node's ENIs, using its IAM role.
 - **Security Groups**: The metal node needs RFC1918 and allow-all security groups attached (via `additional_security_group_ids` on the machine pool, requires RHCS module >= 1.7.5). Without these, return traffic from CUDN IPs is blocked by the default cluster SG.
 - **Testing from cluster nodes**: Pings from other cluster nodes go through OVN (not the VPC route table), so they're not a valid test of BGP routing. Use an EC2 instance in the same VPC instead.
 - **Replicas quirk**: The RHCS provider reports `replicas` as the total compute across all pools. If terraform plan shows a replicas mismatch, use `terraform apply -refresh-only` targeting the cluster resource.

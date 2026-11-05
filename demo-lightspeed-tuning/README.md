@@ -1,6 +1,15 @@
 # Tuning OpenShift Lightspeed for Better Tool Calling
 
-Lightspeed's out-of-the-box config works for basic Q&A, but tool calling (MCP tools, Kubernetes API queries) often underperforms. This demo shows how to tune the OLSConfig operand to improve it.
+This demo tunes Red Hat OpenShift Lightspeed, the AI assistant in the OpenShift
+console, so it gets better at tool calling (MCP tools and live Kubernetes API
+queries). Comparing a default `OLSConfig` with a tuned one shows which settings
+matter, from token budgets and iteration limits to tool filtering, timeouts and
+a system prompt that tells the model to check live cluster state. It also adds
+external MCP servers with three authentication modes and RBAC for users, with
+the model served by Red Hat OpenShift AI. It is here to show Lightspeed
+answering from live cluster data when backed by a self-hosted model.
+
+Tested: 2026-11-04, ROSA HCP 4.22.12, Lightspeed operator 2.0.0, Granite 4.1 30B through MaaS (external MCP servers not tested).
 
 ## Why Tool Calls Fail
 
@@ -37,23 +46,30 @@ This demo assumes the LLM is served by OpenShift AI (RHOAI) with vLLM, potential
 ## Setup
 
 ```bash
-# Install the operator
+# Install the operator and wait for it
 oc apply -f operator.yaml
+until oc get csv -n openshift-lightspeed 2>/dev/null | grep lightspeed-operator | grep -q Succeeded; do sleep 10; done
 
-# Wait for CSV
-oc get csv -n openshift-lightspeed -w
+# Credentials: the API token for your inference endpoint (for a model behind
+# Models-as-a-Service, a MaaS API key). read -rs keeps it off the screen and out
+# of your shell history; piping it keeps it out of the process list.
+read -rs LLM_API_TOKEN              # paste the token, then Enter
+printf '%s' "$LLM_API_TOKEN" | oc create secret generic llm-credentials \
+  -n openshift-lightspeed --from-file=apitoken=/dev/stdin
+unset LLM_API_TOKEN
 
-# Create credentials: set the apitoken to your RHOAI inference endpoint token
-oc apply -f credentials-secret.yaml
+# The inference endpoint and model name. For a model served behind MaaS the
+# endpoint is https://maas.<cluster-domain>/<namespace>/<model-name>/v1, for
+# example the Granite model from ../demo-claude-via-open-source-models:
+LLM_URL="https://maas.$(oc get ingresses.config.openshift.io cluster -o jsonpath='{.spec.domain}')/claude-code-demo/granite-4-1-30b/v1"
+LLM_MODEL="granite-4-1-30b"
+# Adjust contextWindowSize in the file if your model's context is under 32768.
+sed -e "s|REPLACE_WITH_ENDPOINT_URL|$LLM_URL|" -e "s|REPLACE_WITH_MODEL_NAME|$LLM_MODEL|g" \
+  olsconfig-tuned.yaml | oc apply -f -
 
-# Edit olsconfig-tuned.yaml:
-#   - Set provider url to your RHOAI inference endpoint
-#   - Set model name to match the deployed model
-#   - Adjust contextWindowSize to match your model's context length
-oc apply -f olsconfig-tuned.yaml
-
-# Grant users access: edit rbac.yaml first to set your AD group names
-oc apply -f rbac.yaml
+# Grant a group access to Lightspeed (see RBAC below)
+LIGHTSPEED_GROUP="lightspeed-users"
+sed "s|REPLACE_WITH_GROUP|$LIGHTSPEED_GROUP|" rbac.yaml | oc apply -f -
 ```
 
 A minimal default config is also provided in `olsconfig-default.yaml` for comparison.
@@ -61,25 +77,25 @@ A minimal default config is also provided in `olsconfig-default.yaml` for compar
 ## Files
 
 - `operator.yaml`: Namespace, operator group, and subscription
-- `credentials-secret.yaml`: MaaS / RHOAI inference endpoint token (replace REPLACE_ME)
+- `credentials-secret.yaml`: the shape of the `llm-credentials` Secret (Setup creates it from stdin instead)
 - `rbac.yaml`: ClusterRoleBinding to grant users/groups access to Lightspeed
 - `olsconfig-default.yaml`: Minimal baseline config with defaults
 - `olsconfig-tuned.yaml`: Tuned config with improved tool calling
 - `olsconfig-with-mcp-server.yaml`: Tuned config with external MCP server examples
-- `mcp-server-secret.yaml`: Credentials for external MCP servers (replace REPLACE_ME)
+- `mcp-server-secret.yaml`: the shape of the `external-mcp-credentials` Secret (create it from stdin, see External MCP Servers)
 - `kustomization.yaml`: Kustomize overlay using tuned config
 
 ## RBAC: Granting User Access
 
-The Lightspeed operator creates a `lightspeed-operator-ols-user` ClusterRole but does **not** bind it to any users or groups by default. Without a binding, users get:
+The Lightspeed operator creates a `lightspeed-operator-query-access` ClusterRole but does **not** bind it to any users or groups by default. Without a binding, users get:
 
 > You do not have sufficient permissions to access OpenShift Lightspeed.
 
-Edit `rbac.yaml` to add your AD group names, then apply:
+Set the group name when you apply `rbac.yaml`:
 
 ```bash
-# Set the AD group name(s) in rbac.yaml, then:
-oc apply -f rbac.yaml
+LIGHTSPEED_GROUP="lightspeed-users"     # must match the group claim from your IDP
+sed "s|REPLACE_WITH_GROUP|$LIGHTSPEED_GROUP|" rbac.yaml | oc apply -f -
 
 # Verify the binding exists
 oc get clusterrolebindings | grep lightspeed
@@ -87,6 +103,9 @@ oc get clusterrolebindings | grep lightspeed
 # Check available ClusterRoles from the operator
 oc get clusterroles | grep lightspeed
 ```
+
+Tool calls run with the asking user's own permissions: a user who may not list
+pods in a namespace gets an answer saying so, not the data.
 
 To grant access to multiple AD groups, duplicate the `ClusterRoleBinding` block in `rbac.yaml` for each group. To grant access to all authenticated users instead, uncomment the `system:authenticated` binding in the same file.
 
@@ -96,15 +115,18 @@ To grant access to multiple AD groups, duplicate the `ClusterRoleBinding` block 
 # Compare default vs tuned
 diff olsconfig-default.yaml olsconfig-tuned.yaml
 
-# Apply default (baseline)
-oc apply -f olsconfig-default.yaml
+# Apply default (baseline); LLM_URL and LLM_MODEL as in Setup
+sed -e "s|REPLACE_WITH_ENDPOINT_URL|$LLM_URL|" -e "s|REPLACE_WITH_MODEL_NAME|$LLM_MODEL|g" \
+  olsconfig-default.yaml | oc apply -f -
 
 # Apply tuned (better tool calling)
-oc apply -f olsconfig-tuned.yaml
+sed -e "s|REPLACE_WITH_ENDPOINT_URL|$LLM_URL|" -e "s|REPLACE_WITH_MODEL_NAME|$LLM_MODEL|g" \
+  olsconfig-tuned.yaml | oc apply -f -
 
-# Apply tuned with external MCP servers
-oc apply -f mcp-server-secret.yaml
-oc apply -f olsconfig-with-mcp-server.yaml
+# Apply tuned with external MCP servers (create their credentials first, see
+# External MCP Servers below)
+sed -e "s|REPLACE_WITH_ENDPOINT_URL|$LLM_URL|" -e "s|REPLACE_WITH_MODEL_NAME|$LLM_MODEL|g" \
+  olsconfig-with-mcp-server.yaml | oc apply -f -
 ```
 
 ## Provider Types
@@ -114,6 +136,9 @@ The `type` field on the provider supports: `azure_openai`, `openai`, `watsonx`, 
 The configs in this demo use `openai` because the LLM is served by RHOAI MaaS on a separate cluster. MaaS exposes a standard OpenAI-compatible API, so `openai` is the correct type. If the RHOAI endpoint is on the **same cluster**, use `rhoai_vllm` instead. It handles internal cluster TLS and service discovery natively.
 
 ## External MCP Servers
+
+> The servers in `olsconfig-with-mcp-server.yaml` are examples (`*.example.com`):
+> replace them with real MCP servers. This section has not been tested end to end.
 
 Lightspeed's built-in introspection MCP server gives it access to the Kubernetes API. External MCP servers extend this with tools for other systems: monitoring, ticketing, CI/CD, databases, etc.
 
@@ -136,7 +161,15 @@ There are three ways to authenticate with external MCP servers:
 | **Kubernetes** | `kubernetes` | Service account token for in-cluster MCP servers |
 | **Client passthrough** | `client` | Forwards the end user's OpenShift token to the MCP server |
 
-Secret-based auth is the simplest. Create a Secret with the token and reference it:
+Secret-based auth is the simplest. Create a Secret with the token from stdin
+(not a file), then reference it:
+
+```bash
+read -rs MCP_TOKEN                  # paste the MCP server's token, then Enter
+printf '%s' "$MCP_TOKEN" | oc create secret generic external-mcp-credentials \
+  -n openshift-lightspeed --from-file=token=/dev/stdin
+unset MCP_TOKEN
+```
 
 ```yaml
 mcpServers:

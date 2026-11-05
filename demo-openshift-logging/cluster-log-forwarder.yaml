@@ -1,22 +1,42 @@
-apiVersion: "logging.openshift.io/v1"
+# The same forwarder as cluster-log-store.yaml, plus application logs from one
+# namespace (logging-demo, see app.yaml). Applying it updates the forwarder in
+# place and the collectors restart with the new pipeline.
+apiVersion: observability.openshift.io/v1
 kind: ClusterLogForwarder
 metadata:
-  name: "instance"
-  namespace: "openshift-logging"
+  name: lokistack
+  namespace: openshift-logging
 spec:
+  serviceAccount:
+    name: logging-collector
   inputs:
-  - name: openshift-dns-logs
+  - name: logging-demo-logs
+    type: application
     application:
-      namespaces:
-      - openshift-dns
+      includes:
+      - namespace: logging-demo
+  outputs:
+  - name: lokistack-out
+    type: lokiStack
+    lokiStack:
+      target:
+        name: logging-loki
+        namespace: openshift-logging
+      authentication:
+        token:
+          from: serviceAccount
+    tls:
+      ca:
+        key: service-ca.crt
+        configMapName: logging-loki-gateway-ca-bundle
   pipelines:
   - name: infrastructure-logs
     inputRefs:
-      - infrastructure
+    - infrastructure
     outputRefs:
-      - default
+    - lokistack-out
   - name: application-logs
     inputRefs:
-      - openshift-dns-logs
+    - logging-demo-logs
     outputRefs:
-      - default
+    - lokistack-out

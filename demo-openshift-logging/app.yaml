@@ -1,0 +1,34 @@
+# A small application that writes one log line every five seconds, so there
+# are application logs to show. Any namespace whose name does not start with
+# openshift-, kube- or default works: the collector tags logs from those as
+# infrastructure even when they come through an application input.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: logging-demo
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hello-logs
+  namespace: logging-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: hello-logs }
+  template:
+    metadata:
+      labels: { app: hello-logs }
+    spec:
+      containers:
+      - name: hello-logs
+        image: registry.access.redhat.com/ubi9/ubi-minimal:latest
+        command: ["/bin/sh", "-c"]
+        args:
+        - 'i=0; while true; do i=$((i+1)); echo "order $i processed for customer-$((i % 7))"; sleep 5; done'
+        resources:
+          requests: { cpu: 10m, memory: 16Mi }
+          limits: { cpu: 50m, memory: 32Mi }
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities: { drop: ["ALL"] }

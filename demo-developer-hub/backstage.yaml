@@ -70,6 +70,9 @@ spec:
               - name: devspaces-provisioner-token
                 secret:
                   secretName: devspaces-provisioner-token
+                  # Created by ../demo-rhdh-devspaces-self-service; optional so
+                  # this base demo starts on its own.
+                  optional: true
             containers:
               - name: backstage-backend
                 volumeMounts:

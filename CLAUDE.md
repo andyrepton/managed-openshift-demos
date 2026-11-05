@@ -56,6 +56,18 @@ For Red Hat products, read the official docs for the **exact deployed version**
 before writing config. "Not in the image I inspected" is not the same as "does
 not exist": say which one you mean.
 
+### Writing a demo README
+
+Every demo README opens, right under the title, with one plain-English
+paragraph: what the demo does, the benefits it brings, and why it is in this
+repo. Details come after.
+
+README steps must be runnable by a person without an AI: `oc`/`kubectl`,
+`curl`, `jq` and plain shell, with no inline Python or other inline scripts.
+Running a script committed to the repo is fine. Pass
+secrets with `read -rs` and stdin (`oc create secret ... --from-file=key=/dev/stdin`,
+`curl -H @-`), never as command-line arguments.
+
 ### Follow the README exactly
 
 When deploying a demo, follow its README step by step, including the verify

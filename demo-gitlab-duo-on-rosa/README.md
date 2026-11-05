@@ -1,5 +1,13 @@
 # Gitlab Duo on ROSA
 
+This demo builds a self-hosted development and AI tooling stack on Red Hat
+OpenShift Service on AWS (ROSA). It installs GitLab with the GitLab Operator and
+runs the GitLab AI Gateway in the cluster for GitLab Duo, serves a Mistral Small
+24B model on a GPU node with vLLM on Red Hat OpenShift AI, and adds OpenShift
+Dev Spaces, where the Continue extension uses the in-cluster model as a code
+assistant. It is here to show ROSA hosting source control, developer workspaces
+and the AI model behind them on one platform, alongside GPU workloads.
+
 ## Prepare your ROSA cluster
 
 1. You can use the code in ../andys-demo-cluster-tf to create a new ROSA cluster

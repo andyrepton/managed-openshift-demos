@@ -1,18 +1,24 @@
+# The log store. 1x.demo is the smallest size and fits the two m5.4xlarge
+# nodes that andys-demo-cluster-tf adds with deploy_lokistack_machine_pool.
+#
+# credentialMode: token makes Loki assume the IAM role named in the
+# logging-loki-aws Secret with a projected ServiceAccount token (audience
+# openshift), so no AWS keys are stored on the cluster.
 apiVersion: loki.grafana.com/v1
 kind: LokiStack
 metadata:
-  name: logging-loki 
+  name: logging-loki
   namespace: openshift-logging
 spec:
-  size: 1x.extra-small 
+  size: 1x.demo
   storage:
     schemas:
       - effectiveDate: '2023-10-15'
         version: v13
     secret:
-      name: logging-loki-aws 
-      type: s3 
-      credentialMode: static
+      name: logging-loki-aws
+      type: s3
+      credentialMode: token
   storageClassName: gp3-csi
   tenants:
     mode: openshift-logging

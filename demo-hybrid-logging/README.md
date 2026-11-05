@@ -1,6 +1,13 @@
 # Hybrid Centralized Logging: On-Prem to ROSA
 
-Centralize logs from an on-premises OpenShift cluster into a ROSA cluster running LokiStack, giving a single pane of glass for log search across hybrid infrastructure.
+This demo centralises logs from an on-premises OpenShift cluster into a Red Hat
+OpenShift Service on AWS (ROSA) cluster running LokiStack on S3. The on-premises
+cluster runs only the Cluster Logging Operator and forwards its logs over HTTPS
+to a Loki gateway on ROSA, authenticating with a ServiceAccount token, while
+ROSA collects its own logs into the same store. Operators get one place to
+search application and infrastructure logs from both clusters, filtered by
+cluster in the OpenShift console. It is here to show a managed cloud cluster
+acting as the central logging hub for hybrid infrastructure.
 
 ## Architecture
 
@@ -39,6 +46,7 @@ Both clusters' Vector collectors automatically tag logs with `openshift.cluster_
 - **On-prem OpenShift cluster** (4.17+) with:
   - `oc` CLI with cluster-admin access
   - Outbound HTTPS access to ROSA ingress domain
+- `jq` on your workstation, to pretty-print JSON output
 
 ## Kubeconfig Setup
 
@@ -213,11 +221,11 @@ LOKI_URL="https://loki-gateway.${CLUSTER_DOMAIN}"
 
 # Application namespaces (should include chatty-app-rosa AND chatty-app-onprem)
 curl -s -H "Authorization: Bearer ${TOKEN}" \
-  "${LOKI_URL}/api/logs/v1/application/loki/api/v1/label/kubernetes_namespace_name/values" | python3 -m json.tool
+  "${LOKI_URL}/api/logs/v1/application/loki/api/v1/label/kubernetes_namespace_name/values" | jq .
 
 # Infrastructure hosts (should include both ROSA and on-prem nodes)
 curl -s -H "Authorization: Bearer ${TOKEN}" \
-  "${LOKI_URL}/api/logs/v1/infrastructure/loki/api/v1/label/kubernetes_host/values" | python3 -m json.tool
+  "${LOKI_URL}/api/logs/v1/infrastructure/loki/api/v1/label/kubernetes_host/values" | jq .
 ```
 
 ## Clean Up
