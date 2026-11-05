@@ -56,6 +56,19 @@ The metal node shows `1k` in the `KVM` column and every other node `0`. This
 can take a minute or two after the node joins. **Virtualization** then appears
 in the console's navigation.
 
+## Replacing or removing the metal node
+
+Stop the virtual machines on it first:
+
+```bash
+oc patch vm <name> -n <namespace> --type merge -p '{"spec":{"runStrategy":"Halted"}}'
+```
+
+VMs default to the `LiveMigrate` eviction strategy, and with one metal node and
+EBS (ReadWriteOnce) storage they cannot migrate, so eviction is refused and the
+node never drains: a machine pool delete or replace then hangs. Set
+`runStrategy: Always` again once the new node is up.
+
 ## Clean Up
 
 Delete every virtual machine first, then:
