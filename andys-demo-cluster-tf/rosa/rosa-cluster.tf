@@ -31,6 +31,12 @@ module "rosa-hcp" {
   create_account_roles   = true
   create_operator_roles  = true
   properties             = var.properties
+  # Cluster-level tags are what ROSA puts on everything it creates itself: the
+  # default worker pools, EBS volumes for PVCs, load balancers, its security
+  # groups and VPC endpoint. The provider's default_tags only reach resources
+  # Terraform creates. ROSA accepts these only at cluster creation; changing
+  # them on an existing cluster cannot be applied.
+  tags = var.default_aws_tags
 }
 
 output "cluster_id" {
