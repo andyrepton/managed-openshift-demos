@@ -1,0 +1,11 @@
+# A snapshot of the running VM's disk, taken through the EBS CSI driver.
+apiVersion: snapshot.kubevirt.io/v1beta1
+kind: VirtualMachineSnapshot
+metadata:
+  name: fedora-demo-snap-1
+  namespace: vm-demo
+spec:
+  source:
+    apiGroup: kubevirt.io
+    kind: VirtualMachine
+    name: fedora-demo
