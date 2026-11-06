@@ -17,18 +17,17 @@ spec:
       modelFormat:
         name: vLLM
       runtime: vllm-runtime
-      storageUri: pvc://model-weights/devstral-awq
+      storageUri: pvc://model-weights/devstral
       args:
         - --model=/mnt/models
         # Agentic extensions send a large system prompt before the user types
         # anything: Kilo Code's CLI is about 16.1k tokens and its VS Code
         # extension about 20.6k, before any user content.
         #
-        # This needs a 48 GiB card. On a 24 GiB A10G (g5.4xlarge) the 15.16
-        # GiB of weights leave only 3.81 GiB of KV cache, which vLLM caps at
-        # 24976 tokens, enough for the Kilo CLI but not the extension, which
-        # has under 4k tokens left for the conversation. On an L40S
-        # (g7e.2xlarge) there is room for 65536.
+        # This needs a GPU with well over 24 GiB: the FP8 weights alone are
+        # about 25 GB, so a 24 GiB A10G (g5.4xlarge) cannot load the model at
+        # all. A 96 GB RTX PRO 6000 (g7e.2xlarge) leaves ample KV cache for
+        # 65536 tokens.
         #
         # vLLM refuses to start rather than degrading if the KV cache cannot
         # hold max-model-len:
@@ -36,9 +35,14 @@ spec:
         #   len (65536), 10.0 GiB KV cache is needed, which is larger than the
         #   available KV cache memory (3.81 GiB).
         - --max-model-len=65536
-        - --quantization=compressed-tensors
-        - --dtype=float16
         - --gpu-memory-utilization=0.92
+        # Devstral ships Mistral's tekken tokenizer; with the default "auto"
+        # mode this vLLM fails at start-up ("CachedMistralCommonBackend has no
+        # attribute is_fast").
+        - --tokenizer-mode=mistral
+        # Text only: skip the vision encoder's start-up profiling, which fails
+        # in Mistral tokenizer mode ("Failed to apply PixtralProcessor").
+        - '--limit-mm-per-prompt={"image": 0}'
         - --enable-auto-tool-choice
         - --tool-call-parser=mistral
         - --served-model-name=devstral

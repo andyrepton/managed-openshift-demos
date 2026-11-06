@@ -21,7 +21,7 @@
       },
       "models": {
         "devstral": {
-          "name": "Devstral Small 2 24B (AWQ 4-bit)",
+          "name": "Devstral Small 2 24B (FP8, RedHatAI)",
           // The InferenceService runs vLLM with --enable-auto-tool-choice and
           // --tool-call-parser=mistral, so the agent loop can call tools.
           "tool_call": true,

@@ -2,16 +2,17 @@
 
 This demo serves Mistral's [Devstral Small 2
 24B](https://huggingface.co/mistralai/Devstral-Small-2-24B-Instruct-2512) coding
-model with vLLM on Red Hat OpenShift AI, in its 4-bit AWQ form that fits on a
-single 24 GB A10G GPU. A Job downloads the weights to a persistent volume and
+model with vLLM on Red Hat OpenShift AI, using Red Hat's FP8 build
+([RedHatAI/Devstral-Small-2-24B-Instruct-2512](https://huggingface.co/RedHatAI/Devstral-Small-2-24B-Instruct-2512)),
+on one GPU with well over 24 GB. A Job downloads the weights to a persistent volume and
 KServe serves them as an OpenAI-compatible API inside the cluster, which other
 workloads, such as coding assistants in OpenShift Dev Spaces, can then use. It
 is here to show OpenShift AI hosting open-weight models on GPU nodes in a
 managed cluster; other demos build on it. It needs the `openshift-ai` base demo.
 
-Tested: 2026-11-04, ROSA HCP 4.22.12, RHOAI 3.5.2, on a g7e.2xlarge GPU.
+Tested: 2026-11-06, ROSA HCP 4.22.12, RHOAI 3.5.2, on a g7e.2xlarge GPU, with RedHatAI/Devstral-Small-2-24B-Instruct-2512 (FP8).
 
-Devstral is Mistral's agentic coding model: 68% SWE-bench Verified, Apache 2.0, with native tool-calling support. The AWQ 4-bit quantized variant fits on a single A10G (24GB) GPU.
+Devstral is Mistral's agentic coding model: 68% SWE-bench Verified, Apache 2.0, with native tool-calling support. The FP8 weights are about 25 GB, so a 24 GB A10G cannot load them; use a g7e.2xlarge (96 GB) or similar.
 
 ## Prerequisites
 
