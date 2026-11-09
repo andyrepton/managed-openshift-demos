@@ -1,0 +1,11 @@
+# Starts the Plan from the command line. In the talk, press Start on the Plan
+# in the console instead: it creates the same Migration.
+apiVersion: forklift.konveyor.io/v1beta1
+kind: Migration
+metadata:
+  generateName: where-am-i-to-rosa-
+  namespace: openshift-mtv
+spec:
+  plan:
+    name: where-am-i-to-rosa
+    namespace: openshift-mtv

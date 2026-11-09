@@ -1,0 +1,56 @@
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: where-am-i
+  namespace: mtv-demo
+spec:
+  runStrategy: Always
+  dataVolumeTemplates:
+  - metadata:
+      name: where-am-i-rootdisk
+    spec:
+      source:
+        registry:
+          # Official KubeVirt containerdisk: about 580 MB of data in a 5 GiB
+          # image, small enough for MTV to copy in about a minute.
+          url: docker://quay.io/containerdisks/fedora:45
+      storage:
+        resources:
+          requests:
+            storage: 5Gi
+  template:
+    metadata:
+      labels:
+        # Matched by the Service in ../common/web.yaml on both clusters.
+        demo: where-am-i
+    spec:
+      domain:
+        cpu:
+          cores: 1
+        memory:
+          guest: 2Gi
+        devices:
+          disks:
+          - name: rootdisk
+            disk:
+              bus: virtio
+          - name: cloudinitdisk
+            disk:
+              bus: virtio
+          interfaces:
+          - name: default
+            masquerade: {}
+          rng: {}
+      networks:
+      - name: default
+        pod: {}
+      volumes:
+      - name: rootdisk
+        dataVolume:
+          name: where-am-i-rootdisk
+      # cloud-init is over the 2048-byte inline limit, so it is a Secret. MTV
+      # copies the Secret to the destination with the VM.
+      - name: cloudinitdisk
+        cloudInitNoCloud:
+          secretRef:
+            name: where-am-i-cloudinit

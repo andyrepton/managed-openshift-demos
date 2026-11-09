@@ -1,0 +1,80 @@
+# Applied on the destination (ROSA) cluster, after the hetzner-source Secret
+# exists (README step 5). The Provider registers the on-premises cluster as a
+# migration source; the maps say where its networks and storage land on ROSA;
+# the Plan names the VM to move. Starting the Plan is the live demo.
+apiVersion: forklift.konveyor.io/v1beta1
+kind: Provider
+metadata:
+  name: hetzner
+  namespace: openshift-mtv
+spec:
+  type: openshift
+  # Replaced with the source cluster's API URL in README step 5.
+  url: REPLACE_ME_SOURCE_API_URL
+  secret:
+    name: hetzner-source
+    namespace: openshift-mtv
+---
+apiVersion: forklift.konveyor.io/v1beta1
+kind: NetworkMap
+metadata:
+  name: hetzner-to-rosa
+  namespace: openshift-mtv
+spec:
+  provider:
+    source:
+      name: hetzner
+      namespace: openshift-mtv
+    destination:
+      name: host
+      namespace: openshift-mtv
+  map:
+  - source:
+      type: pod
+    destination:
+      type: pod
+---
+apiVersion: forklift.konveyor.io/v1beta1
+kind: StorageMap
+metadata:
+  name: hetzner-to-rosa
+  namespace: openshift-mtv
+spec:
+  provider:
+    source:
+      name: hetzner
+      namespace: openshift-mtv
+    destination:
+      name: host
+      namespace: openshift-mtv
+  map:
+  - source:
+      name: managed-nfs-storage
+    destination:
+      storageClass: gp3-csi
+      accessMode: ReadWriteOnce
+---
+apiVersion: forklift.konveyor.io/v1beta1
+kind: Plan
+metadata:
+  name: where-am-i-to-rosa
+  namespace: openshift-mtv
+spec:
+  provider:
+    source:
+      name: hetzner
+      namespace: openshift-mtv
+    destination:
+      name: host
+      namespace: openshift-mtv
+  map:
+    network:
+      name: hetzner-to-rosa
+      namespace: openshift-mtv
+    storage:
+      name: hetzner-to-rosa
+      namespace: openshift-mtv
+  targetNamespace: mtv-demo
+  vms:
+  - name: where-am-i
+    namespace: mtv-demo

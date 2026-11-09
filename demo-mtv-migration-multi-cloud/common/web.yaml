@@ -1,0 +1,30 @@
+# Applied on both clusters. The selector matches a label in the VM's
+# spec.template, which MTV copies to the migrated VM, so the same Service
+# picks the VM up on whichever cluster runs it.
+apiVersion: v1
+kind: Service
+metadata:
+  name: where-am-i
+  namespace: mtv-demo
+spec:
+  selector:
+    demo: where-am-i
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8080
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: where-am-i
+  namespace: mtv-demo
+spec:
+  to:
+    kind: Service
+    name: where-am-i
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect

@@ -1,8 +1,0 @@
-apiVersion: v1
-kind: Secret
-metadata:
-  name: mtv-token
-  namespace: default
-  annotations:
-    kubernetes.io/service-account.name: "mtv"
-type: kubernetes.io/service-account-token

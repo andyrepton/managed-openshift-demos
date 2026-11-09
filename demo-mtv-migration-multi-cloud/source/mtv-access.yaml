@@ -1,3 +1,6 @@
+# What MTV on the destination cluster may do on this (source) cluster. MTV's
+# documentation asks for a cluster-admin token; this narrower role is what the
+# demo has been tested with.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -27,3 +30,22 @@ rules:
 - apiGroups: ["export.kubevirt.io"]
   resources: ["virtualmachineexports"]
   verbs: ["get", "list", "watch", "create"]
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: mtv
+  namespace: mtv-demo
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: mtv-migration-binding
+subjects:
+- kind: ServiceAccount
+  name: mtv
+  namespace: mtv-demo
+roleRef:
+  kind: ClusterRole
+  name: mtv-migration-role
+  apiGroup: rbac.authorization.k8s.io

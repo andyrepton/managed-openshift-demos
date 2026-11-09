@@ -1,0 +1,76 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: where-am-i-cloudinit
+  namespace: mtv-demo
+type: Opaque
+stringData:
+  userdata: |-
+    #cloud-config
+    write_files:
+    - path: /usr/local/bin/where-am-i
+      permissions: '0755'
+      content: |
+        #!/bin/bash
+        # Runs at every boot, so after a migration the page shows the
+        # network the VM is on now. ipinfo.io names the network that
+        # owns the public egress IP: Hetzner on premises, Amazon on AWS.
+        mkdir -p /var/www
+        for i in $(seq 1 30); do
+          INFO=$(curl -s --max-time 5 https://ipinfo.io/json) && [ -n "$INFO" ] && break
+          sleep 2
+        done
+        field() { python3 -c "import json,sys; print(json.loads(sys.argv[1] or '{}').get('$1','unknown'))" "$INFO"; }
+        IP=$(field ip); ORG=$(field org); CITY=$(field city); COUNTRY=$(field country)
+        case "$ORG" in
+          *Amazon*)  WHERE="Running on AWS"; DETAIL="Red Hat OpenShift Service on AWS"; COLOUR="#ec7a08" ;;
+          *Hetzner*) WHERE="Running on premises"; DETAIL="OpenShift in our own datacenter"; COLOUR="#0066cc" ;;
+          *)         WHERE="Running somewhere new"; DETAIL="$ORG"; COLOUR="#6a6e73" ;;
+        esac
+        cat > /var/www/index.html <<EOF
+        <!DOCTYPE html>
+        <html><head><title>$WHERE</title>
+        <meta http-equiv="refresh" content="5">
+        <style>
+          body { font-family: 'Red Hat Display', 'Segoe UI', sans-serif; margin: 0; background: #151515; color: #f0f0f0; }
+          header { background: $COLOUR; padding: 60px 40px; }
+          h1 { font-size: 4rem; margin: 0; }
+          h2 { font-weight: 400; margin: 10px 0 0; }
+          table { margin: 40px; font-size: 1.5rem; border-spacing: 0 12px; }
+          td:first-child { color: #a3a3a3; padding-right: 40px; }
+        </style></head>
+        <body>
+          <header><h1>$WHERE</h1><h2>$DETAIL</h2></header>
+          <table>
+            <tr><td>Virtual machine</td><td>$(hostname)</td></tr>
+            <tr><td>Network</td><td>$ORG</td></tr>
+            <tr><td>Public IP</td><td>$IP</td></tr>
+            <tr><td>Location</td><td>$CITY, $COUNTRY</td></tr>
+            <tr><td>Booted</td><td>$(uptime -s) UTC</td></tr>
+          </table>
+        </body></html>
+        EOF
+    - path: /etc/systemd/system/where-am-i.service
+      content: |
+        [Unit]
+        Description=Write the where-am-i page for this boot
+        Wants=network-online.target
+        After=network-online.target
+        [Service]
+        Type=oneshot
+        ExecStart=/usr/local/bin/where-am-i
+        [Install]
+        WantedBy=multi-user.target
+    - path: /etc/systemd/system/where-am-i-web.service
+      content: |
+        [Unit]
+        Description=Serve the where-am-i page on port 8080
+        After=where-am-i.service
+        [Service]
+        ExecStart=/usr/bin/python3 -m http.server 8080 --directory /var/www
+        Restart=always
+        [Install]
+        WantedBy=multi-user.target
+    runcmd:
+    - systemctl daemon-reload
+    - systemctl enable --now where-am-i.service where-am-i-web.service
