@@ -11,13 +11,13 @@ spec:
     spec:
       source:
         registry:
-          # Official KubeVirt containerdisk: about 580 MB of data in a 5 GiB
-          # image, small enough for MTV to copy in about a minute.
-          url: docker://quay.io/containerdisks/fedora:45
+          # Official KubeVirt containerdisk: about 320 MB of data in a 3 GiB
+          # image, small enough for MTV to copy quickly.
+          url: docker://quay.io/containerdisks/debian:13
       storage:
         resources:
           requests:
-            storage: 5Gi
+            storage: 3Gi
   template:
     metadata:
       labels:

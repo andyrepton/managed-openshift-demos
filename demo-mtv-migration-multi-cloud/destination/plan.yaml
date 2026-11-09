@@ -1,0 +1,26 @@
+# The VM to move and where it goes. Applied after migration-setup.yaml, and
+# again after each reset: a Plan that has run cannot be started a second time.
+apiVersion: forklift.konveyor.io/v1beta1
+kind: Plan
+metadata:
+  name: where-am-i-to-rosa
+  namespace: openshift-mtv
+spec:
+  provider:
+    source:
+      name: hetzner
+      namespace: openshift-mtv
+    destination:
+      name: host
+      namespace: openshift-mtv
+  map:
+    network:
+      name: hetzner-to-rosa
+      namespace: openshift-mtv
+    storage:
+      name: hetzner-to-rosa
+      namespace: openshift-mtv
+  targetNamespace: mtv-demo
+  vms:
+  - name: where-am-i
+    namespace: mtv-demo

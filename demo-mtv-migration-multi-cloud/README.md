@@ -2,15 +2,15 @@
 
 This demo moves a running virtual machine from an on-premises OpenShift cluster
 to Red Hat OpenShift Service on AWS (ROSA) with the Migration Toolkit for
-Virtualization (MTV), live in front of an audience, in about three minutes. The
-VM serves a web page that looks up the network it is running on at every boot,
-so the page goes from "Running on premises" to "Running on AWS" once MTV has
-copied its disk and started it on ROSA. It shows that VMs on OpenShift
-Virtualization can move between a datacenter and a public cloud with the same
-platform and the same tooling at both ends, and it is here as a ready-made,
-repeatable version of that story.
+Virtualization (MTV), live in front of an audience, in about two minutes. The VM serves a web page that works out which network it is running
+on, and keeps a phrase from the audience on its own disk: after the migration
+the page says "Running on AWS" instead of "Running on premises", and still
+shows the same phrase, which proves the VM and its data came across. It shows
+that VMs on OpenShift Virtualization can move between a datacenter and a public
+cloud with the same platform and the same tooling at both ends, and it is here
+as a ready-made, repeatable version of that story.
 
-Tested: 2026-11-09, on-premises OpenShift 4.22.12 on Hetzner (source) to ROSA HCP 4.22.12 (destination), OpenShift Virtualization 4.22.12 and MTV 2.12.10 on both: setup and a command-line migration (145 s, plus 24 s for the page). Reset and Clean Up not yet run; the console Start button not yet pressed by a person.
+Tested: 2026-11-09, on-premises OpenShift 4.22.12 on Hetzner (source) to ROSA HCP 4.22.12 (destination), OpenShift Virtualization 4.22.12 and MTV 2.12.10 on both: every setup step, the warm-up, a command-line migration (122 s from start to the ROSA page, phrase carried across) and the reset. Clean Up was run by hand in an equivalent form, not as written; the console Start button was not pressed by a person.
 
 ## How it works
 
@@ -19,29 +19,38 @@ ON PREMISES (source)                         ROSA (destination)
 ====================                         ==================
 VM where-am-i  (mtv-demo)                    MTV: Provider "hetzner" -> Plan
   page: "Running on premises"                  |
-  Route where-am-i  -> 503 after migration     |  1. reads the VM over the source API (6443)
+  phrase saved on the VM's disk                |  1. reads the VM over the source API (6443)
                                                |  2. copies the disk from the source's
 VirtualMachineExport  <------------------------+     VirtualMachineExport route (443)
                                                |  3. creates the VM in mtv-demo
                                              VM where-am-i
-                                               page: "Running on AWS"
-                                             Route where-am-i
+                                               page: "Running on AWS", same phrase
 ```
 
 This is a **cold migration**, the type MTV supports between OpenShift
 clusters without extra networking: MTV stops the source VM, copies its disk
-and starts it on ROSA. The source VM is stopped, not deleted. The VM is a
-Fedora 45 image of about 580 MB in a 5 GiB disk, so the copy takes under two
-minutes. The page comes from a script that cloud-init installs as a systemd
-service, which runs at every boot and asks `ipinfo.io` who owns the VM's
-public IP address: Hetzner on premises, Amazon on ROSA.
+and starts it on ROSA. The source VM is stopped, not deleted.
+
+The VM is the official Debian 13 KubeVirt image: about 320 MB of data in a
+3 GiB disk. MTV copies the disk as a compressed file and writes out the full
+3 GiB on ROSA, so the disk's size, not its data, sets the copy time.
+
+The page is a small Python server that cloud-init installs as a systemd
+service. At every boot it asks `ipinfo.io` which network owns the VM's public
+IP address: Hetzner on premises, Amazon on ROSA, where the VM's traffic leaves
+through the VPC's NAT gateway. A phrase typed into the page is written to
+`/var/lib/where-am-i/phrase` on the VM's disk and flushed before the page
+confirms it. The page refreshes itself every 3 seconds and shows **Lost
+contact** once the VM stops answering.
 
 * `common/`: the `mtv-demo` namespace and the VM's Service and Route, applied
   on both clusters so the ROSA URL exists before the VM arrives.
-* `source/`: the VM, its cloud-init Secret, and the ServiceAccount and
-  ClusterRole that MTV on ROSA uses to read and export it.
-* `destination/`: the MTV Provider for the source cluster, the network and
-  storage maps, the Plan, and a Migration to start it from the command line.
+* `source/`: the VM and its cloud-init Secret, the ServiceAccount and
+  ClusterRole that MTV on ROSA uses to read and export it, and a DaemonSet that
+  keeps the export server image on every worker.
+* `destination/`: the MTV Provider for the source cluster and the network and
+  storage maps (`migration-setup.yaml`), the Plan (`plan.yaml`), and a
+  Migration to start it from the command line.
 
 ## Prerequisites
 
@@ -54,9 +63,9 @@ public IP address: Hetzner on premises, Amazon on ROSA.
   with [OpenShift Virtualization](../openshift-virt) and [MTV](../mtv)
   installed. Install OpenShift Virtualization before MTV, or MTV's `host`
   provider shows `ConnectionFailed` until it is (it recovers by itself).
-* `oc` CLI with cluster-admin access on both clusters.
+* `oc` CLI with cluster-admin access on both clusters, and `jq`.
 
-The commands below talk to both clusters at once, so point a variable at each
+The commands below talk to both clusters, so point a variable at each
 cluster's kubeconfig:
 
 ```bash
@@ -66,15 +75,15 @@ export KUBECONFIG_DEST=~/.kube/<rosa-cluster>
 
 ## Setup
 
-Run these from this folder. Setup takes about ten minutes and is done before
-the talk.
+Run these from this folder. Setup takes about ten minutes, plus one warm-up
+migration (step 7), and is done before the talk.
 
 ### 1. Let CDI use the source cluster's storage
 
 Skip this if the source cluster's default storage class has a storage profile
 with access modes set (`oc get storageprofile <class> -o yaml` shows
-`claimPropertySets`). An NFS provisioner that the Containerized Data Importer
-(CDI) does not recognise has none, and VM disks then never bind:
+`claimPropertySets` under `status`). An NFS provisioner that the Containerized
+Data Importer (CDI) does not recognise has none, and VM disks then never bind:
 
 ```bash
 oc --kubeconfig "$KUBECONFIG_SOURCE" patch storageprofile <storage-class> --type merge \
@@ -91,17 +100,33 @@ differs.
 oc --kubeconfig "$KUBECONFIG_SOURCE" apply -f common/namespace.yaml -f common/web.yaml \
   -f source/cloud-init.yaml -f source/vm.yaml
 oc --kubeconfig "$KUBECONFIG_SOURCE" wait vm/where-am-i -n mtv-demo --for=condition=Ready --timeout=15m
-```
-
-Open the page (it can take a minute after `Ready`):
-
-```bash
 echo "https://$(oc --kubeconfig "$KUBECONFIG_SOURCE" get route where-am-i -n mtv-demo -o jsonpath='{.spec.host}')"
 ```
 
-It shows **Running on premises** and the source network's name.
+Open the URL. Within a minute of `Ready` the page shows **Running on
+premises** and the source network's name.
 
-### 3. Give MTV on ROSA access to the source cluster
+### 3. Pre-pull the export server image on the source cluster
+
+When the migration starts, MTV runs an export server pod next to the VM's
+disk. This DaemonSet keeps its image on every worker, so the live demo does
+not wait for a pull. The image comes from the installed OpenShift
+Virtualization:
+
+```bash
+EXPORT_IMAGE=$(oc --kubeconfig "$KUBECONFIG_SOURCE" get csv -n openshift-cnv -o json \
+  | jq -r '.items[].spec.relatedImages[]? | select(.name | test("virt-exportserver")) | .image' | head -1)
+echo "$EXPORT_IMAGE"
+sed "s#REPLACE_ME_EXPORTSERVER_IMAGE#$EXPORT_IMAGE#" source/prepull-exportserver.yaml \
+  | oc --kubeconfig "$KUBECONFIG_SOURCE" apply -f -
+oc --kubeconfig "$KUBECONFIG_SOURCE" rollout status daemonset/prepull-exportserver -n mtv-demo --timeout=5m
+```
+
+The image is a `registry.redhat.io/.../virt-exportserver-rhel9@sha256:...`
+reference, and the DaemonSet reports every pod rolled out. Repeat this step
+after upgrading OpenShift Virtualization.
+
+### 4. Give MTV on ROSA access to the source cluster
 
 The ServiceAccount, ClusterRole and binding go first: a token Secret created
 before its ServiceAccount exists is deleted straight away.
@@ -116,7 +141,7 @@ MTV's documentation asks for a cluster-admin token on the source;
 token still grants that role across the source cluster, so treat it as a
 secret.
 
-### 4. Prepare ROSA
+### 5. Prepare ROSA
 
 The Service and Route go on ROSA too, so the URL is ready before the VM
 arrives:
@@ -126,9 +151,9 @@ oc --kubeconfig "$KUBECONFIG_DEST" apply -f common/namespace.yaml -f common/web.
 echo "https://$(oc --kubeconfig "$KUBECONFIG_DEST" get route where-am-i -n mtv-demo -o jsonpath='{.spec.host}')"
 ```
 
-That URL shows "Application is not available" until the migration finishes.
+That URL shows "Application is not available" until a migration finishes.
 
-### 5. Register the source cluster in MTV
+### 6. Register the source cluster in MTV
 
 The Secret holds the source API URL, the token, and the source cluster's CA so
 ROSA can verify its API certificate. The token goes straight from one cluster
@@ -146,63 +171,73 @@ oc --kubeconfig "$KUBECONFIG_DEST" label secret hetzner-source -n openshift-mtv 
   createdForProviderType=openshift createdForResourceType=providers
 ```
 
-Then create the Provider, the maps and the Plan, with the source API URL put
-into the Provider:
+Then create the Provider and the maps, with the source API URL put into the
+Provider, and the Plan:
 
 ```bash
 sed "s#REPLACE_ME_SOURCE_API_URL#$SOURCE_API#" destination/migration-setup.yaml \
   | oc --kubeconfig "$KUBECONFIG_DEST" apply -f -
 oc --kubeconfig "$KUBECONFIG_DEST" wait provider/hetzner -n openshift-mtv --for=condition=Ready --timeout=5m
+oc --kubeconfig "$KUBECONFIG_DEST" apply -f destination/plan.yaml
 oc --kubeconfig "$KUBECONFIG_DEST" wait plan/where-am-i-to-rosa -n openshift-mtv --for=condition=Ready --timeout=5m
-```
-
-Both providers show `READY` `True`, and the Plan is `Ready`:
-
-```bash
 oc --kubeconfig "$KUBECONFIG_DEST" get provider,networkmap,storagemap,plan -n openshift-mtv
 ```
+
+Both providers show `READY` `True`, both maps are `READY`, and the Plan is
+`READY`.
+
+### 7. Warm up
+
+The first migration onto a fresh ROSA cluster also pulls the disk importer
+and VM images there, which adds time. Run one migration with the command-line
+steps in [Running the demo](#running-the-demo), then [reset](#reset-for-another-run).
 
 ## Running the demo
 
 Have three browser tabs open:
 
-1. The source page from step 2 (**Running on premises**). It reloads itself
-   every 5 seconds.
-2. The ROSA page from step 4 ("Application is not available").
+1. The source page from step 2 (**Running on premises**).
+2. The ROSA page from step 5 ("Application is not available").
 3. The ROSA console at **Migration for Virtualization > Migration plans**.
 
 Then:
 
-1. In the console, open the plan **where-am-i-to-rosa** and press **Start**,
+1. Ask the audience for a phrase, type it into the source page, and press
+   **Save on this VM's disk**. It appears in yellow under the banner.
+2. In the console, open the plan **where-am-i-to-rosa** and press **Start**,
    then confirm. From the command line, the same thing is:
 
    ```bash
    oc --kubeconfig "$KUBECONFIG_DEST" create -f destination/migration.yaml
    ```
 
-2. Watch the plan's progress: **Initialize** (about 30 s, the source VM stops,
-   and its page goes to "Application is not available"), **DiskTransfer**
-   (about 2 minutes), **VirtualMachineCreation** (seconds).
-3. Once the plan shows **Succeeded**, reload the ROSA tab. The page comes up
-   about 30 seconds later: **Running on AWS**, with Amazon as the network and
-   a new public IP and boot time.
+3. Watch the plan's progress: **Initialize** (about 20 seconds; the source VM
+   stops and its page turns red, **Lost contact**), **DiskTransfer** (about 80
+   seconds), **VirtualMachineCreation** (seconds).
+4. Once the plan shows **Succeeded**, reload the ROSA tab. About 20 seconds
+   later the page shows **Running on AWS**, Amazon as the network, a new public
+   IP and boot time, and the audience's phrase.
 
-From the command line:
+From pressing Start to the ROSA page takes about 2 minutes. From the
+command line:
 
 ```bash
 oc --kubeconfig "$KUBECONFIG_DEST" wait plan/where-am-i-to-rosa -n openshift-mtv --for=condition=Succeeded --timeout=15m
 oc --kubeconfig "$KUBECONFIG_DEST" wait vm/where-am-i -n mtv-demo --for=condition=Ready --timeout=10m
 oc --kubeconfig "$KUBECONFIG_SOURCE" get vm where-am-i -n mtv-demo
+curl -s "https://$(oc --kubeconfig "$KUBECONFIG_DEST" get route where-am-i -n mtv-demo -o jsonpath='{.spec.host}')/status" | jq .
 ```
 
-The ROSA VM is `Running` and `Ready`, and the source VM is `Stopped`.
+The ROSA VM is `Running` and `Ready`, the source VM is `Stopped`, and the page
+status shows `"title": "Running on AWS"` and the phrase (the `title` reads
+"Finding out where I am" for the first few seconds after boot).
 
 ## Reset for another run
 
-A Plan that has succeeded cannot be started again, so a rerun needs the
-migrated VM removed from ROSA, a fresh Plan, and the source VM started. Archive
-the Plan before deleting it: archiving is what removes MTV's temporary
-resources, including the `VirtualMachineExport` on the source.
+A Plan that has run cannot be started again, so a rerun needs the migrated VM
+removed from ROSA, a fresh Plan, and the source VM started. Archive the Plan
+before deleting it, so MTV removes its temporary resources. (MTV deletes the
+`VirtualMachineExport` on the source itself when the migration finishes.)
 
 ```bash
 oc --kubeconfig "$KUBECONFIG_DEST" patch plan where-am-i-to-rosa -n openshift-mtv --type merge -p '{"spec":{"archived":true}}'
@@ -214,8 +249,16 @@ oc --kubeconfig "$KUBECONFIG_SOURCE" patch vm where-am-i -n mtv-demo --type merg
 ```
 
 Deleting the ROSA VM also deletes its disk (MTV makes the VM the disk's
-owner). Then re-create the Plan with the `sed ... | oc apply` command from step
-5, and wait for the source page and the Plan to be ready again.
+owner). Then re-create the Plan and wait for both sides:
+
+```bash
+oc --kubeconfig "$KUBECONFIG_DEST" apply -f destination/plan.yaml
+oc --kubeconfig "$KUBECONFIG_DEST" wait plan/where-am-i-to-rosa -n openshift-mtv --for=condition=Ready --timeout=5m
+oc --kubeconfig "$KUBECONFIG_SOURCE" wait vm/where-am-i -n mtv-demo --for=condition=Ready --timeout=10m
+```
+
+The phrase from the last run is still on the source VM's disk; type a new one
+over it in the next run.
 
 ## Clean Up
 
@@ -223,13 +266,16 @@ Run the first five commands of the reset, then:
 
 ```bash
 sed "s#REPLACE_ME_SOURCE_API_URL#unused#" destination/migration-setup.yaml \
-  | oc --kubeconfig "$KUBECONFIG_DEST" delete -f - --ignore-not-found
+  | oc --kubeconfig "$KUBECONFIG_DEST" delete -f -
 oc --kubeconfig "$KUBECONFIG_DEST" delete secret hetzner-source -n openshift-mtv
 oc --kubeconfig "$KUBECONFIG_DEST" delete -f common/namespace.yaml
 oc --kubeconfig "$KUBECONFIG_SOURCE" delete -f source/mtv-token.yaml -f source/mtv-access.yaml
 oc --kubeconfig "$KUBECONFIG_SOURCE" delete -f source/vm.yaml -f source/cloud-init.yaml
 oc --kubeconfig "$KUBECONFIG_SOURCE" delete -f common/namespace.yaml
 ```
+
+Deleting the namespaces also removes the Services, Routes and the pre-pull
+DaemonSet. Step 1's storage profile change stays; it is harmless.
 
 ## Troubleshooting
 
@@ -241,9 +287,12 @@ port 6443, and the `cacert` must be the source cluster's CA.
 cluster's `*.apps` routes on port 443 (it downloads from the
 `VirtualMachineExport` route). Check the importer pod's log in `mtv-demo`.
 
-**The ROSA page says "Running somewhere new":** `ipinfo.io` named a network
-that is neither Amazon nor Hetzner, so the page shows its name instead. If it
-shows `unknown`, the VM could not reach `ipinfo.io`.
+**The page says "Running somewhere new":** `ipinfo.io` named a network that is
+neither Amazon nor Hetzner, so the page shows its name instead. If it stays on
+"Finding out where I am", the VM cannot reach `ipinfo.io`.
+
+**The phrase is missing after the migration:** it is only kept if the page
+confirmed it (it appears in yellow) before you pressed Start.
 
 ## Related Demos
 
