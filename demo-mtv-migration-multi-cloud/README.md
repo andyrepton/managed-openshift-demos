@@ -10,7 +10,7 @@ that VMs on OpenShift Virtualization can move between a datacenter and a public
 cloud with the same platform and the same tooling at both ends, and it is here
 as a ready-made, repeatable version of that story.
 
-Tested: 2026-11-09, on-premises OpenShift 4.22.12 on Hetzner (source) to ROSA HCP 4.22.12 (destination), OpenShift Virtualization 4.22.12 and MTV 2.12.10 on both: every setup step, the warm-up, a command-line migration (122 s from start to the ROSA page, phrase carried across) and the reset. Clean Up was run by hand in an equivalent form, not as written; the console Start button was not pressed by a person.
+Tested: 2026-11-09, on-premises OpenShift 4.22.12 on Hetzner (source) to ROSA HCP 4.22.12 (destination), OpenShift Virtualization 4.22.12 and MTV 2.12.10 on both: every setup step, the warm-up, a command-line migration (122 s from start to the ROSA page, phrase carried across) and the reset. A migration started with the console Start button, the reset again, and the DEMO.md pre-flight checks. Clean Up was run by hand in an equivalent form, not as written.
 
 ## How it works
 
