@@ -194,6 +194,9 @@ steps in [Running the demo](#running-the-demo), then [reset](#reset-for-another-
 
 ## Running the demo
 
+For a live audience, [DEMO.md](DEMO.md) has the presenter's run sheet:
+pre-flight checks, talking points and what to do if something goes wrong.
+
 Have three browser tabs open:
 
 1. The source page from step 2 (**Running on premises**).
