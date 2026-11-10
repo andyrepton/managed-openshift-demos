@@ -210,8 +210,10 @@ oc get csv -n openshift-operators | grep rhcl-operator
 
 # Create Kuadrant instance
 # Note: Kuadrant requires the Gateway API provider (Istio) that KServe installs.
-# If Kuadrant reports "MissingDependency", restart the Kuadrant operator pod:
-#   oc delete pod -n openshift-operators -l app.kubernetes.io/name=kuadrant-operator
+# If Kuadrant reports "MissingDependency", recreate the Kuadrant operator pod
+# (OLM reverts `oc rollout restart` on the Deployments it owns, so the old pod
+# keeps running and never re-checks):
+#   oc delete pod -n openshift-operators -l app=kuadrant,control-plane=controller-manager
 oc apply -f maas/kuadrant.yaml
 oc wait --for=condition=Ready kuadrant/kuadrant -n kuadrant-system --timeout=300s
 
