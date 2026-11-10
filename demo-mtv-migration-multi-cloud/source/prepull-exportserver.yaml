@@ -1,0 +1,35 @@
+# Keeps OpenShift Virtualization's export server image on every worker of
+# the source cluster. MTV starts an export server pod next to the VM's disk
+# when the migration starts, and pulling its image there would add seconds to
+# the live demo. The image is the one the installed OpenShift Virtualization
+# uses, put in by README step 3.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: prepull-exportserver
+  namespace: mtv-demo
+spec:
+  selector:
+    matchLabels:
+      app: prepull-exportserver
+  template:
+    metadata:
+      labels:
+        app: prepull-exportserver
+    spec:
+      terminationGracePeriodSeconds: 0
+      containers:
+      - name: hold
+        image: REPLACE_ME_EXPORTSERVER_IMAGE
+        command: ["sleep", "infinity"]
+        resources:
+          requests:
+            cpu: 1m
+            memory: 8Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+          runAsNonRoot: true
+          seccompProfile:
+            type: RuntimeDefault

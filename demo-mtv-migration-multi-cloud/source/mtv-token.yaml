@@ -1,0 +1,10 @@
+# Applied after mtv-access.yaml: a token Secret created before its
+# ServiceAccount exists is deleted straight away.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mtv-token
+  namespace: mtv-demo
+  annotations:
+    kubernetes.io/service-account.name: mtv
+type: kubernetes.io/service-account-token

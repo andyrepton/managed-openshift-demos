@@ -1,0 +1,13 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: mtv-operator
+  namespace: openshift-mtv
+spec:
+  # MTV 2.12 supports OpenShift 4.20, 4.21 and 4.22. No startingCSV: the
+  # channel resolves to the newest 2.12 build in the cluster's catalog.
+  channel: release-v2.12
+  installPlanApproval: Automatic
+  name: mtv-operator
+  source: redhat-operators
+  sourceNamespace: openshift-marketplace
