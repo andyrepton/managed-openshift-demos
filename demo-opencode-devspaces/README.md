@@ -126,7 +126,7 @@ model. Check GPU capacity before changing instance type. See
 ┌─────────────────────────────────────────────────┐
 │  Dev Spaces Workspace                           │
 │  ┌───────────┐     ┌─────────────────────────┐  │
-│  │ OpenCode  │────▶│ vLLM (Devstral AWQ 4b)  │  │
+│  │ OpenCode  │────▶│ vLLM (Devstral FP8)     │  │
 │  │ (terminal)│     │ vllm-model-serving ns    │  │
 │  └───────────┘     └─────────────────────────┘  │
 │       ▲                      ▲                  │

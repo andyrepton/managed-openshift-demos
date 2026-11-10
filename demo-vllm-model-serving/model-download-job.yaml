@@ -25,7 +25,8 @@ spec:
               pip install -q huggingface_hub &&
               /tmp/.local/bin/hf download \
                 RedHatAI/Devstral-Small-2-24B-Instruct-2512 \
-                --local-dir /models/devstral-awq
+                --exclude 'consolidated*' \
+                --local-dir /models/devstral
           env:
             - name: HOME
               value: /tmp

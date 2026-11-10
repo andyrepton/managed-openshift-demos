@@ -11,7 +11,7 @@
       },
       "models": {
         "devstral": {
-          "name": "Devstral Small 2 24B (AWQ 4-bit)",
+          "name": "Devstral Small 2 24B (FP8, RedHatAI)",
           "limit": {
             "context": 65536,
             "output": 8192
