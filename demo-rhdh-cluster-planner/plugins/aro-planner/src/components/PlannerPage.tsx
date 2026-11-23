@@ -1,20 +1,19 @@
 import React from 'react';
 
-import { Content, Header, Page } from '@backstage/core-components';
+import { Content } from '@backstage/core-components';
 
 import { Wizard } from './Wizard';
 
-/** Standalone page: price a cluster without starting a Scaffolder request. */
+/**
+ * Standalone page: price a cluster without starting a Scaffolder request.
+ *
+ * Content only. In the New Frontend System the page extension's `title` renders
+ * the header, so a `Page`/`Header` shell here would draw a second one.
+ */
 export function PlannerPage() {
   return (
-    <Page themeId="tool">
-      <Header
-        title="Deployment Planner"
-        subtitle="Size, price and compare where an application should run"
-      />
-      <Content>
-        <Wizard />
-      </Content>
-    </Page>
+    <Content>
+      <Wizard />
+    </Content>
   );
 }

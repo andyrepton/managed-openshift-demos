@@ -16,12 +16,6 @@
     "pluginPackage": "@devspaces/backstage-plugin-devspaces-self-service"
   },
   "sideEffects": false,
-  "scalprum": {
-    "name": "devspaces-self-service.backstage-plugin-devspaces-self-service",
-    "exposedModules": {
-      "PluginRoot": "./src/index.ts"
-    }
-  },
   "scripts": {
     "start": "backstage-cli package start",
     "build": "backstage-cli package build",
@@ -31,9 +25,10 @@
     "clean": "backstage-cli package clean"
   },
   "dependencies": {
-    "@backstage/core-components": "0.18.8",
-    "@backstage/core-plugin-api": "1.12.4",
-    "@backstage/theme": "0.7.2",
+    "@backstage/core-components": "0.18.13",
+    "@backstage/core-plugin-api": "1.12.9",
+    "@backstage/frontend-plugin-api": "0.18.0",
+    "@backstage/theme": "0.7.3",
     "@emotion/react": "11.14.0",
     "@emotion/styled": "11.14.1",
     "@mui/icons-material": "5.18.0",
@@ -44,17 +39,16 @@
     "react-dom": "^18.0.0"
   },
   "devDependencies": {
-    "@backstage/cli": "0.36.0",
+    "@backstage/cli": "0.36.5",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "react-router": "6.30.3",
-    "react-router-dom": "6.30.3",
+    "react-router": "6.30.6",
+    "react-router-dom": "6.30.6",
     "typescript": "^5.9.2"
   },
   "files": [
-    "dist",
-    "dist-scalprum"
+    "dist"
   ]
 }

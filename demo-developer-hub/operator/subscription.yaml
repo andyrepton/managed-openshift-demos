@@ -1,9 +1,5 @@
-# RHDH 1.10 ships in the standard `redhat-operators` catalog, so no CatalogSource is
+# RHDH 2.1 ships in the standard `redhat-operators` catalog, so no CatalogSource is
 # needed - OpenShift already has it.
-#
-# See the README for why this is 1.10 and not 2.x: the 2.x images are published only
-# to quay.io and were never promoted to registry.redhat.io, and ROSA HCP blocks the
-# ImageDigestMirrorSet that would be needed to redirect them.
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -25,9 +21,10 @@ metadata:
   name: rhdh
   namespace: rhdh-operator
 spec:
-  # `fast-1.10` rather than `fast`: it pins to the 1.10 stream, so the cluster will
-  # not jump to 2.x the moment that reaches the catalog.
-  channel: fast-1.10
+  # `fast-2.1` rather than `fast`: it pins to the 2.1 stream, so the cluster
+  # takes 2.1 patch releases but does not jump to the next minor (which can
+  # carry breaking changes, as 1.10 to 2.1 did) on its own.
+  channel: fast-2.1
   name: rhdh
   source: redhat-operators
   sourceNamespace: openshift-marketplace

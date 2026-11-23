@@ -9,21 +9,32 @@ data:
     includes:
       - dynamic-plugins.default.yaml
     plugins:
+      # GitHub sign-in. RHDH 2.1 no longer builds auth providers in: each one is
+      # a dynamic plugin, shipped disabled in dynamic-plugins.default.yaml.
+      # Without this entry the sign-in page has no GitHub button and nobody can
+      # get in.
+      #
+      # The key must match the default entry's image (registry.access.redhat.com,
+      # not the quay.io path in the docs example) for this to override it rather
+      # than add a second copy. `{{inherit}}` takes the digest from the default.
+      - package: oci://registry.access.redhat.com/rhdh/backstage-plugin-auth-backend-module-github-provider:{{inherit}}
+        enabled: true
+
       # Disabled deliberately. This provides the `publish:github:*` Scaffolder
       # actions, which need a stored GitHub token to do anything. With guest
       # sign-in enabled there is no credential here for an anonymous visitor to
       # drive, and these actions are what would change that.
       #
       # Note RHDH ships this disabled by default anyway; re-enabling it means
-      # `disabled: false` AND a token, and so means turning guest sign-in off.
-      - package: ./dynamic-plugins/dist/backstage-plugin-scaffolder-backend-module-github-dynamic
-        disabled: true
+      # `enabled: true` AND a token, and so means turning guest sign-in off.
+      - package: oci://registry.access.redhat.com/rhdh/backstage-plugin-scaffolder-backend-module-github:{{inherit}}
+        enabled: false
 
       # GitHub catalog discovery. Not needed here - the catalog/ locations in
       # app-config cover it - but this is the usual next step, so it is present and
       # disabled rather than absent.
-      - package: ./dynamic-plugins/dist/backstage-plugin-catalog-backend-module-github-dynamic
-        disabled: true
+      - package: oci://registry.access.redhat.com/rhdh/backstage-plugin-catalog-backend-module-github:{{inherit}}
+        enabled: false
         pluginConfig:
           catalog:
             providers:

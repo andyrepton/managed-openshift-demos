@@ -17,7 +17,8 @@
   },
   "resolutions": {
     "got": "^11.8.5",
-    "adm-zip": "^0.6.1"
+    "adm-zip": "^0.6.1",
+    "@backstage/frontend-plugin-api": "0.18.0"
   },
   "devDependencies": {
     "@backstage/cli-defaults": "^0.1.0"

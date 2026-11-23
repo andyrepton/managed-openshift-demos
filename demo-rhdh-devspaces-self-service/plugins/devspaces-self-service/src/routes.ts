@@ -1,5 +1,3 @@
-import { createRouteRef } from '@backstage/core-plugin-api';
+import { createRouteRef } from '@backstage/frontend-plugin-api';
 
-export const rootRouteRef = createRouteRef({
-  id: 'devspaces-self-service',
-});
+export const rootRouteRef = createRouteRef();

@@ -9,13 +9,11 @@ metadata:
   name: developer-hub
   namespace: rhdh
 spec:
-  # The operator enables the `lightspeed` flavour by default (its metadata sets
-  # enabledByDefault: true), which adds an init-rag-data init container and a
-  # lightspeed-core sidecar to every pod. This demo is plain RHDH, so turn it off -
-  # ../demo-rhdh-lightspeed-with-custom-mcp is the demo that enables it and gives it
-  # a model to talk to.
+  # The operator enables the `intelligent-assistant` flavour by default (its
+  # metadata sets enabledByDefault: true; in RHDH 1.10 it was called
+  # `lightspeed`). This demo is plain RHDH, so turn it off.
   flavours:
-    - name: lightspeed
+    - name: intelligent-assistant
       enabled: false
 
   database:
