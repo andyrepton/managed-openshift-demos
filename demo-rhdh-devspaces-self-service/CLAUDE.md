@@ -8,7 +8,8 @@ htpasswd), a namespace the plugin creates as `<github-login>-devspaces` is one
 Che never looks in: the user logged in as `cluster-admin` gets
 `cluster-admin-devspaces`, and the workspace exists but is invisible to them.
 Make the cluster username match the GitHub login (for example an htpasswd entry
-for it). RHDH 2.x's OpenShift auth plugin removes the mismatch.
+for it). No RHDH release ships an OpenShift auth provider that would remove the
+mismatch (see `../demo-developer-hub/CLAUDE.md`), so this stays a setup step.
 
 On ROSA HCP, manage htpasswd users through OCM or the `rosa` CLI, never the
 `OAuth` CR (its `.spec` is empty; the OAuth server is in the managed control
